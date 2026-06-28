@@ -29,7 +29,7 @@ Fedora/Waydroid patches.
 ```bash
 cd /mnt/docs/adbautoplayer
 ./build-rpm.sh
-sudo dnf upgrade ./src-tauri/target/release/bundle/rpm/adb-auto-player-*.rpm
+sudo dnf upgrade ./target/release/bundle/rpm/AdbAutoPlayer-*.rpm
 ```
 
 ## Update to a new upstream release X.Y.Z
@@ -38,7 +38,7 @@ sudo dnf upgrade ./src-tauri/target/release/bundle/rpm/adb-auto-player-*.rpm
 git fetch upstream --tags
 git rebase --onto X.Y.Z <current-tag> webdevbar   # carry our patches onto the new tag
 ./build-rpm.sh                                     # verify it still builds
-sudo dnf upgrade ./src-tauri/target/release/bundle/rpm/adb-auto-player-*.rpm
+sudo dnf upgrade ./target/release/bundle/rpm/AdbAutoPlayer-*.rpm
 git push --force-with-lease origin webdevbar
 ```
 

@@ -11,7 +11,7 @@
 #   git fetch upstream --tags
 #   git rebase --onto X.Y.Z <current-tag> webdevbar   # carry our patches onto the new tag
 #   ./build-rpm.sh
-#   sudo dnf upgrade ./src-tauri/target/release/bundle/rpm/adb-auto-player-*.rpm
+#   sudo dnf upgrade ./target/release/bundle/rpm/AdbAutoPlayer-*.rpm
 #   git push --force-with-lease origin webdevbar
 #
 # First run after an update: watch for build breakage if upstream changed the
@@ -71,5 +71,5 @@ pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/t
 
 echo
 echo "DONE. RPM(s):"
-ls -1 src-tauri/target/release/bundle/rpm/*.rpm 2>/dev/null || echo "  (no rpm found — check build output above)"
+ls -1 target/release/bundle/rpm/*.rpm 2>/dev/null || echo "  (no rpm found — check build output above)"
 echo "Install: sudo dnf upgrade <path-above>"

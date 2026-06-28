@@ -33,7 +33,9 @@ checkCommandExists("uv", "Install uv: https://github.com/astral-sh/uv");
 const venvPath = path.join(process.cwd(), ".venv");
 
 if (!existsSync(venvPath)) {
-  runCommand("uv venv --python-preference only-system");
+  // Local patch: allow uv-managed interpreters (Fedora system python is 3.14,
+  // project pins 3.13.9 which uv installed as a managed interpreter)
+  runCommand("uv venv");
 } else {
   console.log(".venv already exists, skipping...");
 }

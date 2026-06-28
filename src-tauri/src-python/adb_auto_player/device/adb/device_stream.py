@@ -122,6 +122,10 @@ class DeviceStream:
                 return True
             if "mumu" in props or "microvirt" in props or "nemu" in props:
                 return False
+            # Waydroid supports continuous streaming; chunked --time-limit=1 churns
+            # its encoder and stops producing frames after ~1h (permanent fallback).
+            if "waydroid" in props:
+                return False
         except Exception:
             pass
 

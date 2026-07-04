@@ -44,3 +44,14 @@ git push --force-with-lease origin webdevbar
 
 Our patch set is tiny, so the rebase is normally clean. If upstream touches one
 of the files above, resolve the conflict by keeping our intent on top of theirs.
+
+
+## Update log
+
+Fork history - what upstream release we rode and when (patches rebased on top each time).
+
+| Date | Upstream | Notes |
+|---|---|---|
+| 2026-06-28 | 12.9.16 -> 12.9.17 | Fork created (private repo + `upstream` remote). Waydroid continuous-streaming fix + Fedora RPM build. First fork build = 12.9.17. |
+| 2026-06-28 | 12.9.17 -> 12.9.18 | Rebased onto 12.9.18 (clean). Rebuilt + installed. |
+| 2026-07-04 | 12.9.18 -> 12.9.20 | Rebased onto 12.9.20 (`git rebase --onto 12.9.20 12.9.18 webdevbar`, clean, Waydroid fix intact). Upstream since .18: Homestead rewrite, Supreme Arena + Quest fixes, per-task repeat, RapidOCR 3.9.0 config fix (39 commits). Rebuilt RPM + installed. |

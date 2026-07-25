@@ -246,6 +246,8 @@ Single source of truth for card grid, portrait crops and pick slots at
 
 **Files:**
 - Create: `.../services/solstice/heroes.py`
+- Create: `.../templates/event/solstice_clash/anchors/ban_glyph_red.png` (cut in Step 0)
+- Create: `.../templates/event/solstice_clash/anchors/ban_glyph_blue.png` (cut in Step 0)
 - Create: `tests/games/afk_journey/services/solstice/test_heroes_extract.py`
 
 **Interfaces:**
@@ -253,8 +255,38 @@ Single source of truth for card grid, portrait crops and pick slots at
 - Produces:
   - `extract_portrait(img: np.ndarray, row: int, col: int) -> np.ndarray` (grayscale probe)
   - `extract_padded_portrait(img: np.ndarray, row: int, col: int) -> np.ndarray` (grayscale, padded - library entry)
-  - `is_banned(img: np.ndarray, row: int, col: int) -> bool`
+  - `is_banned(img: np.ndarray, row: int, col: int, ban_glyphs: list[np.ndarray]) -> bool`
+  - `load_ban_glyphs(anchor_dir: Path) -> list[np.ndarray]`
+  - `BAN_MATCH_THRESHOLD: float = 0.60`
   - `is_blank(portrait: np.ndarray) -> bool`
+
+- [ ] **Step 0: Cut the two ban-slash glyph templates**
+
+The banned cards in `selecting.png` are at (3,0) red and (3,1) blue. **Both** variants are
+required: they render differently in grayscale, and matching only the red glyph scores 0.18
+against a blue ban. Write this snippet to `/tmp/cut_glyphs.py` and run it from the repo root:
+
+```python
+import cv2, os
+ROWS = [665, 900, 1135, 1370]
+COLS = [155, 315, 475, 635, 795]
+SRC = 'src-tauri/src-python/tests/games/afk_journey/services/solstice/data/selecting.png'
+OUT = ('src-tauri/src-python/adb_auto_player/games/afk_journey/templates/'
+       'event/solstice_clash/anchors')
+img = cv2.imread(SRC)
+assert img is not None, SRC
+os.makedirs(OUT, exist_ok=True)
+for name, (r, c) in {'ban_glyph_red': (3, 0), 'ban_glyph_blue': (3, 1)}.items():
+    x, y = COLS[c], ROWS[r]
+    card = img[y:y + 190, x:x + 150]
+    glyph = cv2.cvtColor(card[45:165, 20:130], cv2.COLOR_BGR2GRAY)[10:-10, 10:-10]
+    cv2.imwrite(os.path.join(OUT, name + '.png'), glyph)
+    print(name, glyph.shape[1], 'x', glyph.shape[0])
+```
+
+Run: `cd /mnt/docs/adbautoplayer && uv run --group dev python /tmp/cut_glyphs.py`
+
+Expected: two 90x100 grayscale PNGs written.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -461,7 +493,7 @@ cd /mnt/docs/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_extract.py -q
 ```
 
-Expected: PASS, 5 tests. If `test_banned_card_detected` fails, print the actual channel means for those cards and adjust `_BAN_CAST_THRESHOLD` - do **not** relax `is_blank`.
+Expected: PASS, 7 tests. If `test_no_false_positives_on_any_other_card` fails, the ban glyph templates are wrong or missing - re-cut them (Task 2 Step 0). Do **not** relax `BAN_MATCH_THRESHOLD`: measured separation is 1.00 for bans versus 0.35 for every other card, so a failure means bad templates, not a bad threshold.
 
 - [ ] **Step 5: Commit**
 
@@ -1380,7 +1412,7 @@ cd /mnt/docs/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_library.py -q
 ```
 
-Expected: PASS, 6 tests. If `test_banned_cards_are_excluded` reports 20, `_BAN_CAST_THRESHOLD` in Task 2 needs lowering - print the per-card channel means to choose a value.
+Expected: PASS, 6 tests. If `test_banned_cards_are_excluded` reports 20, the ban glyphs are not being loaded - check `ban_glyph_red.png` and `ban_glyph_blue.png` exist under the anchors directory and that the `ban_glyphs` fixture asserts a length of 2.
 
 - [ ] **Step 5: Commit**
 

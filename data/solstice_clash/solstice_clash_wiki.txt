@@ -1,0 +1,324 @@
+{{Event Infobox
+|name       = Solstice Clash
+|image      = Solstice Clash.jpg
+|type       = In-Game
+|group      = PvP
+|group2     = Strategy
+|time_start = 2026-07-20 00:00
+|time_end   = 2026-08-03 23:59
+}}
+'''Solstice Clash''' is an [[Event]].
+
+==Event Info==
+Compete in live, fair-play 3v3 battles using randomized hero pools, or watch live matches and guess the winners!
+
+==Guide==
+# '''Live Battle - Join the Event:''' During the event, speak with the referee to start a {{b|start a match}}. Magisters can also talk to the host to enter {{b|FLive Spectating}} and watch matches while predicting the winner.
+# '''Live Battle - Match:''' In each match, 20 heroes are randomly selected from the hero pool for the current theme. Each side bans 1 hero and selects 3 unique heroes in a set sequence for a {{b|3v3 battle}}.
+# '''Live Battle - Formation:''' {{b|All heroes}} deployed in the battle are set to the same progression level. During the preparation phase, {{b|neither side can see}} the opposing formation.
+# '''Live Battle - Spectate & Guess:''' Talk to the Host to {{b|watch matches live}} and place tokens on a predicted winner. Each match also has a dedicated chat room where you can send and claim Token Packets.
+#* Once both sides confirm their lineups, they will begin setting their formations. During this phase, the odds are {{b|hidden}}, giving spectators a final chance to decide which side to back.
+
+==Rules==
+===Battle Rules===
+{{Quote|'''Referee:''' Welcome to Solstice Clash!}}
+#Participants are matched with opponents of a similar level based on their current ranking points.
+#Before each match, the system randomly selects 20 heroes from the heroes available for the current session. Players then take turns drafting 3 unique heroes each from this selection. Before drafting starts, each side has the opportunity to ban 1 hero.
+#All heroes in the event are set to the same progression level. During this event, you may select and deploy heroes you do not currently own outside the event.
+#During battle preparation, you may adjust your formations. Both sides' hero positions will remain hidden until the battle begins.
+#If you leave before the formation phase ends, you'll automatically lose the match. If the battle ends in a draw, it will be treated as a void match, and neither points nor tokens will be affected.
+#During the event, the battle theme will periodically change, updating the available hero pool, maps, and active battlefield effects. Each time the theme changes, your rank points will reset down to 4,000.
+#Your placement on the ranked leaderboard will be determined by your highest rank points achieved during the event.
+
+===Guessing Rules===
+{{Quote|'''Royal City Show:''' Welcome to Royal City Show!}}
+#During the event, you can select an ongoing high-ranking match and watch it live.
+#Before the battle starts, you can place Guess Tokens on the side of your choice.
+#If you stop spectating before the battle starts, or if any player leaves before picks are locked, your pick will be canceled and your Guess Tokens will be fully refunded.
+#Spectators gain access to an exclusive match chat, which remains open until the battle concludes.
+#Exclusive token packets can be sent and claimed within the match chat. Please note that these packets expire once the chat room closes.
+
+===Guess Tokens===
+# Guess Tokens are automatically distributed every hour.
+# The player's hourly token rate is determined by their hero collection progress outside the event. Among all the rates they qualify for, only the highest one will be applied.
+# Own Chippy & Hammie: 100/h
+# Own 10 Supreme+ or higher heroes: 150/h
+# Own 20 Supreme+ or higher heroes: 150/h
+# Own 10 Paragon 1 or higher heroes: 250/h
+# Own 10 Paragon 2 or higher heroes: 300/h
+# Own 10 Paragon 3 or higher heroes: 350/h
+# Own 10 Paragon 4 or higher heroes: 400/h
+
+
+==Rankings==
+Based on the number of active players, servers are assigned to Districts, Rankings are divided in 3 categories: District Points, District Guesses and Cross-Server Guesses (Daily reset).<br />
+
+District Points Reward for Top 1-20: [[Solstice Champion]] frame.<br />
+District Guesses Reward for Top 1-50: [[Master of Odds]] title.
+
+==Store==
+{{Quote|'''Solstice Market:''' I saved my finest treasures just for you!}}
+===Solstice Clash Rewards===
+{{Store|cols=Stock;
+|Stellar Crystal*1      ;; Solstice Silver*800  ;; 2 ;;
+|Stellar Crystal*1      ;; Solstice Silver*900  ;; 2 ;;
+|Stellar Crystal*1      ;; Solstice Silver*1000 ;; 2 ;;
+|Stellar Crystal*1      ;; Solstice Silver*1200 ;; 2 ;;
+|Stellar Crystal*1      ;; Solstice Silver*1400 ;; 2 ;;
+|Temporal Essence*5     ;; Solstice Silver*600  ;; 1 ;;
+|Temporal Essence*5     ;; Solstice Silver*700  ;; 1 ;;
+|Temporal Essence*5     ;; Solstice Silver*800  ;; 1 ;;
+|Temporal Essence*5     ;; Solstice Silver*900  ;; 1 ;;
+|Temporal Essence*5     ;; Solstice Silver*1100 ;; 1 ;;
+|Temporal Essence*5     ;; Solstice Silver*1500 ;; 1 ;;
+|Twilight Essence*5     ;; Solstice Silver*1200 ;; 1 ;;
+|Twilight Essence*5     ;; Solstice Silver*1300 ;; 1 ;;
+|Twilight Essence*5     ;; Solstice Silver*1500 ;; 1 ;;
+|Twilight Essence*5     ;; Solstice Silver*1800 ;; 1 ;;
+|Twilight Essence*5     ;; Solstice Silver*2200 ;; 1 ;;
+|Tidal Essence*5        ;; Solstice Silver*100  ;; 1 ;;
+|Tidal Essence*5        ;; Solstice Silver*200  ;; 1 ;;
+|Tidal Essence*5        ;; Solstice Silver*300  ;; 1 ;;
+|Tidal Essence*5        ;; Solstice Silver*400  ;; 1 ;;
+|Slumber Essence*5      ;; Solstice Silver*2700 ;; 1 ;;
+|Slumber Essence*5      ;; Solstice Silver*3000 ;; 1 ;;
+|Slumber Essence*5      ;; Solstice Silver*3600 ;; 1 ;;
+|Slumber Essence*5      ;; Solstice Silver*4500 ;; 1 ;;
+|Soulstone (A-Level)*15 ;; Solstice Silver*100  ;; 2 ;;
+|Soulstone (A-Level)*15 ;; Solstice Silver*200  ;; 2 ;;
+|Soulstone (A-Level)*15 ;; Solstice Silver*300  ;; 2 ;;
+|Soulstone (A-Level)*15 ;; Solstice Silver*400  ;; 2 ;;
+|Diamond*200            ;; Solstice Silver*800  ;; 5 ;;
+|Diamond*200            ;; Solstice Silver*1200 ;; 5 ;;
+|Honored Guest Pass     ;; Solstice Silver*10,000 ;; 1 ;;
+|Noble Guest Pass       ;; Solstice Silver*50,000 ;; 1 ;;
+|Exalted Guest Pass     ;; Solstice Silver*200,000 ;; 1 ;;
+|Royal Guest Pass       ;; Solstice Silver*1,000,000 ;; 1 ;;
+|Berry Cake             ;; Solstice Silver*2000 ;; 1 ;;
+|Berry Cone             ;; Solstice Silver*2000 ;; 1 ;;
+|Golden Token           ;; Solstice Silver*2000 ;; 1 ;;
+|Lucky Apostle          ;; Solstice Silver*2000 ;; 1 ;;
+|Alarm Clock (Emoji)    ;; Solstice Silver*100  ;; 1 ;;
+|Thumbs Up (Emoji)      ;; Solstice Silver*100  ;; 1 ;;
+|White Flag (Emoji)     ;; Solstice Silver*100  ;; 1 ;;
+|Bet Red (Emoji)        ;; Solstice Silver*100  ;; 1 ;;
+|Bet Blue (Emoji)       ;; Solstice Silver*100  ;; 1 ;;
+|All In (Emoji)         ;; Solstice Silver*100  ;; 1 ;;
+|Attention! (Emoji)     ;; Solstice Silver*100  ;; 1 ;;
+|Light Bulb (Emoji)     ;; Solstice Silver*100  ;; 1 ;;
+|Broke (Emoji)          ;; Solstice Silver*100  ;; 1 ;;
+|Trophy (Emoji)         ;; Solstice Silver*100  ;; 1 ;;
+|Alarm Clock (Animated) ;; Solstice Silver*1000 ;; 1 ;;
+|Thumbs Up (Animated)   ;; Solstice Silver*1000 ;; 1 ;;
+|White Flag (Animated)  ;; Solstice Silver*1000 ;; 1 ;;
+|Bet Red (Animated)     ;; Solstice Silver*1000 ;; 1 ;;
+|Bet Blue (Animated)    ;; Solstice Silver*1000 ;; 1 ;;
+|All In (Animated)      ;; Solstice Silver*1000 ;; 1 ;;
+|Attention! (Animated)  ;; Solstice Silver*1000 ;; 1 ;;
+|Light Bulb (Animated)  ;; Solstice Silver*1000 ;; 1 ;;
+|Broke (Animated)       ;; Solstice Silver*1000 ;; 1 ;;
+|Trophy (Animated)      ;; Solstice Silver*1000 ;; 1 ;;
+|Mirage Orb             ;; Solstice Silver*1000 ;; 10 ;;
+|Shadow Jade            ;; Solstice Silver*1500 ;; 2 ;;
+|Savannah Decor Chest   ;; Solstice Silver*1000 ;; 30 ;;
+}}
+
+===Lucky Satchel===
+The Unlock Rate of every type of Lucky Satchel is 1/day during the event.
+{{Store|cols=Stock;Unlock Requirement
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel II  ;; Solstice Silver*100,000    ;; 1 ;; Spend 75,000 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; Spend 16,200 Solstice Silvers to unlock.
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+|Lucky Satchel I   ;; Solstice Silver*10,000    ;; 1 ;; 
+}}
+
+==Available Roster==
+===Usable Heroes===
+{| class="fandom-table article-table alternating-colors-table" style="text-align:center;" 
+! Heroes & Adjustments
+|-
+| {{Lightbearer}}
+|-
+| {{Card List|mini=1|param_delim=,|1=<!--
+-->Valen;<!--
+-->Cassadee    {caption=ATK +50%};<!--
+-->Vala    {caption=ATK -40%};<!--
+-->Mirael    {caption=ATK +20%};<!--
+-->Marilee    {caption=ATK +20%};<!--
+-->Rowan;<!--
+-->Lucius    {caption=HP +40% ATK +20%};<!--
+-->Korin    {caption=HP +20% ATK +20%};<!--
+-->Atalanta;<!--
+-->Fay    {caption=HP +20% ATK +20%};<!--
+-->Temesia    {caption=HP -20%};<!--
+-->Walker    {caption=ATK +20%};<!--
+-->Sinbad    {caption=ATK -30%};<!--
+-->Sonja    {caption=HP +20% ATK +20%};<!--
+-->Lucca    {caption=HP -20%};<!--
+-->Hugin    {caption=HP -40% ATK -40%};<!--
+-->Cyran   {caption=ATK -30%};<!--
+-->Evie   {caption=HP -20% ATK -40%};<!--
+-->Perseus    {caption=HP -20% ATK -40%};<!--
+-->Silven    {caption=HP -20% ATK -40%};<!--
+-->}}
+|-
+| {{Mauler}}
+|-
+| {{Card List|mini=1|param_delim=,|1=<!--
+-->Brutus    {caption=HP +20% ATK +40%};<!--
+-->Lumont;<!--
+-->Odie;<!--
+-->Seth    {caption=ATK +50%};<!--
+-->Smokey & Meerky    {caption=HP +40% ATK +20%};<!--
+-->Kruger    {caption=HP +20% ATK +30%};<!--
+-->Satrana;<!--
+-->Rhys;<!--
+-->Shakir    {caption=ATK -40%};<!--
+-->Koko;<!--
+-->Antandra;<!--
+-->Alsa    {caption=ATK +30%};<!--
+-->Soren    {caption=ATK -20%};<!--
+-->Mikola    {caption=HP +40% ATK +20%};<!--
+-->Gerda    {caption=HP -20% ATK -20%};<!--
+-->Zandrok    {caption=HP -30% ATK -30%};<!--
+-->Nazrik    {caption=ATK -30%};<!--
+-->Kordan    {caption=HP -20% ATK -30%};<!--
+-->Hepler    {caption=HP -30% ATK -30%};<!--
+-->Galahad   {caption=ATK -20%};<!--
+-->}}
+|-
+| {{Wilder}}
+|-
+| {{Card List|mini=1|param_delim=,|1=<!--
+-->Hewynn    {caption=HP +20% ATK +20%};<!--
+-->Eironn    {caption=ATK +20%};<!--
+-->Arden    {caption=ATK +50%};<!--
+-->Lyca    {caption=ATK +40%};<!--
+-->Damian    {caption=ATK +30%};<!--
+-->Granny Dahnie;<!--
+-->Kafra    {caption=HP +20% ATK +30%};<!--
+-->Parisa    {caption=ATK +40%};<!--
+-->Bryon    {caption=HP -10% ATK -40%};<!--
+-->Florabelle;<!--
+-->Tasi    {caption=ATK -20%};<!--
+-->Ulmus;<!--
+-->Lenya    {caption=HP -40% ATK -40%};<!--
+-->Lorsan    {caption=ATK -30%};<!--
+-->Pang    {caption=HP -40% ATK -40% Phys DEF -40% Magic DEF -40%};<!--
+-->Lily May  {caption=ATK -30%};<!--
+-->Faramor    {caption=ATK -40%};<!--
+-->Indris;<!--
+-->Velara    {caption=ATK -20%};<!--
+-->Thador    {caption=HP -40% ATK -50% Phys DEF -40% Magic DEF -40%};<!--
+-->Tilaya    {caption=HP -30% ATK -30%};<!--
+-->Pippa    {caption=ATK -30%};<!--
+-->Solise   {caption=HP -20% ATK -20%};<!--
+-->}}
+|-
+| {{Graveborn}}
+|-
+|  {{Card List|mini=1|param_delim=,|1=<!--
+-->Thoran    {caption=HP +25%};<!--
+-->Carolina    {caption=ATK +40%};<!--
+-->Igor    {caption=ATK +50%};<!--
+-->Cecia    {caption=ATK -30%};<!--
+-->Niru;<!--
+-->Silvina    {caption=ATK -40%};<!--
+-->Salazer;<!--
+-->Viperian    {caption=ATK +50%};<!--
+-->Valka    {caption=HP -30% ATK -30%};<!--
+-->Ludovic    {caption=ATK +20%};<!--
+-->Callan;<!--
+-->Nara    {caption=ATK -30%};<!--
+-->Hodgkin    {caption=HP -20% ATK -20%};<!--
+-->Bonnie;<!--
+-->Daimon    {caption=HP -30% ATK -30% Phys DEF -20% Magic DEF -20%};<!--
+-->Isabella    {caption=HP +30% ATK +30%};<!--
+-->Shadewing;<!--
+-->Zorya    {caption=HP -30% ATK +50%};<!--
+-->Nerion    {caption=HP -50% ATK -50% ATK SPD -30%};<!--
+-->}}
+|-
+| {{Hypogean}}
+|-
+| {{Card List|mini=1|param_delim=,|1=<!--
+-->Berial    {caption=ATK -40%};<!--
+-->Reinier    {caption=HP +20% ATK +40%};<!--
+-->Phraesto    {caption=HP -30% ATK -30%};<!--
+-->Harak    {caption=HP -30% ATK -30%};<!--
+-->Cryonaia    {caption=ATK -10%};<!--
+-->}}
+|-
+| {{Celestial}}
+|-
+| {{Card List|mini=1|param_delim=,|1=<!--
+-->Scarlita    {caption=HP -10% ATK -10%};<!--
+-->Dionel;<!--
+-->Dunlingr    {caption=HP -40% ATK -20% Phys DEF -20% Magic DEF -20%};<!--
+-->Talene    {caption=ATK -30%};<!--
+-->Baelran    {caption=HP -30% ATK -20%};<!--
+-->}}
+|-
+| {{Dimensional}}
+|-
+|  {{Card List|mini=1|param_delim=,|1=<!--
+-->Natsu    {caption=HP -20% ATK -30%};<!--
+-->Lucy;<!--
+-->Laios    {caption=HP +20% ATK +20%};<!--
+-->}}
+|-
+|}
+
+===Banned Heroes===
+{{Card List|mini=1|Chippy; Hammie; Zanie; Gwyneth; Peggy; Kazim; Shemira; Zorya; Kulu; Saida; Mehira; Contess; Gunnar; Lamentis; Elijah & Lailah; Athalia; Aurora; Aliceth; Alna; Sylphira; Pandora; Marcille; Frieren; Himmel}}
+
+===Themes===
+This Solstice Clash event introduces battlefield themes. These themes rotate during the event, and each one brings a unique effect to the battlefield.
+====Tranquil Grounds====
+[[image: Tranquil-Grounds.png]]
+<br>Standard Conditions. No special rules.
+====Fierce Duel====
+[[image: Fierce Duel.png]]
+<br>Standard Conditions. Highly complex terrain.
+====Converging Paths====
+[[image: Converging Paths.png]]
+<br>Standard Conditions. Special Terrain.
+====Flourishing Wilds====
+[[image: Flourishing Wilds.png]]
+<br>HP increased by 100%. At 30s into a battle and every 10s thereafter, all units on the battlefield permanently lose 15 Vitality. This effect can stack. Standard terrain.
+====Tactical Grounds====
+[[image: Tactical Grounds.png]]
+<br>HP increased by 100%. At 30s into a battle and every 10s thereafter, all units on the battlefield permanently lose 15 Vitality. This effect can stack. Special terrain.
+
+
+==Gallery==
+{{Files by Category Gallery|Solstice Clash Images}}
+
+
+==Change History==
+{{Change History|1.7.2}}

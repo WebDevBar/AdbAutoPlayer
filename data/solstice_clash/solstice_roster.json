@@ -1,0 +1,695 @@
+{
+ "usable": [
+  {
+   "faction": "Lightbearer",
+   "name": "Valen",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Cassadee",
+   "adjustment": "ATK +50%",
+   "hp_pct": null,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Vala",
+   "adjustment": "ATK -40%",
+   "hp_pct": null,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Mirael",
+   "adjustment": "ATK +20%",
+   "hp_pct": null,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Marilee",
+   "adjustment": "ATK +20%",
+   "hp_pct": null,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Rowan",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Lucius",
+   "adjustment": "HP +40% ATK +20%",
+   "hp_pct": 40,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Korin",
+   "adjustment": "HP +20% ATK +20%",
+   "hp_pct": 20,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Atalanta",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Fay",
+   "adjustment": "HP +20% ATK +20%",
+   "hp_pct": 20,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Temesia",
+   "adjustment": "HP -20%",
+   "hp_pct": -20,
+   "atk_pct": null
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Walker",
+   "adjustment": "ATK +20%",
+   "hp_pct": null,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Sinbad",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Sonja",
+   "adjustment": "HP +20% ATK +20%",
+   "hp_pct": 20,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Lucca",
+   "adjustment": "HP -20%",
+   "hp_pct": -20,
+   "atk_pct": null
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Hugin",
+   "adjustment": "HP -40% ATK -40%",
+   "hp_pct": -40,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Cyran",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Evie",
+   "adjustment": "HP -20% ATK -40%",
+   "hp_pct": -20,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Perseus",
+   "adjustment": "HP -20% ATK -40%",
+   "hp_pct": -20,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Lightbearer",
+   "name": "Silven",
+   "adjustment": "HP -20% ATK -40%",
+   "hp_pct": -20,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Mauler",
+   "name": "Brutus",
+   "adjustment": "HP +20% ATK +40%",
+   "hp_pct": 20,
+   "atk_pct": 40
+  },
+  {
+   "faction": "Mauler",
+   "name": "Lumont",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Odie",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Seth",
+   "adjustment": "ATK +50%",
+   "hp_pct": null,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Mauler",
+   "name": "Smokey & Meerky",
+   "adjustment": "HP +40% ATK +20%",
+   "hp_pct": 40,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Mauler",
+   "name": "Kruger",
+   "adjustment": "HP +20% ATK +30%",
+   "hp_pct": 20,
+   "atk_pct": 30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Satrana",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Rhys",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Shakir",
+   "adjustment": "ATK -40%",
+   "hp_pct": null,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Mauler",
+   "name": "Koko",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Antandra",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Mauler",
+   "name": "Alsa",
+   "adjustment": "ATK +30%",
+   "hp_pct": null,
+   "atk_pct": 30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Soren",
+   "adjustment": "ATK -20%",
+   "hp_pct": null,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Mauler",
+   "name": "Mikola",
+   "adjustment": "HP +40% ATK +20%",
+   "hp_pct": 40,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Mauler",
+   "name": "Gerda",
+   "adjustment": "HP -20% ATK -20%",
+   "hp_pct": -20,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Mauler",
+   "name": "Zandrok",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Nazrik",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Kordan",
+   "adjustment": "HP -20% ATK -30%",
+   "hp_pct": -20,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Hepler",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Mauler",
+   "name": "Galahad",
+   "adjustment": "ATK -20%",
+   "hp_pct": null,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Wilder",
+   "name": "Hewynn",
+   "adjustment": "HP +20% ATK +20%",
+   "hp_pct": 20,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Wilder",
+   "name": "Eironn",
+   "adjustment": "ATK +20%",
+   "hp_pct": null,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Wilder",
+   "name": "Arden",
+   "adjustment": "ATK +50%",
+   "hp_pct": null,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Wilder",
+   "name": "Lyca",
+   "adjustment": "ATK +40%",
+   "hp_pct": null,
+   "atk_pct": 40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Damian",
+   "adjustment": "ATK +30%",
+   "hp_pct": null,
+   "atk_pct": 30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Granny Dahnie",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Wilder",
+   "name": "Kafra",
+   "adjustment": "HP +20% ATK +30%",
+   "hp_pct": 20,
+   "atk_pct": 30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Parisa",
+   "adjustment": "ATK +40%",
+   "hp_pct": null,
+   "atk_pct": 40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Bryon",
+   "adjustment": "HP -10% ATK -40%",
+   "hp_pct": -10,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Florabelle",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Wilder",
+   "name": "Tasi",
+   "adjustment": "ATK -20%",
+   "hp_pct": null,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Wilder",
+   "name": "Ulmus",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Wilder",
+   "name": "Lenya",
+   "adjustment": "HP -40% ATK -40%",
+   "hp_pct": -40,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Lorsan",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Pang",
+   "adjustment": "HP -40% ATK -40% Phys DEF -40% Magic DEF -40%",
+   "hp_pct": -40,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Lily May",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Faramor",
+   "adjustment": "ATK -40%",
+   "hp_pct": null,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Wilder",
+   "name": "Indris",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Wilder",
+   "name": "Velara",
+   "adjustment": "ATK -20%",
+   "hp_pct": null,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Wilder",
+   "name": "Thador",
+   "adjustment": "HP -40% ATK -50% Phys DEF -40% Magic DEF -40%",
+   "hp_pct": -40,
+   "atk_pct": -50
+  },
+  {
+   "faction": "Wilder",
+   "name": "Tilaya",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Pippa",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Wilder",
+   "name": "Solise",
+   "adjustment": "HP -20% ATK -20%",
+   "hp_pct": -20,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Thoran",
+   "adjustment": "HP +25%",
+   "hp_pct": 25,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Carolina",
+   "adjustment": "ATK +40%",
+   "hp_pct": null,
+   "atk_pct": 40
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Igor",
+   "adjustment": "ATK +50%",
+   "hp_pct": null,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Cecia",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Niru",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Silvina",
+   "adjustment": "ATK -40%",
+   "hp_pct": null,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Salazer",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Viperian",
+   "adjustment": "ATK +50%",
+   "hp_pct": null,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Valka",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Ludovic",
+   "adjustment": "ATK +20%",
+   "hp_pct": null,
+   "atk_pct": 20
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Callan",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Nara",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Hodgkin",
+   "adjustment": "HP -20% ATK -20%",
+   "hp_pct": -20,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Bonnie",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Daimon",
+   "adjustment": "HP -30% ATK -30% Phys DEF -20% Magic DEF -20%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Isabella",
+   "adjustment": "HP +30% ATK +30%",
+   "hp_pct": 30,
+   "atk_pct": 30
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Shadewing",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Zorya",
+   "adjustment": "HP -30% ATK +50%",
+   "hp_pct": -30,
+   "atk_pct": 50
+  },
+  {
+   "faction": "Graveborn",
+   "name": "Nerion",
+   "adjustment": "HP -50% ATK -50% ATK SPD -30%",
+   "hp_pct": -50,
+   "atk_pct": -50
+  },
+  {
+   "faction": "Hypogean",
+   "name": "Berial",
+   "adjustment": "ATK -40%",
+   "hp_pct": null,
+   "atk_pct": -40
+  },
+  {
+   "faction": "Hypogean",
+   "name": "Reinier",
+   "adjustment": "HP +20% ATK +40%",
+   "hp_pct": 20,
+   "atk_pct": 40
+  },
+  {
+   "faction": "Hypogean",
+   "name": "Phraesto",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Hypogean",
+   "name": "Harak",
+   "adjustment": "HP -30% ATK -30%",
+   "hp_pct": -30,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Hypogean",
+   "name": "Cryonaia",
+   "adjustment": "ATK -10%",
+   "hp_pct": null,
+   "atk_pct": -10
+  },
+  {
+   "faction": "Celestial",
+   "name": "Scarlita",
+   "adjustment": "HP -10% ATK -10%",
+   "hp_pct": -10,
+   "atk_pct": -10
+  },
+  {
+   "faction": "Celestial",
+   "name": "Dionel",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Celestial",
+   "name": "Dunlingr",
+   "adjustment": "HP -40% ATK -20% Phys DEF -20% Magic DEF -20%",
+   "hp_pct": -40,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Celestial",
+   "name": "Talene",
+   "adjustment": "ATK -30%",
+   "hp_pct": null,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Celestial",
+   "name": "Baelran",
+   "adjustment": "HP -30% ATK -20%",
+   "hp_pct": -30,
+   "atk_pct": -20
+  },
+  {
+   "faction": "Dimensional",
+   "name": "Natsu",
+   "adjustment": "HP -20% ATK -30%",
+   "hp_pct": -20,
+   "atk_pct": -30
+  },
+  {
+   "faction": "Dimensional",
+   "name": "Lucy",
+   "adjustment": "",
+   "hp_pct": null,
+   "atk_pct": null
+  },
+  {
+   "faction": "Dimensional",
+   "name": "Laios",
+   "adjustment": "HP +20% ATK +20%",
+   "hp_pct": 20,
+   "atk_pct": 20
+  }
+ ],
+ "banned": [
+  "Chippy",
+  "Hammie",
+  "Zanie",
+  "Gwyneth",
+  "Peggy",
+  "Kazim",
+  "Shemira",
+  "Zorya",
+  "Kulu",
+  "Saida",
+  "Mehira",
+  "Contess",
+  "Gunnar",
+  "Lamentis",
+  "Elijah & Lailah",
+  "Athalia",
+  "Aurora",
+  "Aliceth",
+  "Alna",
+  "Sylphira",
+  "Pandora",
+  "Marcille",
+  "Frieren",
+  "Himmel"
+ ]
+}

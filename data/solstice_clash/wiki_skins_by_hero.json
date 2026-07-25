@@ -1,0 +1,419 @@
+{
+ "Parisa": [
+  "Creek Vines",
+  "Ode to Flowers"
+ ],
+ "Chippy": [
+  "Acorn Knight"
+ ],
+ "Hammie": [
+  "Acorn Mage"
+ ],
+ "Cassadee": [
+  "Azure Prodigy",
+  "Astral Adventurer"
+ ],
+ "Lumont": [
+  "Benign Horn"
+ ],
+ "Brutus": [
+  "Blood Claw",
+  "Ravaging Cleave"
+ ],
+ "Florabelle": [
+  "Blooming Maiden"
+ ],
+ "Carolina": [
+  "Candlelight Specter"
+ ],
+ "Fay": [
+  "Colorful Dancer",
+  "Radiant Stars"
+ ],
+ "Kruger": [
+  "Dauntless Warrior"
+ ],
+ "Odie": [
+  "Desert Defender",
+  "Desert Ranger"
+ ],
+ "Alsa": [
+  "Desert Flare"
+ ],
+ "Antandra": [
+  "Desert Fury",
+  "Golden Whirl"
+ ],
+ "Satrana": [
+  "Ember Enchantress"
+ ],
+ "Dunlingr": [
+  "Eternal Voice"
+ ],
+ "Bryon": [
+  "Evergreen Sentinel",
+  "Starshore Breeze"
+ ],
+ "Tasi": [
+  "Fairy of Dreams",
+  "Starlit Fantasy"
+ ],
+ "Thoran": [
+  "Fallen King"
+ ],
+ "Vala": [
+  "Day and Night",
+  "Thorny Rose"
+ ],
+ "Sonja": [
+  "Crimson Queenpin",
+  "Pristine Valor"
+ ],
+ "Harak": [
+  "Deepsea Ravager",
+  "Barbed Abyss"
+ ],
+ "Elijah & Lailah": [
+  "Celestial Twins",
+  "Lunox Waltz"
+ ],
+ "Cryonaia": [
+  "Arctic Revenant"
+ ],
+ "Shemira": [
+  "Corpsemaker",
+  "Glacier Gossamer"
+ ],
+ "Lucy": [
+  "Celestial Spirit Mage"
+ ],
+ "Indris": [
+  "Chain Breaker",
+  "Scorching Oath"
+ ],
+ "Kulu": [
+  "Blast Master"
+ ],
+ "Baelran": [
+  "Dawnblade"
+ ],
+ "Pang": [
+  "Bamboo Guardian"
+ ],
+ "Talene": [
+  "Azure Flame",
+  "Resurging Flame"
+ ],
+ "Ulmus": [
+  "Duskwild Bloom",
+  "Grove Keeper"
+ ],
+ "Perseus": [
+  "Chosen Champion"
+ ],
+ "Marcille": [
+  "Elven Mage"
+ ],
+ "Laios": [
+  "Dungeon Adventurer"
+ ],
+ "Galahad": [
+  "Daughter of Dawn",
+  "Forest Dew"
+ ],
+ "Isabella": [
+  "Fabled Reverie",
+  "The Taken Soul"
+ ],
+ "Aurora": [
+  "Celestial of Dreams",
+  "Dreamscape Dominion"
+ ],
+ "Contess": [
+  "Abyssal Rulekeeper"
+ ],
+ "Nerion": [
+  "Bereaved Tide"
+ ],
+ "Gwyneth": [
+  "Dragonslayer Knight",
+  "Savannah Holiday"
+ ],
+ "Solise": [
+  "Crimson Court Fox",
+  "Floral Wonder"
+ ],
+ "Valen": [
+  "Crimson Operative",
+  "Roving Swordsman"
+ ],
+ "Kazim": [
+  "Falcon's Vow"
+ ],
+ "Lamentis": [
+  "Cosmic Hellion"
+ ],
+ "Peggy": [
+  "Empire's Jewel"
+ ],
+ "Voracia": [
+  "Feastweaver"
+ ],
+ "Cecia": [
+  "Midnight Cosmos",
+  "Requiem of Thorns"
+ ],
+ "Rhys": [
+  "Fiery Cavalier"
+ ],
+ "Granny Dahnie": [
+  "Forest Guardian"
+ ],
+ "Atalanta": [
+  "Fortune Finder"
+ ],
+ "Shakir": [
+  "Furious Howl",
+  "Silver Masquerade"
+ ],
+ "Kafra": [
+  "Gale Rider"
+ ],
+ "Scarlita": [
+  "Herald of Compassion"
+ ],
+ "Lyca": [
+  "Keeper of the Glades",
+  "Woodland Dawn"
+ ],
+ "Salazer": [
+  "Lash of Bantus"
+ ],
+ "Temesia": [
+  "Lightsavior"
+ ],
+ "Igor": [
+  "Graveyard Ghostfire",
+  "Pumpkin Spirit"
+ ],
+ "Phraesto": [
+  "Misty Scorpion",
+  "Golden Depths"
+ ],
+ "Marilee": [
+  "Greenwood Gale",
+  "Forest's Arrow"
+ ],
+ "Silvina": [
+  "Nostalgic Reverie",
+  "The Taken Breath"
+ ],
+ "Viperian": [
+  "Glimmerbane Regalia",
+  "Shadow Serpent"
+ ],
+ "Smokey & Meerky": [
+  "Frosted Elegance",
+  "Wasteland Apothecary"
+ ],
+ "Valka": [
+  "Forsaken Blade",
+  "Radiant Vanguard"
+ ],
+ "Hugin": [
+  "Maverick Smith"
+ ],
+ "Bonnie": [
+  "Obsidian Claws",
+  "Feathery Reverie"
+ ],
+ "Arden": [
+  "Oak Sage"
+ ],
+ "Callan": [
+  "Grim Soulkeeper"
+ ],
+ "Athalia": [
+  "Harbinger of Justice"
+ ],
+ "Hodgkin": [
+  "Frostbitten Depths",
+  "Reviled Captain"
+ ],
+ "Natsu": [
+  "Fire Dragon Slayer Mage"
+ ],
+ "Daimon": [
+  "Forsaken Child",
+  "Snowday Whimsy"
+ ],
+ "Soren": [
+  "Golden Afterglow",
+  "Silent Fury"
+ ],
+ "Thador": [
+  "Ironsworn General"
+ ],
+ "Pandora": [
+  "Hope Unleashed"
+ ],
+ "Mehira": [
+  "Mind Cager"
+ ],
+ "Alna": [
+  "Frozen Mother"
+ ],
+ "Kordan": [
+  "Ironblood Chieftain"
+ ],
+ "Ravion": [
+  "Ivory Majesty",
+  "Twilight's Burden"
+ ],
+ "Lenya": [
+  "Golden Recess",
+  "Wild Cyclone"
+ ],
+ "Silven": [
+  "Heir of Glory"
+ ],
+ "Hepler": [
+  "Master of Forms"
+ ],
+ "Gunnar": [
+  "Iron Doom"
+ ],
+ "Ludovic": [
+  "Nostalgic Meadow",
+  "Wreathed Eternalist"
+ ],
+ "Frieren": [
+  "Frieren's Winterwear",
+  "The Legendary Mage"
+ ],
+ "Orion": [
+  "Golden Prince"
+ ],
+ "Rolan": [
+  "First Crown"
+ ],
+ "Mirael": [
+  "Scarlet Vow",
+  "Scarlet Sorceress"
+ ],
+ "Eironn": [
+  "Sword of Misarte",
+  "Stormsword"
+ ],
+ "Sinbad": [
+  "Seaside Savant",
+  "Ocean's Outlaw"
+ ],
+ "Berial": [
+  "Sinister Jester"
+ ],
+ "Niru": [
+  "Soul Collector"
+ ],
+ "Lucca": [
+  "Stalwart Fighter"
+ ],
+ "Seth": [
+  "Swift Shadow"
+ ],
+ "Reinier": [
+  "Symmetric Sin"
+ ],
+ "Hewynn": [
+  "Tender Leaf",
+  "Serene Snowfall"
+ ],
+ "Lucius": [
+  "The Lightbringer"
+ ],
+ "Rowan": [
+  "The Roamer",
+  "Son of Mithril"
+ ],
+ "Gerda": [
+  "Soothing Siren"
+ ],
+ "Faramor": [
+  "Silverfang Mantle",
+  "Sunlit Surf"
+ ],
+ "Lily May": [
+  "Silent Guillotine",
+  "Twilight Tracker"
+ ],
+ "Velara": [
+  "Pale Votary"
+ ],
+ "Mikola": [
+  "Petal Sparkle",
+  "Warbeat Compere"
+ ],
+ "Aliceth": [
+  "Radiant Wings"
+ ],
+ "Nazrik": [
+  "Soulstalker"
+ ],
+ "Koko": [
+  "Sugar-Coated Menace",
+  "Wild Child"
+ ],
+ "Pippa": [
+  "The Muddled Magician"
+ ],
+ "Damian": [
+  "Storybook Spark",
+  "Woody Wonder"
+ ],
+ "Himmel": [
+  "The Legendary Hero"
+ ],
+ "Evie": [
+  "Royal Envoy"
+ ],
+ "Sylphira": [
+  "Sovereign of Song"
+ ],
+ "Dionel": [
+  "Venus of Dawn"
+ ],
+ "Walker": [
+  "Wildland Outlaw"
+ ],
+ "Korin": [
+  "Wood Warden"
+ ],
+ "Nara": [
+  "Wrathful Wraith"
+ ],
+ "Lorsan": [
+  "Winter's Tune",
+  "Windweaver Protector"
+ ],
+ "Cyran": [
+  "Umbral Weaver"
+ ],
+ "Saida": [
+  "Vampiric Vine"
+ ],
+ "Zandrok": [
+  "Watchful Edge"
+ ],
+ "Zanie": [
+  "Timeless Tinkerer"
+ ],
+ "Shadewing": [
+  "Undying Vow"
+ ],
+ "Tilaya": [
+  "Wild Blade"
+ ],
+ "Zorya": [
+  "Watcher in Stone"
+ ]
+}

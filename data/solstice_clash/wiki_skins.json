@@ -1,0 +1,872 @@
+{
+ "Creek Vines": {
+  "hero": "Parisa",
+  "rarity": "Epic",
+  "type": "Event;Paid"
+ },
+ "Acorn Knight": {
+  "hero": "Chippy",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Acorn Mage": {
+  "hero": "Hammie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Azure Prodigy": {
+  "hero": "Cassadee",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Benign Horn": {
+  "hero": "Lumont",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Blood Claw": {
+  "hero": "Brutus",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Blooming Maiden": {
+  "hero": "Florabelle",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Candlelight Specter": {
+  "hero": "Carolina",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Colorful Dancer": {
+  "hero": "Fay",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Dauntless Warrior": {
+  "hero": "Kruger",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Desert Defender": {
+  "hero": "Odie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Desert Flare": {
+  "hero": "Alsa",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Desert Fury": {
+  "hero": "Antandra",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Ember Enchantress": {
+  "hero": "Satrana",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Eternal Voice": {
+  "hero": "Dunlingr",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Evergreen Sentinel": {
+  "hero": "Bryon",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Fairy of Dreams": {
+  "hero": "Tasi",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Fallen King": {
+  "hero": "Thoran",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Day and Night": {
+  "hero": "Vala",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Desert Ranger": {
+  "hero": "Odie",
+  "rarity": "Elite",
+  "type": "Event;Paid"
+ },
+ "Crimson Queenpin": {
+  "hero": "Sonja",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Deepsea Ravager": {
+  "hero": "Harak",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Celestial Twins": {
+  "hero": "Elijah & Lailah",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Arctic Revenant": {
+  "hero": "Cryonaia",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Corpsemaker": {
+  "hero": "Shemira",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Celestial Spirit Mage": {
+  "hero": "Lucy",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Chain Breaker": {
+  "hero": "Indris",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Blast Master": {
+  "hero": "Kulu",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Dawnblade": {
+  "hero": "Baelran",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Bamboo Guardian": {
+  "hero": "Pang",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Azure Flame": {
+  "hero": "Talene",
+  "rarity": "Epic",
+  "type": "Event;Paid"
+ },
+ "Duskwild Bloom": {
+  "hero": "Ulmus",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Chosen Champion": {
+  "hero": "Perseus",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Elven Mage": {
+  "hero": "Marcille",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Dungeon Adventurer": {
+  "hero": "Laios",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Daughter of Dawn": {
+  "hero": "Galahad",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Fabled Reverie": {
+  "hero": "Isabella",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Celestial of Dreams": {
+  "hero": "Aurora",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Astral Adventurer": {
+  "hero": "Cassadee",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Abyssal Rulekeeper": {
+  "hero": "Contess",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Barbed Abyss": {
+  "hero": "Harak",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Dreamscape Dominion": {
+  "hero": "Aurora",
+  "rarity": "Epic",
+  "type": "Event;Paid"
+ },
+ "Bereaved Tide": {
+  "hero": "Nerion",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Dragonslayer Knight": {
+  "hero": "Gwyneth",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Crimson Court Fox": {
+  "hero": "Solise",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Crimson Operative": {
+  "hero": "Valen",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Falcon's Vow": {
+  "hero": "Kazim",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Cosmic Hellion": {
+  "hero": "Lamentis",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Empire's Jewel": {
+  "hero": "Peggy",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Feastweaver": {
+  "hero": "Voracia",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Midnight Cosmos": {
+  "hero": "Cecia",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Fiery Cavalier": {
+  "hero": "Rhys",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Forest Guardian": {
+  "hero": "Granny Dahnie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Fortune Finder": {
+  "hero": "Atalanta",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Furious Howl": {
+  "hero": "Shakir",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Gale Rider": {
+  "hero": "Kafra",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Grove Keeper": {
+  "hero": "Ulmus",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Herald of Compassion": {
+  "hero": "Scarlita",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Keeper of the Glades": {
+  "hero": "Lyca",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Lash of Bantus": {
+  "hero": "Salazer",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Lightsavior": {
+  "hero": "Temesia",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Graveyard Ghostfire": {
+  "hero": "Igor",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Misty Scorpion": {
+  "hero": "Phraesto",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Greenwood Gale": {
+  "hero": "Marilee",
+  "rarity": "Elite",
+  "type": "Event"
+ },
+ "Nostalgic Reverie": {
+  "hero": "Silvina",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Hero Skin": {
+  "hero": null,
+  "rarity": null,
+  "type": null
+ },
+ "Glimmerbane Regalia": {
+  "hero": "Viperian",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Frosted Elegance": {
+  "hero": "Smokey & Meerky",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Forsaken Blade": {
+  "hero": "Valka",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Maverick Smith": {
+  "hero": "Hugin",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Obsidian Claws": {
+  "hero": "Bonnie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Oak Sage": {
+  "hero": "Arden",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Forest's Arrow": {
+  "hero": "Marilee",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Grim Soulkeeper": {
+  "hero": "Callan",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Harbinger of Justice": {
+  "hero": "Athalia",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Frostbitten Depths": {
+  "hero": "Hodgkin",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Fire Dragon Slayer Mage": {
+  "hero": "Natsu",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Forsaken Child": {
+  "hero": "Daimon",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Golden Afterglow": {
+  "hero": "Soren",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Glacier Gossamer": {
+  "hero": "Shemira",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Ironsworn General": {
+  "hero": "Thador",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Hope Unleashed": {
+  "hero": "Pandora",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Lunox Waltz": {
+  "hero": "Elijah & Lailah",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Mind Cager": {
+  "hero": "Mehira",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Forest Dew": {
+  "hero": "Galahad",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Golden Whirl": {
+  "hero": "Antandra",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Golden Depths": {
+  "hero": "Phraesto",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Frozen Mother": {
+  "hero": "Alna",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Ironblood Chieftain": {
+  "hero": "Kordan",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Floral Wonder": {
+  "hero": "Solise",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Feathery Reverie": {
+  "hero": "Bonnie",
+  "rarity": "Legendary",
+  "type": "Paid;Couture"
+ },
+ "Ivory Majesty": {
+  "hero": "Ravion",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Golden Recess": {
+  "hero": "Lenya",
+  "rarity": "Epic",
+  "type": "Paid;Velvet Store"
+ },
+ "Heir of Glory": {
+  "hero": "Silven",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Master of Forms": {
+  "hero": "Hepler",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Iron Doom": {
+  "hero": "Gunnar",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Nostalgic Meadow": {
+  "hero": "Ludovic",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Frieren's Winterwear": {
+  "hero": "Frieren",
+  "rarity": "Elite",
+  "type": "Paid"
+ },
+ "Golden Prince": {
+  "hero": "Orion",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "First Crown": {
+  "hero": "Rolan",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Radiant Stars": {
+  "hero": "Fay",
+  "rarity": "Elite",
+  "type": "Event"
+ },
+ "Scarlet Vow": {
+  "hero": "Mirael",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Sword of Misarte": {
+  "hero": "Eironn",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Ode to Flowers": {
+  "hero": "Parisa",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Requiem of Thorns": {
+  "hero": "Cecia",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Resurging Flame": {
+  "hero": "Talene",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Roving Swordsman": {
+  "hero": "Valen",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Scarlet Sorceress": {
+  "hero": "Mirael",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Seaside Savant": {
+  "hero": "Sinbad",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Shadow Serpent": {
+  "hero": "Viperian",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Silent Fury": {
+  "hero": "Soren",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Sinister Jester": {
+  "hero": "Berial",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Soul Collector": {
+  "hero": "Niru",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Stalwart Fighter": {
+  "hero": "Lucca",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Stormsword": {
+  "hero": "Eironn",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Swift Shadow": {
+  "hero": "Seth",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Symmetric Sin": {
+  "hero": "Reinier",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Tender Leaf": {
+  "hero": "Hewynn",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "The Lightbringer": {
+  "hero": "Lucius",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "The Roamer": {
+  "hero": "Rowan",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "The Taken Breath": {
+  "hero": "Silvina",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Pumpkin Spirit": {
+  "hero": "Igor",
+  "rarity": "Elite",
+  "type": "Event"
+ },
+ "Ravaging Cleave": {
+  "hero": "Brutus",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Son of Mithril": {
+  "hero": "Rowan",
+  "rarity": "Elite",
+  "type": "Season Milestone;Quest"
+ },
+ "Ocean's Outlaw": {
+  "hero": "Sinbad",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Starlit Fantasy": {
+  "hero": "Tasi",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Radiant Vanguard": {
+  "hero": "Valka",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Reviled Captain": {
+  "hero": "Hodgkin",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Soothing Siren": {
+  "hero": "Gerda",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Silverfang Mantle": {
+  "hero": "Faramor",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Serene Snowfall": {
+  "hero": "Hewynn",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "Scorching Oath": {
+  "hero": "Indris",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Silent Guillotine": {
+  "hero": "Lily May",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "Pale Votary": {
+  "hero": "Velara",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Starshore Breeze": {
+  "hero": "Bryon",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Petal Sparkle": {
+  "hero": "Mikola",
+  "rarity": "Elite",
+  "type": "Event"
+ },
+ "Radiant Wings": {
+  "hero": "Aliceth",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Soulstalker": {
+  "hero": "Nazrik",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Snowday Whimsy": {
+  "hero": "Daimon",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Sugar-Coated Menace": {
+  "hero": "Koko",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Silver Masquerade": {
+  "hero": "Shakir",
+  "rarity": "Elite",
+  "type": "Paid"
+ },
+ "Pristine Valor": {
+  "hero": "Sonja",
+  "rarity": "Legendary",
+  "type": "Couture;Paid"
+ },
+ "The Muddled Magician": {
+  "hero": "Pippa",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Storybook Spark": {
+  "hero": "Damian",
+  "rarity": "Epic",
+  "type": "Velvet Store;Paid"
+ },
+ "The Legendary Hero": {
+  "hero": "Himmel",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "The Legendary Mage": {
+  "hero": "Frieren",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Royal Envoy": {
+  "hero": "Evie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Sovereign of Song": {
+  "hero": "Sylphira",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Savannah Holiday": {
+  "hero": "Gwyneth",
+  "rarity": "Elite",
+  "type": "Quest"
+ },
+ "Sunlit Surf": {
+  "hero": "Faramor",
+  "rarity": "Epic",
+  "type": "Paid"
+ },
+ "Thorny Rose": {
+  "hero": "Vala",
+  "rarity": "Legendary",
+  "type": "VIP Reward;Paid"
+ },
+ "Twilight Tracker": {
+  "hero": "Lily May",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Venus of Dawn": {
+  "hero": "Dionel",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Warbeat Compere": {
+  "hero": "Mikola",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wasteland Apothecary": {
+  "hero": "Smokey & Meerky",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wild Child": {
+  "hero": "Koko",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wild Cyclone": {
+  "hero": "Lenya",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wildland Outlaw": {
+  "hero": "Walker",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wood Warden": {
+  "hero": "Korin",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Woody Wonder": {
+  "hero": "Damian",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wrathful Wraith": {
+  "hero": "Nara",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wreathed Eternalist": {
+  "hero": "Ludovic",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Winter's Tune": {
+  "hero": "Lorsan",
+  "rarity": "Elite",
+  "type": "Paid"
+ },
+ "Windweaver Protector": {
+  "hero": "Lorsan",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Umbral Weaver": {
+  "hero": "Cyran",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Vampiric Vine": {
+  "hero": "Saida",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Watchful Edge": {
+  "hero": "Zandrok",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Twilight's Burden": {
+  "hero": "Ravion",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Timeless Tinkerer": {
+  "hero": "Zanie",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "The Taken Soul": {
+  "hero": "Isabella",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Undying Vow": {
+  "hero": "Shadewing",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Wild Blade": {
+  "hero": "Tilaya",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Watcher in Stone": {
+  "hero": "Zorya",
+  "rarity": null,
+  "type": "Classic"
+ },
+ "Woodland Dawn": {
+  "hero": "Lyca",
+  "rarity": "Elite",
+  "type": "Event"
+ }
+}

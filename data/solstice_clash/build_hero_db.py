@@ -27,10 +27,13 @@ Outputs (all committed):
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
 import sqlite3
+import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -222,25 +225,7 @@ def build_event_roster(wt: str) -> tuple[list[dict], list[str]]:
     return usable, banned
 
 
-SCHEMA = """
-CREATE TABLE hero(
-  slug TEXT PRIMARY KEY, name TEXT NOT NULL, faction TEXT, hero_class TEXT,
-  damage_type TEXT, attack_range INTEGER, rarity TEXT, title TEXT,
-  gender TEXT, race TEXT, combat_icon TEXT);
-CREATE TABLE hero_skin(
-  id INTEGER PRIMARY KEY, hero_slug TEXT NOT NULL REFERENCES hero(slug),
-  skin_name TEXT NOT NULL, combat_icon TEXT, UNIQUE(hero_slug, skin_name));
-CREATE TABLE hero_skill(
-  id INTEGER PRIMARY KEY, hero_slug TEXT NOT NULL REFERENCES hero(slug),
-  skill_type TEXT, skill_name TEXT, attack_range TEXT, cooldown TEXT,
-  energy TEXT, summary TEXT, detail TEXT, UNIQUE(hero_slug, skill_name));
-CREATE TABLE solstice_roster(
-  id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, hero_slug TEXT, faction TEXT,
-  status TEXT NOT NULL, adjustment TEXT, hp_pct INTEGER, atk_pct INTEGER);
-CREATE INDEX idx_hero_faction ON hero(faction);
-CREATE INDEX idx_skill_hero ON hero_skill(hero_slug);
-CREATE INDEX idx_roster_status ON solstice_roster(status);
-"""
+# Schema now lives in schema.sql, applied by migrate.py.
 
 
 def main() -> None:
@@ -253,6 +238,8 @@ def main() -> None:
 
     print("fetching heroes ...")
     heroes = build_heroes(by_hero)
+
+    run_stamp = datetime.datetime.now().isoformat(timespec="seconds")
 
     print(f"fetching event page {EVENT_PAGE!r} ...")
     event_wt = api(action="parse", page=EVENT_PAGE, prop="wikitext")["parse"]["wikitext"]
@@ -269,24 +256,68 @@ def main() -> None:
         fh.write(event_wt)
 
     db = os.path.join(HERE, "heroes.sqlite")
-    if os.path.exists(db):
-        os.remove(db)
+    # NON-DESTRUCTIVE. This script refreshes only the wiki-derived tables. Locally
+    # earned data - hero.external_id / game_icon, hero_alias, cell_registry,
+    # art_transform, library_config - is measured here and CANNOT be rebuilt from the
+    # wiki, so it must survive a refresh. Deleting the file would destroy all of it.
+    subprocess.run([sys.executable, os.path.join(HERE, "migrate.py"), db], check=True)
     con = sqlite3.connect(db)
-    con.executescript(SCHEMA)
+    # preserve the icon mapping across the refresh
+    preserved = {
+        name: (ext, gicon, wicon)
+        for name, ext, gicon, wicon in con.execute(
+            "SELECT name, external_id, game_icon, wiki_icon FROM hero "
+            "WHERE external_id IS NOT NULL OR game_icon IS NOT NULL OR wiki_icon IS NOT NULL")
+    }
+    # Keyed by (hero_slug, skin_name) because that is the table's uniqueness. Keying on
+    # skin_name alone collapses rows when two heroes share a skin name, and the restore
+    # would then write one hero's icons onto the other's row.
+    preserved_skin = {
+        (hs, sk): (g, w, iw, ih) for hs, sk, g, w, iw, ih in con.execute(
+            "SELECT hero_slug, skin_name, game_icon, wiki_icon, icon_w, icon_h FROM hero_skin "
+            "WHERE game_icon IS NOT NULL OR wiki_icon IS NOT NULL "
+            "OR icon_w IS NOT NULL OR icon_h IS NOT NULL")
+    }
+    # hero_skill and solstice_roster hold NOTHING locally earned, so a clean rebuild is
+    # correct for them. hero_skin does (game_icon/wiki_icon/icon_w/icon_h), so it is upserted
+    # and stamped instead - a transient wiki omission must not delete a measured icon.
+    con.execute("DELETE FROM hero_skill")
+    con.execute("DELETE FROM solstice_roster")
     for h in heroes:
-        con.execute("INSERT OR REPLACE INTO hero VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    (h["slug"], h["name"], h["faction"], h["hero_class"],
-                     h["damage_type"], h["attack_range"], h["rarity"], h["title"],
-                     h["gender"], h["race"], f"Hero {h['name']}.png"))
+        # Named columns, never positional: the table has grown and a positional
+        # INSERT silently breaks (or loudly, as it did) whenever a column is added.
+        # INSERT OR REPLACE would also null out preserved columns, so upsert instead.
+        con.execute(
+            "INSERT INTO hero(slug,name,faction,hero_class,damage_type,attack_range,"
+            "rarity,title,gender,race) VALUES(?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(slug) DO UPDATE SET name=excluded.name, faction=excluded.faction,"
+            "hero_class=excluded.hero_class, damage_type=excluded.damage_type,"
+            "attack_range=excluded.attack_range, rarity=excluded.rarity, title=excluded.title,"
+            "gender=excluded.gender, race=excluded.race",
+            (h["slug"], h["name"], h["faction"], h["hero_class"],
+             h["damage_type"], h["attack_range"], h["rarity"], h["title"],
+             h["gender"], h["race"]))
+        con.execute("UPDATE hero SET last_seen=? WHERE slug=?", (run_stamp, h["slug"]))
         for s in h["skins"]:
-            con.execute("INSERT OR IGNORE INTO hero_skin(hero_slug,skin_name,combat_icon)"
-                        " VALUES(?,?,?)", (h["slug"], s, f"Hero {s}.png"))
+            con.execute("INSERT INTO hero_skin(hero_slug,skin_name,last_seen) VALUES(?,?,?) "
+                        "ON CONFLICT(hero_slug,skin_name) DO UPDATE SET last_seen=excluded.last_seen",
+                        (h["slug"], s, run_stamp))
         for k in h["skills"]:
             con.execute(
                 "INSERT OR IGNORE INTO hero_skill(hero_slug,skill_type,skill_name,"
                 "attack_range,cooldown,energy,summary,detail) VALUES(?,?,?,?,?,?,?,?)",
                 (h["slug"], k["type"], k["name"], k["range"], k["cd"], k["energy"],
                  k["lite"], k["full"]))
+    restored = 0
+    for name, (ext, gicon, wicon) in preserved.items():
+        restored += con.execute(
+            "UPDATE hero SET external_id=?, game_icon=?, wiki_icon=? WHERE name=?",
+            (ext, gicon, wicon, name)).rowcount
+
+    for (hs, sk), (g, w, iw, ih) in preserved_skin.items():
+        con.execute("UPDATE hero_skin SET game_icon=?, wiki_icon=?, icon_w=?, icon_h=? "
+                    "WHERE hero_slug=? AND skin_name=?", (g, w, iw, ih, hs, sk))
+
     known = {n.lower(): s for n, s in con.execute("SELECT name,slug FROM hero")}
     unlinked = []
     for u in usable:
@@ -310,8 +341,22 @@ def main() -> None:
                     " VALUES(?,?,?,?)", (b, known.get(b.lower()), None, "banned"))
     con.commit()
 
+    stale_skins = [f"{hs}/{sk}" for hs, sk in con.execute(
+        "SELECT hero_slug, skin_name FROM hero_skin WHERE last_seen IS NULL OR last_seen <> ?",
+        (run_stamp,))]
+    if stale_skins:
+        print(f"  WARNING: {len(stale_skins)} skin rows absent from this wiki fetch "
+              f"(kept, not deleted): {stale_skins[:8]}{' ...' if len(stale_skins) > 8 else ''}")
+    stale = [n for (n,) in con.execute(
+        "SELECT name FROM hero WHERE last_seen IS NULL OR last_seen <> ?", (run_stamp,))]
+    if stale:
+        print(f"  WARNING: {len(stale)} hero rows absent from this wiki fetch "
+              f"(kept, not deleted - they may carry a game icon mapping):")
+        print(f"           {stale[:12]}{' ...' if len(stale) > 12 else ''}")
+    print(f"  icon mappings preserved: {restored}/{len(preserved)}")
     counts = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-              for t in ("hero", "hero_skin", "hero_skill", "solstice_roster")}
+              for t in ("hero", "hero_skin", "hero_skill", "solstice_roster",
+                        "hero_alias", "cell_registry", "art_transform")}
     print("  rows:", counts)
     print("  usable per faction:", dict(Counter(u["faction"] for u in usable)))
     print("  banned:", len(banned))

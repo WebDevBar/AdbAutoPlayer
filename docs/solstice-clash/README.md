@@ -504,3 +504,49 @@ recursive copy of the game data dir (13G) filled it completely, breaking tool ou
 
 `/mnt/vault/solstice/` holds the captures (`frames`, `compete`, `labels`), `apk`, `lpak`, and
 `gamefiles`; `/tmp/solstice` symlinks to them so existing paths still work.
+
+---
+
+## 14. Database, schema and refresh
+
+    data/solstice_clash/
+      schema.sql            declarative schema (v1)
+      migrate.py            idempotent, non-destructive. Run it any time.
+      build_hero_db.py      refreshes WIKI-DERIVED tables only
+      extract_game_icons.py decodes the game's AST/LZ4/ASTC icons
+      heroes.sqlite         the database
+
+### Two data lifecycles - this is the thing to understand
+
+| Class | Tables / columns | Refresh behaviour |
+|---|---|---|
+| **wiki-derived** | `hero_skill`, `solstice_roster`, and the wiki fields of `hero` | rebuilt on every run |
+| **locally earned** | `hero.external_id`, `hero.game_icon`, `hero.wiki_icon`, `hero.icon_w/h`, all `hero_skin` icon columns, `hero_alias`, `cell_registry`, `art_transform`, `library_config` | **measured here, NOT reproducible from the wiki - must survive** |
+
+`build_hero_db.py` originally **deleted heroes.sqlite outright**, which would have destroyed
+every locally-earned value. It now runs `migrate.py`, snapshots the icon columns, rebuilds only
+the tables that are safe to rebuild, and restores.
+
+### Rules that came out of peer review (Codex, 4 rounds to NO ISSUES FOUND)
+
+1. **Never DELETE a table that holds locally-earned columns.** `hero` and `hero_skin` are
+   upserted and stamped with `last_seen`; rows absent from a fetch are **reported, never
+   deleted**. A transient wiki omission must not destroy a measured icon mapping.
+   Verified: an injected orphan skin survived a full refresh with all icon columns intact.
+2. **Key preservation snapshots by the table's real UNIQUE constraint.** `hero_skin` is
+   `UNIQUE(hero_slug, skin_name)` - keying a snapshot on `skin_name` alone collapses rows when
+   two heroes share a skin name, and the restore then writes one hero's icons onto another's.
+3. **Never use positional INSERT.** `INSERT INTO hero VALUES(?,...)` broke the moment the table
+   grew. Always name columns, and use `ON CONFLICT ... DO UPDATE` so preserved columns are not
+   nulled - `INSERT OR REPLACE` would wipe them.
+4. **Only claim an asset file that exists on disk.** `wiki_icon` is a local fact, so the builder
+   must not populate it; it briefly claimed a wiki file for all 153 heroes when only 124 exist.
+
+### Verifying a change
+
+    python3 migrate.py            # idempotent, safe on an existing DB
+    cp heroes.sqlite /tmp/before.sqlite
+    python3 build_hero_db.py
+    # then diff every table count and every icon column against /tmp/before.sqlite
+
+That diff is what caught three separate data-loss paths. Run it after any builder change.

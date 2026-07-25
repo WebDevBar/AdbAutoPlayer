@@ -392,76 +392,110 @@ the crop by hand and by exhaustive search - the region was never the problem. Th
 render differs compositionally from the wiki art. Both still identify **correctly**, because
 base and skin art map to the same `hero_slug`.
 
-## 12. Datamining the installed game - PARTIALLY SOLVED, ASSETS ARE BAKED IN
+## 12. Game assets - SOLVED. These are the PRIMARY icon source.
 
-**Correction:** an earlier version of this doc called this a dead end. That was wrong, three
-times over. The hero art IS shipped locally. The mistake each time was concluding from a
-truncated listing - most damningly, running `find` that reported **10,935 images** and then
-declaring "no hero icons" after reading only the first 40 lines (all of which happened to be
-`iconCache`).
-
-### WHERE THE HERO ART ACTUALLY IS
+Hero art is **baked into the installed game**, not streamed. It beats the wiki on every measure.
 
     ~/.local/share/waydroid/data/data/com.farlightgames.igame.gp/files/data/ui/icon/
 
-Reachable from the HOST (Waydroid's Android fs is on the host filesystem); needs sudo. 430MB.
+Waydroid's Android filesystem is on the HOST, so no root or adb is needed - but the directory is
+owned by the Android UID, so copying out needs sudo. Subdirs: `hero/` 593, `heroskin/` 153,
+`heroult/` 208, `duelicon/` 169. 430MB total.
 
-| Directory | Files | Contents |
+### The container format (reverse-engineered)
+
+Files are named `*.png` but are NOT PNGs:
+
+    bytes 0-2   "AST"
+    byte  3,4   width  = b3 + b4*256
+    byte  5,6   height = b5 + b6*256
+    byte  7     13   (block-size code; every observed file is ASTC 6x6)
+    bytes 8-11  uncompressed size, uint32 LE
+    bytes 12+   LZ4 *block* (not frame) compressed ASTC
+
+Decode = LZ4-block decompress -> ASTC 6x6 -> **flip vertically** (Unity origin is bottom-left).
+Verified on every size variant: 180x248->20160, 508x716->163200, 300x565->76000, 280x168->21056.
+1123 of 1123 files decode with zero failures. Implemented in `extract_game_icons.py`.
+
+### Naming
+
+    spui_herohead_<ID>.png       base icon; <ID> is the GAME'S OWN HERO ID
+    spui_herohead_<ID>_s1.png    skin variant (any suffix after the id = a skin)
+
+IDs < 1000 are heroes; 1000+ are NPCs, mobs and bosses.
+
+### Gamma: apply exponent 1/1.8 at library-build time
+
+Decoded RGB renders darker than the game draws it. Measured against **labelled ADB cells**
+(the only ground truth that matters):
+
+| correction | median | worst | >=0.90 |
+|---|---|---|---|
+| raw | 0.9550 | 0.9055 | 18/18 |
+| **1/1.8** | **0.9718** | **0.9115** | 18/18 |
+| 1/2.0 | 0.9705 | 0.9059 | 18/18 |
+
+Do NOT bake it into the files - apply when building the match library so it stays tunable per
+image. Stored as `library_config.gamma`.
+
+Comparing to wiki art instead suggests a *bimodal* correction (20 of 103 need gamma, 83 do not).
+That is an artifact of inconsistent wiki uploads, not a property of the game assets. Trust
+captured frames, not the wiki.
+
+### Results vs the wiki library
+
+| | wiki assets | game assets |
 |---|---|---|
-| `ui/icon/hero` | 593 | `spui_herohead_<ID>.png` - **hero head icons keyed by numeric ID** |
-| `ui/icon/heroskin` | 153 | skin variants |
-| `ui/icon/heroult` | 208 | ultimate icons |
-| `ui/icon/duelicon` | 169 | duel-mode icons (Solstice Clash is a duel mode) |
-| `ui/icon/avatar` | 1726 | player avatars |
-| `ui/icon/item` | 1434 | items |
+| locked_pick blind (54 cells) | 52/54 correct, median 0.797 | **54/54, median 0.9731, min 0.9249** |
+| draft_card (18 labelled) | 17/18 >=0.90, worst 0.63 | **18/18, worst 0.9055** |
+| margin | median +0.337 | median **+0.460** |
+| Reinier | 0.631 | **0.9747** (wiki art is a different picture) |
+| Eironn | 0.648 | **0.9529** (via skin `15_s1`) |
 
-Copied to `/mnt/vault/solstice/gamefiles/ui/`.
+The two cells the wiki library got wrong were both **Zorya**; the game library names them
+correctly at 0.928/0.943.
 
-**The numeric ID in `spui_herohead_<ID>.png` is the game's own hero ID** - the universal
-identifier we wanted for the `external_id` column.
+### Hero ID mapping - COMPLETE
 
-### BLOCKER: the .png files are not PNGs
+All **118 current heroes** (list supplied by the user, 2026-07-26) have a game icon.
+`hero.external_id` = the game's hero ID, `hero.game_icon` = the icon filename.
 
-They are a Lilith-custom container. Magic is `41 53 54 b4` (`"AST"` + 0xb4), NOT standard
-ASTC (`13 AB A1 5C`). Measured on `spui_herohead_1000.png` (15302 bytes):
+Mapping was built three ways: wiki<->game asset match at >=0.95 (86 ids, median similarity
+0.9972 - the wiki art IS datamined), confirmed cells, and user identification of the rest.
 
-- no (header offset, block size, dimensions) combination yields a size-exact raw ASTC payload
-- no zlib stream in the first 64 bytes
-- body entropy 7.49 bits/byte -> compressed or block-packed
+`hero_alias` maps the long collab names (`Lucy Heartfilia` -> `Lucy`, `Natsu Dragneel` -> `Natsu`)
+plus `...New` suffixes and the `Gwineth`/`Gwyneth` spelling.
 
-Decoding needs reverse engineering of that header. This is now a **bounded, well-defined
-target**: one container format, one file to crack, 593 hero icons behind it.
+The 32 hero-table rows without a game icon are NPCs/bosses the wiki files under
+Category:Heroes - none appear in the user's current-hero list. Wiki rarity/class fields are
+unreliable here: `Rolan` and `Voracia` carry rarity S and skills but are NOT current heroes.
 
-### Also unmapped: hero ID -> name
+### Wiki icons are kept as a SECONDARY source
 
-`assets/Config/AutoGenConfigBytes/LanguageDbEN.bytes` (23MB, in `split_BinaryAssets.apk`)
-contains every hero name in plain text, but the key/value structure needs parsing to link
-IDs to names. Note we would not strictly need it: with confirmed cell labels we can identify
-a decoded icon by matching it against cells we have already named, and the ID follows.
+`hero.wiki_icon` / `hero_skin.wiki_icon`. 121 heroes have both sources, 3 wiki-only.
+`library_config.icon_priority` = `game,wiki`. Use game first, always.
 
-### What these sources are NOT (checked, do not re-check)
+### What these sources are NOT (checked - do not re-check)
 
 | Source | Contents |
 |---|---|
-| `split_UnityDataAssetPack.apk` (718MB) | 112 bundles, 18 textures, 1 hero (`thornknight`) |
-| `files/data/*.lpak` (196 bundles, 69MB) | terrain virtual-texture tiles (`VT` = Virtual Texture) |
+| `split_UnityDataAssetPack.apk` (718MB) | 112 bundles, 18 textures, 1 hero |
+| `files/data/*.lpak` (196 bundles) | terrain virtual-texture tiles (`VT` = Virtual Texture) |
 | `files/iconCache/ASTC` (844 files) | **player avatars** - decodes fine, wrong content |
-| `files/Share/` | gacha pull share-screenshots (filenames are timestamps, NOT hero IDs) |
-| `LpakCatalog.Android.bin` (292k strings) | world/NodeCanvas assets; no `spui_`, no `ui/` |
-| `igame.pkg` (134MB) | custom format, magic `ffffffff 74050600`, undecoded |
+| `files/Share/` | gacha share-screenshots (filenames are timestamps, NOT hero ids) |
+| `LpakCatalog.Android.bin` | world/NodeCanvas assets; no `spui_`, no `ui/` |
+| `igame.pkg` (134MB) | custom format, magic `ffffffff 74050600`, undecoded, NOT NEEDED |
 
 ### Technique notes
 
-- `.lpak` files are standard `UnityFS` bundles with the version string stripped. UnityPy reads
-  them with `UnityPy.config.FALLBACK_UNITY_VERSION = "2021.3.30f1"`.
-- Standard ASTC decodes via `texture2ddecoder.decode_astc(data[16:], w, h, bx, by)`; header is
-  magic `0x5CA1AB13`, block dims at bytes 4-6, then 24-bit LE x/y/z. Unity textures come out
-  **vertically flipped** (origin is bottom-left).
-- `adb root` is NOT supported in Waydroid and knocks the connection offline; `adb connect` to
-  recover.
+- `.lpak` = standard `UnityFS` with the version string stripped; UnityPy needs
+  `UnityPy.config.FALLBACK_UNITY_VERSION = "2021.3.30f1"`.
+- `adb root` is NOT supported in Waydroid and knocks the connection offline; `adb connect` to recover.
 - A shell glob over a root-owned directory silently matches nothing - the glob expands
   unprivileged. Wrap it: `sudo sh -c '...'`.
-- No CDN involved: a 60s DNS capture on `waydroid0` during icon loading produced nothing.
+- No CDN: a 60s DNS capture on `waydroid0` during icon loading produced nothing.
+- **Do not conclude from a truncated listing.** This route was wrongly declared dead three times;
+  the last time a `find` reported 10,935 images and only the first 40 were read.
 
 ## 13. Storage
 

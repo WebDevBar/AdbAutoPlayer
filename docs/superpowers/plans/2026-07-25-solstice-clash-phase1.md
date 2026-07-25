@@ -1,3 +1,13 @@
+> **SUPERSEDED (2026-07-26).** Use `2026-07-26-solstice-clash-phase1.md` instead.
+>
+> This plan assumed the hero library had to be discovered from gameplay - auto-numbered
+> `hero_001` slugs, a frequency filter, wiki-only art, one cell type, and shared
+> spectate/compete geometry. All of that is now obsolete: the library is decoded from the
+> game's own assets, all 118 heroes are named and mapped, geometry is measured and stored in
+> `cell_registry`, and spectate is known NOT to share the compete layout.
+>
+> Kept for the record only.
+
 # Solstice Clash Phase 1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

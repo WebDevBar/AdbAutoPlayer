@@ -32,8 +32,9 @@ every task is testable from committed fixture frames.
 - **No hardcoded geometry or tunables.** Read `cell_registry` and `library_config` from the DB.
 - **`hero.slug` is the identity.** `external_id` is the game's id, useful but never the key.
   Positional numbering (roster index, "#1-#20") must never reach the database.
-- **Two new deps:** `lz4` and `texture2ddecoder` (already a UnityPy dependency). Add to
-  `pyproject.toml` in Task 2.
+- **Two new deps, both undeclared today:** `lz4` and `texture2ddecoder`. Add BOTH in Task 2
+  (`uv add lz4 texture2ddecoder` from `src-tauri/`). UnityPy is not a project dependency, so
+  `texture2ddecoder` does not arrive transitively.
 
 ---
 
@@ -359,11 +360,14 @@ git commit -m "feat(solstice): config service reading geometry and tunables from
 
 ```bash
 cd /mnt/docs/adbautoplayer/src-tauri
-uv add lz4
+uv add lz4 texture2ddecoder
 uv run python -c "import lz4.block, texture2ddecoder; print('ok')"
 ```
 
-Expected: `ok`. `texture2ddecoder` arrives with UnityPy; if it is missing, `uv add texture2ddecoder`.
+Expected: `ok`. **Both must be added explicitly** - neither is currently a repo dependency
+(`texture2ddecoder` ships with UnityPy, but UnityPy is not in this project). `icons.py` imports
+`texture2ddecoder` at module level, so a missing dependency fails at test *collection*, before
+the `skipif` for the icon directory can take effect.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1213,10 +1217,136 @@ def test_build_hero_db_does_not_touch_match_tables(tmp_db):
 
 - [ ] **Step 3: Run it, expect failure**
 
-- [ ] **Step 4: Implement `store.py`** with `record_match` using
-`INSERT ... ON CONFLICT(natural_key) DO NOTHING` then selecting the id, so re-observing a match
-returns the existing id rather than duplicating or raising. Enable `PRAGMA foreign_keys=ON` on
-every connection, or the `ON DELETE CASCADE` will not fire.
+- [ ] **Step 4: Implement `store.py`**
+
+```python
+"""Match recording. These tables are LOCALLY EARNED - build_hero_db.py never touches them."""
+
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class MatchRecord:
+    natural_key: str          # stable per match, so a re-observation dedupes
+    source: str               # 'compete' | 'spectate'
+    captured_at: str
+    theme: str | None = None
+    balance_epoch: str | None = None
+    blue_player: str | None = None
+    blue_rating: int | None = None
+    blue_rank: int | None = None
+    red_player: str | None = None
+    red_rating: int | None = None
+    red_rank: int | None = None
+    outcome: str | None = None            # 'blue' | 'red' | 'draw' | None
+    outcome_source: str | None = None
+
+
+@dataclass(frozen=True)
+class HeroSlot:
+    side: str                 # 'blue' | 'red'
+    slot: int
+    hero_slug: str | None     # None when status == 'unknown'
+    art_ref: str | None
+    status: str               # 'identified' | 'unknown'
+    score: float | None = None
+    margin: float | None = None
+
+
+@dataclass(frozen=True)
+class OddsSample:
+    sampled_at: str
+    blue_pool: int | None = None
+    red_pool: int | None = None
+    blue_odds: float | None = None
+    red_odds: float | None = None
+    spectators: int | None = None
+
+
+class MatchStore:
+    def __init__(self, db_path: Path):
+        self._db = Path(db_path)
+
+    def _connect(self) -> sqlite3.Connection:
+        con = sqlite3.connect(self._db)
+        # Required for the ON DELETE CASCADE on match_hero / match_odds. SQLite defaults
+        # this OFF per connection, so setting it in the schema alone is not enough.
+        con.execute("PRAGMA foreign_keys = ON")
+        return con
+
+    def record_match(self, rec: MatchRecord) -> int:
+        """Insert, or return the existing id if this natural_key was already seen.
+
+        Re-observing the same match must not duplicate it or raise - Mode B will see the
+        same match on consecutive polls.
+        """
+        with self._connect() as con:
+            con.execute(
+                "INSERT INTO match(natural_key,source,captured_at,theme,balance_epoch,"
+                "blue_player,blue_rating,blue_rank,red_player,red_rating,red_rank,"
+                "outcome,outcome_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(natural_key) DO NOTHING",
+                (rec.natural_key, rec.source, rec.captured_at, rec.theme, rec.balance_epoch,
+                 rec.blue_player, rec.blue_rating, rec.blue_rank,
+                 rec.red_player, rec.red_rating, rec.red_rank,
+                 rec.outcome, rec.outcome_source))
+            row = con.execute("SELECT id FROM match WHERE natural_key=?",
+                              (rec.natural_key,)).fetchone()
+        return int(row[0])
+
+    def match_by_natural_key(self, natural_key: str) -> int | None:
+        with self._connect() as con:
+            row = con.execute("SELECT id FROM match WHERE natural_key=?",
+                              (natural_key,)).fetchone()
+        return int(row[0]) if row else None
+
+    def record_heroes(self, match_id: int, slots: list[HeroSlot]) -> None:
+        """Every slot is stored, including unknown ones. Dropping an unidentified slot
+        would make a 3v3 look like a 2v3 and silently corrupt the training data."""
+        with self._connect() as con:
+            con.executemany(
+                "INSERT INTO match_hero(match_id,side,slot,hero_slug,art_ref,status,score,margin)"
+                " VALUES(?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(match_id,side,slot) DO UPDATE SET "
+                "hero_slug=excluded.hero_slug, art_ref=excluded.art_ref, "
+                "status=excluded.status, score=excluded.score, margin=excluded.margin",
+                [(match_id, s.side, s.slot, s.hero_slug, s.art_ref, s.status, s.score, s.margin)
+                 for s in slots])
+
+    def heroes_for(self, match_id: int) -> list[HeroSlot]:
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT side,slot,hero_slug,art_ref,status,score,margin FROM match_hero "
+                "WHERE match_id=? ORDER BY side, slot", (match_id,)).fetchall()
+        return [HeroSlot(*r) for r in rows]
+
+    def record_odds(self, match_id: int, sample: OddsSample) -> None:
+        with self._connect() as con:
+            con.execute(
+                "INSERT INTO match_odds(match_id,sampled_at,blue_pool,red_pool,"
+                "blue_odds,red_odds,spectators) VALUES(?,?,?,?,?,?,?)",
+                (match_id, sample.sampled_at, sample.blue_pool, sample.red_pool,
+                 sample.blue_odds, sample.red_odds, sample.spectators))
+
+    def odds_for(self, match_id: int) -> list[OddsSample]:
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT sampled_at,blue_pool,red_pool,blue_odds,red_odds,spectators "
+                "FROM match_odds WHERE match_id=? ORDER BY sampled_at", (match_id,)).fetchall()
+        return [OddsSample(*r) for r in rows]
+
+    def set_outcome(self, match_id: int, outcome: str, source: str) -> None:
+        with self._connect() as con:
+            con.execute("UPDATE match SET outcome=?, outcome_source=? WHERE id=?",
+                        (outcome, source, match_id))
+```
+
+Note `heroes_for` returns `HeroSlot(*r)` and the SELECT column order matches the dataclass
+field order exactly - if you reorder either, reorder both.
 
 - [ ] **Step 5: Run the tests.** Expected: PASS, 5 tests.
 

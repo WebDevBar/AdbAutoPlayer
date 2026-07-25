@@ -476,7 +476,7 @@ def is_banned(
     return False
 
 
-def load_ban_glyphs(anchor_dir: "Path") -> list[np.ndarray]:
+def load_ban_glyphs(anchor_dir: Path) -> list[np.ndarray]:
     """Load the red and blue ban-slash templates as grayscale."""
     glyphs = []
     for name in ("ban_glyph_red", "ban_glyph_blue"):
@@ -500,8 +500,13 @@ Expected: PASS, 7 tests. If `test_no_false_positives_on_any_other_card` fails, t
 ```bash
 cd /mnt/docs/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/heroes.py \
+        src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors/ban_glyph_red.png \
+        src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors/ban_glyph_blue.png \
         src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_extract.py
-git commit -m "feat(solstice): portrait extraction and ban-overlay detection"
+git commit -m "feat(solstice): portrait extraction and glyph-based ban detection
+
+Ban detection template-matches the red and blue circle-slash glyphs rather
+than using a colour cast, which false-positived on 10 of 20 real cards."
 ```
 
 ---
@@ -602,11 +607,13 @@ Expected: FAIL - `module has no attribute 'match_portrait'`
 
 - [ ] **Step 3: Write the implementation**
 
-Append to `services/solstice/heroes.py`:
+Append to `services/solstice/heroes.py`.
+
+**Import placement matters:** Ruff selects `E`, so a mid-file import fails `E402`. Add
+`from dataclasses import dataclass` to the existing import block at the **top** of `heroes.py`
+(alongside `from pathlib import Path`), then append only the code below.
 
 ```python
-from dataclasses import dataclass
-
 ACCEPT_SCORE: float = 0.90
 ACCEPT_MARGIN: float = 0.10
 
@@ -1322,12 +1329,20 @@ Expected: FAIL - `module has no attribute 'harvest_candidates'`
 
 - [ ] **Step 3: Write the implementation**
 
-Append to `services/solstice/heroes.py`:
+Append to `services/solstice/heroes.py`.
+
+**Import placement matters:** move these two imports into the existing top-of-file import block
+(below `from . import geometry as geo`), not to the point of use - a mid-file import fails Ruff's
+`E402`:
 
 ```python
 from .screens import SolsticeScreen
 from .vision import classify
+```
 
+Then append the code below:
+
+```python
 # A candidate must recur in at least this many frames before entering the
 # library. Transient mid-animation crops appear once and are discarded
 # (890 of 1045 candidates during design testing).
@@ -1437,6 +1452,17 @@ must recur in >= 6 frames, which eliminated 890 of 1045 artefacts in testing."
 **Interfaces:**
 - Consumes: everything from Tasks 1-6
 - Produces: no new code interfaces
+
+- [ ] **Step 0: Run the linter**
+
+```bash
+cd /mnt/docs/adbautoplayer
+uv run --group dev ruff check src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/ \
+                              src-tauri/src-python/tests/games/afk_journey/services/solstice/
+```
+
+Expected: no findings. `E402` (import not at top of file) and `F401` (unused import) are the two
+most likely failures given how Tasks 2, 3 and 6 build up `heroes.py` incrementally.
 
 - [ ] **Step 1: Run the entire test suite**
 

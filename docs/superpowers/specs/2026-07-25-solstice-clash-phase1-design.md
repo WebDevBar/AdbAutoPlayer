@@ -264,6 +264,7 @@ for labelling.
 | Silhouette-changing skin mis-identified | Margin requirement + unknown path; never silently guess |
 | Card geometry shifts with a game update | Geometry in one constants module; a golden-frame test detects drift |
 | Library polluted by non-pool screens | Classifier gates harvesting; frequency filter; visual review before labelling |
+| Outworld appearance changes with in-game day/night cycle (confirmed 2026-07-25: night capture looks very different from day) | Rely on the existing `navigate_to_world()` rather than a bespoke outworld template; any new anchor must be validated against both lightings |
 | Corpus disk growth (4.5 GB from one session) | Long-term frames to `/vault` (4 TB); runtime keeps only unknowns + a rolling debug buffer |
 
 ## 7. Open questions

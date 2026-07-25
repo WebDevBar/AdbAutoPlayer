@@ -298,7 +298,14 @@ def main() -> None:
                     " VALUES(?,?,?,?,?,?,?)",
                     (u["name"], slug, u["faction"], "usable",
                      u["adjustment"] or None, u["hp_pct"], u["atk_pct"]))
+    # A hero can appear in BOTH lists on the wiki (Zorya does). Usable wins: she is
+    # playable and gets picked in real matches. Using INSERT OR REPLACE here would let
+    # the banned row clobber the usable one and silently drop her from the roster.
+    usable_names = {u["name"].lower() for u in usable}
     for b in banned:
+        if b.lower() in usable_names:
+            print(f"  note: {b!r} listed as both usable and banned - keeping usable")
+            continue
         con.execute("INSERT OR REPLACE INTO solstice_roster(name,hero_slug,faction,status)"
                     " VALUES(?,?,?,?)", (b, known.get(b.lower()), None, "banned"))
     con.commit()

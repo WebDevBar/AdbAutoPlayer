@@ -1800,7 +1800,9 @@ Add to `SolsticeClashMixin`:
 - [ ] **Step 2: Add the bounded reset policy**
 
 ```python
-    def _collect_forever(self, max_restarts: int = 3) -> None:
+    def _collect_forever(
+        self, max_restarts: int = 3, max_matches: int | None = None
+    ) -> None:
         """Loop until the restart budget is exhausted.
 
         Recovery has to be bounded or an unattended run spends the night retrying. The
@@ -1810,10 +1812,15 @@ Add to `SolsticeClashMixin`:
         and continuing would produce only noise.
         """
         consecutive_failures = 0
+        recorded = 0
         while consecutive_failures < max_restarts:
+            if max_matches is not None and recorded >= max_matches:
+                logging.info(f"recorded {recorded} match(es), stopping as requested")
+                return
             try:
                 if self._run_one_match():
                     consecutive_failures = 0
+                    recorded += 1
                     continue
                 consecutive_failures += 1
                 logging.warning(
@@ -2530,9 +2537,44 @@ print({t: c.execute(f'select count(*) from {t}').fetchone()[0]
        for t in ('match','match_hero','identification_audit','hero_screen_transform')})"
 ```
 
-- [ ] **Step 3: Run one match**
+- [ ] **Step 3: Run exactly one match**
 
-Run the mode with `max_restarts=1` so a failure stops promptly, and watch the log.
+The registered GUI command takes no arguments and loops until failure, so drive the mixin
+directly with both bounds set. This is the only way to run a single match and stop.
+
+```python
+# /tmp/solstice/run_one.py
+import logging
+from pathlib import Path
+
+from adb_auto_player.file_loader import SettingsLoader
+
+SettingsLoader.set_app_config_dir(Path("/mnt/docs/adbautoplayer/src-tauri"))
+SettingsLoader.set_resource_dir(
+    Path("/mnt/docs/adbautoplayer/src-tauri/src-python/adb_auto_player")
+)
+
+from adb_auto_player.games.afk_journey.mixins.solstice_clash import SolsticeClashMixin
+
+
+class Probe(SolsticeClashMixin):
+    pass
+
+
+# Template lookup derives the game name from the class's module path, so a class defined
+# in __main__ cannot resolve templates.
+Probe.__module__ = SolsticeClashMixin.__module__
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+game = Probe()
+game.start_up(device_streaming=False)
+game.navigate_to_world()
+game._collect_forever(max_restarts=1, max_matches=1)
+```
+
+Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python /tmp/solstice/run_one.py`
+
+Watch the log throughout.
 
 - [ ] **Step 4: Verify what was actually written**
 

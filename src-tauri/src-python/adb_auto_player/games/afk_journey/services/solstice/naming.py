@@ -64,3 +64,25 @@ def resolve_hero_name(
     if len(hits) != 1:
         return None
     return hits.pop()
+
+def resolve_hero_name_strict(texts: list[str], cfg: SolsticeConfig) -> str | None:
+    """Return the hero slug named in `texts` by EXACT match, or None.
+
+    Exact (case-insensitive, trimmed), never fuzzy. Fuzzy matching is what let the player
+    name "Silver Bull" match the hero "Silven": the window "silver" scores 0.833 against
+    "silven", over the 0.80 threshold, and a substring match ignores the rest of the name.
+
+    This is safe to use strictly because the caller passes only text that is NEW since a
+    baseline of the same screen, so background labels, numbers and player names are already
+    excluded. An OCR slip inside the name itself now yields None, and the caller falls back
+    to image matching - which is the correct direction, since a wrong name here would be
+    recorded as ground truth.
+
+    Ambiguity returns None: two different heroes named in the popup text means something is
+    wrong with the read.
+    """
+    by_name = {row.name.strip().lower(): slug for slug, row in cfg.heroes().items()}
+    hits = {by_name[t] for t in (x.strip().lower() for x in texts) if t in by_name}
+    if len(hits) != 1:
+        return None
+    return hits.pop()

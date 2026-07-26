@@ -25,7 +25,7 @@ from adb_auto_player.ocr import RapidOCRBackend
 
 from ..services.solstice.config import SolsticeConfig
 from ..services.solstice.icons import IconLibrary
-from ..services.solstice.naming import resolve_hero_name
+from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
 from ..services.solstice.tuning import (
@@ -60,6 +60,14 @@ _THEME_NAME_REGION = (1195, 1280, 10, 540)  # y0, y1, x0, x1
 # cost is asymmetric, so bias long rather than tuning for the minimum that worked once.
 LONGPRESS_SECONDS = 3.0
 LONGPRESS_ATTEMPTS = 3
+# Empty middle of the details overlay. Verified on device: tapping here closes an open
+# hero popup and returns the screen to its exact prior state (delta 0.07).
+#
+# The overlay only has two clickable controls, the back arrow on the left and Replay on
+# the right; the green button visible through it belongs to the screen underneath and is
+# not reachable. Deliberately NOT y1830 - that sits close enough to the bottom edge to
+# risk the Android gesture area - and NOT the top gap at y170, which does nothing at all.
+POPUP_DISMISS_AT = Point(540, 1700)
 # Wait before grabbing the draft frame so more pick slots have filled.
 TRAINING_LATE_DELAY = 8.0
 # The prematch screen appears once the draft countdown expires. The draft ran ~25s
@@ -443,6 +451,15 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         frame = self.get_screenshot()
         return frame
 
+    def _dismiss_popup(self) -> None:
+        """Tap an empty area to close any open hero popup.
+
+        POPUP_DISMISS_AT is deliberately not near a button. The previous value (540, 1750)
+        sat on the green Back button, so dismissing could have left the summary entirely.
+        """
+        self.tap(POPUP_DISMISS_AT)
+        sleep(0.5)
+
     def _confirm_by_longpress(self, hero: SummaryHero) -> str | None:
         """Long-press a summary card and OCR the hero name from the popup.
 
@@ -455,16 +472,42 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         )
         point = Point((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2)
 
+        # Baseline the screen with nothing open, so the diff below is meaningful.
+        self._dismiss_popup()
+        baseline = {
+            b.text.strip()
+            for b in self._ocr.detect_text_blocks(
+                self.get_screenshot(), ConfidenceValue(0.5)
+            )
+        }
+
         for _ in range(LONGPRESS_ATTEMPTS):
             slug: str | None = None
             try:
+                # Close anything already open BEFORE pressing. A popup left over from the
+                # previous card would still be on screen and would be read as this card's
+                # answer - a false positive that looks exactly like a correct one.
+                self._dismiss_popup()
                 self.hold(point, duration=LONGPRESS_SECONDS)
                 sleep(1.0)
                 frame = self.get_screenshot()
-                # The popup renders downward from blue cards and upward from red ones, so
-                # its position is not fixed - it is detected by CONTENT, not geometry.
+                # BASELINE DIFF. Everything already on the details screen before pressing
+                # - background labels, stat numbers, player names, avatar fragments - is
+                # by definition not popup text. Only what is NEW can be the popup, so the
+                # hero name is looked for there and nowhere else.
+                #
+                # This is what makes strict matching possible, and it removes both failure
+                # modes seen on device: a player name being read as a hero ("Silver Bull"
+                # resolving to the hero "Silven"), and a background word colliding with a
+                # second hero to trigger the ambiguity guard, which made Berial and Harak
+                # return None despite being plainly on screen.
                 blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
-                slug = resolve_hero_name([b.text for b in blocks], self._solstice_cfg)
+                fresh = [
+                    b.text.strip()
+                    for b in blocks
+                    if b.text.strip() not in baseline
+                ]
+                slug = resolve_hero_name_strict(fresh, self._solstice_cfg)
             except Exception as exc:  # noqa: BLE001 - one unreadable card must not end the match
                 logging.warning(f"long-press confirm failed: {exc}")
             finally:
@@ -472,8 +515,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # get_screenshot raised above. A popup left open covers the screen, so
                 # the next long-press and the navigation that follows would act on the
                 # wrong UI state - and that failure would look like a matching problem.
-                self.tap(Point(540, 1750))
-                sleep(0.5)
+                self._dismiss_popup()
             if slug is not None:
                 return slug
         return None

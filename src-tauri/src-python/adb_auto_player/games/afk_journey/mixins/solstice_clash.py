@@ -224,6 +224,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             delay=RESULT_POLL_DELAY,
             timeout=MATCH_TIMEOUT,
             timeout_message="neither a result screen nor the overworld appeared",
+            # No ordering needed: the result screen and the overworld are mutually
+            # exclusive, so whichever matched IS the answer. Leaving this on made the
+            # wait sleep another full poll interval and re-check after it had already
+            # found the screen - about 6 seconds of pure dead time per match, visible
+            # in the trace as a second identical poll before recording began.
+            ensure_order=False,
         )
         if "homestead_enter" in str(found.template):
             # Draw: nothing to record, and NOT a failure. Returning True keeps the

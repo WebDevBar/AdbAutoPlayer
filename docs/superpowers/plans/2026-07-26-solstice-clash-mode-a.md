@@ -2450,7 +2450,44 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
     assert written == 6
     agreed, total = store.audit_agreement_rate("spectate_prematch")
     assert total == 6
-    assert agreed == 0
+    assert agreed == 0, "nothing can be confirmed against an empty set"
+
+
+def test_train_from_frame_confirms_when_the_hero_is_in_the_set(cfg, library, frames, tmp_db):
+    """The POSITIVE case: a uniquely-read hero present in that side's set is confirmed.
+
+    The confirmed set is built from what the frame actually reads, because this test is
+    about the RULE (set membership plus uniqueness produces agreement), not about which
+    heroes happen to be in the fixture. Asserting only the negative case would pass even
+    if train_from_frame never confirmed anything at all.
+    """
+    import cv2
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import train_from_frame
+    from adb_auto_player.games.afk_journey.services.solstice.vision import (
+        extract_cell, identify_cell,
+    )
+
+    frame = cv2.imread(str(frames["spectate_prematch"]))
+
+    by_side: dict[str, set[str]] = {"blue": set(), "red": set()}
+    for cell in cfg.cells("prematch_pick"):
+        result = identify_cell(extract_cell(frame, cell), "prematch_pick", library, cfg)
+        if result.slug:
+            by_side[cell.side or ""].add(result.slug)
+    assert any(by_side.values()), "fixture read nothing - check the seeded cell geometry"
+
+    store = MatchStore(tmp_db)
+    train_from_frame(
+        store=store, cfg=cfg, library=library, frame=frame,
+        screen_slug="spectate_prematch", cell_type="prematch_pick",
+        confirmed_by_side=by_side, frame_path="/tmp/x.png", match_id=None,
+    )
+
+    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    assert total == 6
+    assert agreed > 0, "a hero in its own side's set must produce an agreeing row"
 
 
 def test_only_ocr_confirmed_slots_seed_the_confirmation_set():

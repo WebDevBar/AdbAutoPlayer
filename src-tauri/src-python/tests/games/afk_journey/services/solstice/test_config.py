@@ -22,7 +22,7 @@ def test_locked_pick_cells_have_expected_geometry(db_path):
     cells = sorted(cfg.cells("locked_pick"), key=lambda c: c.slot or 0)
     assert [c.x0 for c in cells] == [62, 206, 349, 635, 779, 922]
     assert all((c.y0, c.y1) == (1495, 1580) for c in cells)
-    assert [c.side for c in cells] == ["blue"] * 3 + ["red"] * 3
+    assert [c.side for c in cells] == ["left"] * 3 + ["right"] * 3
     assert all((c.width, c.height) == (100, 85) for c in cells)
 
 

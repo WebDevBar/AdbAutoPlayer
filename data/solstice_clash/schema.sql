@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS cell_registry(
   cell_type       TEXT NOT NULL,   -- 'locked_pick' | 'draft_locked_pick' | 'draft_card'
   x0 INTEGER NOT NULL, y0 INTEGER NOT NULL,
   x1 INTEGER NOT NULL, y1 INTEGER NOT NULL,
-  side            TEXT,            -- 'blue' | 'red'
+  side            TEXT,            -- 'left' | 'right'
   slot            INTEGER,
   base_resolution TEXT NOT NULL DEFAULT '1080x1920',
   verified_at     TEXT,
@@ -153,16 +153,16 @@ CREATE TABLE IF NOT EXISTS match(
   captured_at    TEXT NOT NULL,
   theme          TEXT,                   -- readable on the draft screen
   balance_epoch  TEXT,                   -- hash of roster adjustments at capture time
-  blue_player    TEXT, blue_rating INTEGER, blue_rank INTEGER,
-  red_player     TEXT, red_rating  INTEGER, red_rank  INTEGER,
-  outcome        TEXT,                   -- 'blue' | 'red' | 'draw' | NULL
+  left_player    TEXT, left_rating INTEGER, left_rank INTEGER,
+  right_player   TEXT, right_rating INTEGER, right_rank INTEGER,
+  outcome        TEXT,                   -- 'left' | 'right' | 'draw' | NULL
   outcome_source TEXT
 );
 
 CREATE TABLE IF NOT EXISTS match_hero(
   id            INTEGER PRIMARY KEY,
   match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
-  side          TEXT NOT NULL,           -- 'blue' | 'red'
+  side          TEXT NOT NULL,           -- 'left' | 'right'
   slot          INTEGER NOT NULL,
   hero_slug     TEXT REFERENCES hero(slug),
   art_ref       TEXT,
@@ -211,8 +211,8 @@ CREATE TABLE IF NOT EXISTS match_odds(
   id          INTEGER PRIMARY KEY,
   match_id    INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
   sampled_at  TEXT NOT NULL,
-  blue_pool   INTEGER, red_pool INTEGER,
-  blue_odds   REAL,    red_odds REAL,
+  left_pool   INTEGER, right_pool INTEGER,
+  left_odds   REAL,    right_odds REAL,
   spectators  INTEGER
 );
 

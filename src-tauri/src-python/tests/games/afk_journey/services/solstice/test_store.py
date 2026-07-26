@@ -34,15 +34,15 @@ def test_records_a_match_and_its_heroes(tmp_db):
             captured_at="2026-07-26T10:00:00",
             natural_key="t1",
             theme="Fierce Duel",
-            blue_player="GameRetro",
-            red_player="Dan",
+            left_player="GameRetro",
+            right_player="Dan",
         )
     )
     store.record_heroes(
         mid,
         [
-            HeroSlot("blue", 1, "dionel", "spui_herohead_48", "identified", 0.97, 0.34),
-            HeroSlot("red", 6, None, None, "unknown", 0.41, 0.02),
+            HeroSlot("left", 1, "dionel", "spui_herohead_48", "identified", 0.97, 0.34),
+            HeroSlot("right", 6, None, None, "unknown", 0.41, 0.02),
         ],
     )
     rows = store.heroes_for(mid)
@@ -90,7 +90,7 @@ def test_unknown_heroes_are_stored_not_dropped(tmp_db):
     )
     store.record_heroes(
         mid,
-        [HeroSlot("blue", i, None, None, "unknown", 0.5, 0.0) for i in (1, 2, 3)],
+        [HeroSlot("left", i, None, None, "unknown", 0.5, 0.0) for i in (1, 2, 3)],
     )
     assert len(store.heroes_for(mid)) == 3
 
@@ -128,7 +128,7 @@ def test_pool_fallback_provenance_is_recorded(tmp_db):
         mid,
         [
             HeroSlot(
-                "blue",
+                "left",
                 1,
                 "sonja",
                 "x",
@@ -141,7 +141,7 @@ def test_pool_fallback_provenance_is_recorded(tmp_db):
                 pool_miss=0,
             ),
             HeroSlot(
-                "blue",
+                "left",
                 2,
                 "zorya",
                 "y",
@@ -183,7 +183,7 @@ def test_deleting_a_match_cascades(tmp_db):
     mid = store.record_match(
         MatchRecord(source="compete", captured_at="2026-07-26T10:00:00")
     )
-    store.record_heroes(mid, [HeroSlot("blue", 1, "sonja", "x", "identified")])
+    store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "identified")])
     store.record_pool(mid, [PoolSlot(1, "sonja", "x", "identified")])
     store.record_odds(mid, OddsSample("2026-07-26T10:00:01"))
     con = sqlite3.connect(tmp_db)
@@ -211,7 +211,7 @@ def test_build_hero_db_does_not_touch_match_data(tmp_db):
         )
     )
     store.record_heroes(
-        mid, [HeroSlot("blue", 1, "sonja", "x", "identified", 0.9, 0.3)]
+        mid, [HeroSlot("left", 1, "sonja", "x", "identified", 0.9, 0.3)]
     )
     store.record_pool(mid, [PoolSlot(1, "sonja", "x", "identified")])
     store.record_odds(mid, OddsSample("2026-07-26T10:00:01", 100, 200, 2.9, 1.4, 5))
@@ -246,7 +246,7 @@ def test_rejects_invalid_enum_values(tmp_db):
     with pytest.raises(ValueError, match="invalid side"):
         store.record_heroes(mid, [HeroSlot("blu", 1, "sonja", "x", "identified")])
     with pytest.raises(ValueError, match="invalid status"):
-        store.record_heroes(mid, [HeroSlot("blue", 1, "sonja", "x", "maybe")])
+        store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "maybe")])
 
 
 def test_rejects_status_that_disagrees_with_the_data(tmp_db):
@@ -254,9 +254,9 @@ def test_rejects_status_that_disagrees_with_the_data(tmp_db):
     store = MatchStore(tmp_db)
     mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
     with pytest.raises(ValueError, match="disagrees"):
-        store.record_heroes(mid, [HeroSlot("blue", 1, "sonja", "x", "unknown")])
+        store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "unknown")])
     with pytest.raises(ValueError, match="disagrees"):
-        store.record_heroes(mid, [HeroSlot("blue", 2, None, None, "identified")])
+        store.record_heroes(mid, [HeroSlot("left", 2, None, None, "identified")])
     with pytest.raises(ValueError, match="disagrees"):
         store.record_pool(mid, [PoolSlot(1, None, None, "banned", 0)])
 
@@ -293,7 +293,7 @@ def test_hero_stats_round_trip(tmp_db):
         MatchRecord(source="spectate_summary", captured_at="2026-07-26")
     )
     store.record_heroes(match_id, [
-        HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+        HeroSlot(side="left", slot=1, hero_slug="atalanta", art_ref="Atalanta",
                  status="identified", score=0.87, margin=0.36,
                  stat_sword=699_000, stat_heart=0, stat_shield=2_924_000,
                  power=490_000, identified_by="longpress_ocr"),
@@ -309,19 +309,23 @@ def test_record_audit_computes_agreement(tmp_db):
         AuditRow, MatchStore,
     )
     store = MatchStore(tmp_db)
+    agreed_before, total_before = store.audit_agreement_rate("solstice_summary")
     same = store.record_audit(AuditRow(
-        screen_slug="solstice_summary", side="blue", slot=1,
+        screen_slug="solstice_summary", side="left", slot=1,
         image_slug="atalanta", image_art_ref="Atalanta",
         image_score=0.87, image_margin=0.36, ocr_slug="atalanta", frame_path=None,
     ))
     differ = store.record_audit(AuditRow(
-        screen_slug="solstice_summary", side="red", slot=1,
+        screen_slug="solstice_summary", side="right", slot=1,
         image_slug="igor", image_art_ref="Igor",
         image_score=0.72, image_margin=0.11, ocr_slug="thoran", frame_path="/x.png",
     ))
     assert same != differ
+    # Measure the DELTA, not absolutes. tmp_db is a copy of the SHIPPED database, which
+    # now carries real audit rows from live collection, so asserting on totals makes the
+    # test fail as soon as anyone records a match.
     agreed, total = store.audit_agreement_rate("solstice_summary")
-    assert (agreed, total) == (1, 2)
+    assert (agreed - agreed_before, total - total_before) == (1, 2)
 
 
 def test_learn_transform_requires_agreement(tmp_db):
@@ -332,7 +336,7 @@ def test_learn_transform_requires_agreement(tmp_db):
     )
     store = MatchStore(tmp_db)
     bad = store.record_audit(AuditRow(
-        screen_slug="solstice_summary", side="blue", slot=1,
+        screen_slug="solstice_summary", side="left", slot=1,
         image_slug="igor", image_art_ref="Igor",
         image_score=0.72, image_margin=0.11, ocr_slug="thoran", frame_path=None,
     ))
@@ -346,7 +350,7 @@ def test_learn_transform_roundtrip_and_retune(tmp_db):
     )
     store = MatchStore(tmp_db)
     good = store.record_audit(AuditRow(
-        screen_slug="solstice_summary", side="blue", slot=1,
+        screen_slug="solstice_summary", side="left", slot=1,
         image_slug="atalanta", image_art_ref="Atalanta",
         image_score=0.87, image_margin=0.36, ocr_slug="atalanta", frame_path=None,
     ))

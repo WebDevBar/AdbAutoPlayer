@@ -26,19 +26,19 @@ class MatchRecord:
     natural_key: str | None = None  # NULL until the match has enough stable facts
     theme: str | None = None
     balance_epoch: str | None = None
-    blue_player: str | None = None
-    blue_rating: int | None = None
-    blue_rank: int | None = None
-    red_player: str | None = None
-    red_rating: int | None = None
-    red_rank: int | None = None
-    outcome: str | None = None  # 'blue' | 'red' | 'draw' | None
+    left_player: str | None = None
+    left_rating: int | None = None
+    left_rank: int | None = None
+    right_player: str | None = None
+    right_rating: int | None = None
+    right_rank: int | None = None
+    outcome: str | None = None  # 'left' | 'right' | 'draw' | None
     outcome_source: str | None = None
 
 
 @dataclass(frozen=True)
 class HeroSlot:
-    side: str  # 'blue' | 'red'
+    side: str  # 'left' | 'right'
     slot: int
     hero_slug: str | None  # None when status == 'unknown'
     art_ref: str | None
@@ -82,10 +82,10 @@ class PoolSlot:
 @dataclass(frozen=True)
 class OddsSample:
     sampled_at: str
-    blue_pool: int | None = None
-    red_pool: int | None = None
-    blue_odds: float | None = None
-    red_odds: float | None = None
+    left_pool: int | None = None
+    right_pool: int | None = None
+    left_odds: float | None = None
+    right_odds: float | None = None
     spectators: int | None = None
 
 
@@ -113,10 +113,10 @@ class AuditRow:
 # Valid values. The schema documents these in comments only, so the store enforces them:
 # without this a Phase 2 caller could persist source='comptee' or side='blu' silently.
 _SOURCES = frozenset({"compete", "spectate", "spectate_summary"})
-_SIDES = frozenset({"blue", "red"})
+_SIDES = frozenset({"left", "right"})
 _HERO_STATUSES = frozenset({"identified", "unknown"})
 _POOL_STATUSES = frozenset({"identified", "unknown", "banned"})
-_OUTCOMES = frozenset({"blue", "red", "draw"})
+_OUTCOMES = frozenset({"left", "right", "draw"})
 POOL_SIZE = 20  # the draft grid is always 5x4
 
 
@@ -162,12 +162,12 @@ class MatchStore:
         "captured_at",
         "theme",
         "balance_epoch",
-        "blue_player",
-        "blue_rating",
-        "blue_rank",
-        "red_player",
-        "red_rating",
-        "red_rank",
+        "left_player",
+        "left_rating",
+        "left_rank",
+        "right_player",
+        "right_rating",
+        "right_rank",
         "outcome",
         "outcome_source",
     )
@@ -319,15 +319,15 @@ class MatchStore:
     def record_odds(self, match_id: int, sample: OddsSample) -> None:
         with self._connect() as con:
             con.execute(
-                "INSERT INTO match_odds(match_id,sampled_at,blue_pool,red_pool,"
-                "blue_odds,red_odds,spectators) VALUES(?,?,?,?,?,?,?)",
+                "INSERT INTO match_odds(match_id,sampled_at,left_pool,right_pool,"
+                "left_odds,right_odds,spectators) VALUES(?,?,?,?,?,?,?)",
                 (
                     match_id,
                     sample.sampled_at,
-                    sample.blue_pool,
-                    sample.red_pool,
-                    sample.blue_odds,
-                    sample.red_odds,
+                    sample.left_pool,
+                    sample.right_pool,
+                    sample.left_odds,
+                    sample.right_odds,
                     sample.spectators,
                 ),
             )
@@ -335,7 +335,7 @@ class MatchStore:
     def odds_for(self, match_id: int) -> list[OddsSample]:
         with self._connect() as con:
             rows = con.execute(
-                "SELECT sampled_at,blue_pool,red_pool,blue_odds,red_odds,spectators "
+                "SELECT sampled_at,left_pool,right_pool,left_odds,right_odds,spectators "
                 "FROM match_odds WHERE match_id=? ORDER BY sampled_at",
                 (match_id,),
             ).fetchall()

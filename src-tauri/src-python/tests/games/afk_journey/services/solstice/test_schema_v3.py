@@ -70,7 +70,7 @@ def _audit(con: sqlite3.Connection, **kw) -> int:
     row = {
         "match_id": None,
         "screen_id": screen_id(con, "solstice_summary"),
-        "side": "blue",
+        "side": "left",
         "slot": 1,
         "image_slug": "atalanta",
         "image_art_ref": "Atalanta",
@@ -153,11 +153,23 @@ def test_deleting_a_match_does_not_break_transform_evidence(db: Path) -> None:
     con.execute(
         "INSERT INTO match(source,captured_at) VALUES('spectate_summary','2026-07-26')"
     )
-    match_id = int(con.execute("SELECT id FROM match").fetchone()[0])
+    # Scope to the row THIS test just made. The shipped database now carries real matches
+    # and audit rows from live collection, so an unqualified SELECT picks up one of those.
+    match_id = int(con.execute("SELECT MAX(id) FROM match").fetchone()[0])
     good = _audit(con, match_id=match_id)
     _transform(con, good)
 
     con.execute("DELETE FROM match WHERE id=?", (match_id,))
 
-    assert con.execute("SELECT match_id FROM identification_audit").fetchone()[0] is None
-    assert con.execute("SELECT COUNT(*) FROM hero_screen_transform").fetchone()[0] == 1
+    assert (
+        con.execute(
+            "SELECT match_id FROM identification_audit WHERE id=?", (good,)
+        ).fetchone()[0]
+        is None
+    )
+    assert (
+        con.execute(
+            "SELECT COUNT(*) FROM hero_screen_transform WHERE audit_id=?", (good,)
+        ).fetchone()[0]
+        == 1
+    )

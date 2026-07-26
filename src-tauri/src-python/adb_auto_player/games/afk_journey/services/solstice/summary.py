@@ -97,9 +97,9 @@ class SummaryHero:
 
 @dataclass(frozen=True)
 class SummaryRead:
-    winner: str | None  # 'blue' | 'red' | None when the header could not be read
-    blue_player: str | None
-    red_player: str | None
+    winner: str | None  # 'left' | 'right' | None when the header could not be read
+    left_player: str | None
+    right_player: str | None
     heroes: list[SummaryHero]
 
 
@@ -148,8 +148,8 @@ def _winner_by_panel_tint(frame: np.ndarray) -> str | None:
         return None
     if abs(top_orange - bottom_orange) < _WINNER_COLOUR_MIN_DELTA:
         return None
-    # The top panel is the first three heroes, which the cell registry labels "blue".
-    return "blue" if top_orange > bottom_orange else "red"
+    # The top panel is the first three heroes, which the cell registry labels "left".
+    return "left" if top_orange > bottom_orange else "right"
 
 
 def _winner_by_colour(frame: np.ndarray) -> str | None:
@@ -180,7 +180,7 @@ def _winner_by_colour(frame: np.ndarray) -> str | None:
         return None
     if abs(left_orange - right_orange) < _WINNER_COLOUR_MIN_DELTA:
         return None
-    return "blue" if left_orange > right_orange else "red"
+    return "left" if left_orange > right_orange else "right"
 
 
 def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
@@ -220,11 +220,11 @@ def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
         has_victory = "victory" in text
         has_defeat = "defeat" in text
         if has_victory and has_defeat:
-            return "blue" if text.index("victory") < text.index("defeat") else "red"
+            return "left" if text.index("victory") < text.index("defeat") else "right"
         if has_victory:
-            return "blue" if block.box.center.x < _HEADER_SPLIT_X else "red"
+            return "left" if block.box.center.x < _HEADER_SPLIT_X else "right"
         if has_defeat:
-            return "red" if block.box.center.x < _HEADER_SPLIT_X else "blue"
+            return "right" if block.box.center.x < _HEADER_SPLIT_X else "left"
     return None
 
 
@@ -261,7 +261,7 @@ def read_summary(
 ) -> SummaryRead:
     """Parse one summary frame. Pure: no device, no taps, no persistence."""
     winner = _read_winner(frame, ocr)
-    blue_player, red_player = _read_players(frame, ocr)
+    left_player, right_player = _read_players(frame, ocr)
 
     heroes: list[SummaryHero] = []
     for cell in sorted(
@@ -280,4 +280,4 @@ def read_summary(
                 stats=_read_stats(frame, centre_y, ocr),
             )
         )
-    return SummaryRead(winner, blue_player, red_player, heroes)
+    return SummaryRead(winner, left_player, right_player, heroes)

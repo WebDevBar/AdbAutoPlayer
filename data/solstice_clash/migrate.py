@@ -46,6 +46,26 @@ ADD_COLUMNS = [
     ("match_hero", "identified_by", "TEXT"),
 ]
 
+# Column renames for the 2026-07-27 blue/red -> left/right position rename. Guarded on
+# both ends: only runs while the old name is still there and the new one is not, so a
+# second run (or a fresh database that never had the old names) is a no-op.
+RENAME_COLUMNS = [
+    ("match", "blue_player", "left_player"),
+    ("match", "blue_rating", "left_rating"),
+    ("match", "blue_rank", "left_rank"),
+    ("match", "red_player", "right_player"),
+    ("match", "red_rating", "right_rating"),
+    ("match", "red_rank", "right_rank"),
+    ("match_odds", "blue_pool", "left_pool"),
+    ("match_odds", "red_pool", "right_pool"),
+    ("match_odds", "blue_odds", "left_odds"),
+    ("match_odds", "red_odds", "right_odds"),
+]
+
+# Tables whose 'side' column used 'blue' | 'red' and now uses 'left' | 'right'. Checked
+# for column presence first - match_pool has no side column at all.
+SIDE_TABLES = ("cell_registry", "match_hero", "match_pool", "identification_audit")
+
 # Measured defaults. Only inserted if absent - never overwrites tuned values.
 DEFAULT_CONFIG = [
     ("icon_source", "game", "decoded from files/data/ui/icon (AST/LZ4/ASTC 6x6)"),
@@ -81,24 +101,24 @@ DEFAULT_SCREENS = [
 # with a scale of 0.48, comfortably inside the accept_score/accept_margin gates.
 # Bounds below are centre +-20, tight enough to exclude the frame entirely.
 DEFAULT_SUMMARY_CELLS = [
-    ("solstice_summary", "summary_blue_1", "summary_hero", 70, 456, 110, 496, "blue", 1),
-    ("solstice_summary", "summary_blue_2", "summary_hero", 70, 546, 110, 586, "blue", 2),
-    ("solstice_summary", "summary_blue_3", "summary_hero", 70, 636, 110, 676, "blue", 3),
-    ("solstice_summary", "summary_red_1", "summary_hero", 70, 1103, 110, 1143, "red", 1),
-    ("solstice_summary", "summary_red_2", "summary_hero", 70, 1195, 110, 1235, "red", 2),
-    ("solstice_summary", "summary_red_3", "summary_hero", 70, 1287, 110, 1327, "red", 3),
+    ("solstice_summary", "summary_left_1", "summary_hero", 70, 456, 110, 496, "left", 1),
+    ("solstice_summary", "summary_left_2", "summary_hero", 70, 546, 110, 586, "left", 2),
+    ("solstice_summary", "summary_left_3", "summary_hero", 70, 636, 110, 676, "left", 3),
+    ("solstice_summary", "summary_right_1", "summary_hero", 70, 1103, 110, 1143, "right", 1),
+    ("solstice_summary", "summary_right_2", "summary_hero", 70, 1195, 110, 1235, "right", 2),
+    ("solstice_summary", "summary_right_3", "summary_hero", 70, 1287, 110, 1327, "right", 3),
 ]
 
 # spectate_draft_picks: top strip, from live/match01/raw/000039317.png.
 # Cards span y 400-530; the "Lvl 240" badge covers the bottom ~30px, so the art ends
 # at 495. Centres x: 120/260/400 (blue) and 678/822/965 (red).
 DEFAULT_DRAFT_PICK_CELLS = [
-    ("spectate_draft_picks", "draft_pick_blue_1", "draft_pick",  75, 410, 165, 495, "blue", 1),
-    ("spectate_draft_picks", "draft_pick_blue_4", "draft_pick", 215, 410, 305, 495, "blue", 4),
-    ("spectate_draft_picks", "draft_pick_blue_5", "draft_pick", 355, 410, 445, 495, "blue", 5),
-    ("spectate_draft_picks", "draft_pick_red_2",  "draft_pick", 633, 410, 723, 495, "red",  2),
-    ("spectate_draft_picks", "draft_pick_red_3",  "draft_pick", 777, 410, 867, 495, "red",  3),
-    ("spectate_draft_picks", "draft_pick_red_6",  "draft_pick", 920, 410, 1010, 495, "red", 6),
+    ("spectate_draft_picks", "draft_pick_left_1",  "draft_pick",  75, 410, 165, 495, "left", 1),
+    ("spectate_draft_picks", "draft_pick_left_4",  "draft_pick", 215, 410, 305, 495, "left", 4),
+    ("spectate_draft_picks", "draft_pick_left_5",  "draft_pick", 355, 410, 445, 495, "left", 5),
+    ("spectate_draft_picks", "draft_pick_right_2", "draft_pick", 633, 410, 723, 495, "right", 2),
+    ("spectate_draft_picks", "draft_pick_right_3", "draft_pick", 777, 410, 867, 495, "right", 3),
+    ("spectate_draft_picks", "draft_pick_right_6", "draft_pick", 920, 410, 1010, 495, "right", 6),
 ]
 
 # spectate_prematch: from live/match01/raw/000104002.png. Cards span y 940-1120 with the
@@ -109,12 +129,12 @@ DEFAULT_PREMATCH_CELLS = [
     # the star crown occupies its top ~40px, so a window starting at 965 crops the crown
     # into the template and depresses the score. With 965 only 3 of 6 cells identified
     # (0.53-0.78); with 1005 all 6 do, at 0.94-0.99 with margins 0.36-0.50.
-    ("spectate_prematch", "prematch_blue_1", "prematch_pick",  87, 1005, 177, 1085, "blue", 1),
-    ("spectate_prematch", "prematch_blue_2", "prematch_pick", 225, 1005, 315, 1085, "blue", 2),
-    ("spectate_prematch", "prematch_blue_3", "prematch_pick", 360, 1005, 450, 1085, "blue", 3),
-    ("spectate_prematch", "prematch_red_1",  "prematch_pick", 632, 1005, 722, 1085, "red",  1),
-    ("spectate_prematch", "prematch_red_2",  "prematch_pick", 765, 1005, 855, 1085, "red",  2),
-    ("spectate_prematch", "prematch_red_3",  "prematch_pick", 900, 1005, 990, 1085, "red",  3),
+    ("spectate_prematch", "prematch_left_1",  "prematch_pick",  87, 1005, 177, 1085, "left", 1),
+    ("spectate_prematch", "prematch_left_2",  "prematch_pick", 225, 1005, 315, 1085, "left", 2),
+    ("spectate_prematch", "prematch_left_3",  "prematch_pick", 360, 1005, 450, 1085, "left", 3),
+    ("spectate_prematch", "prematch_right_1", "prematch_pick", 632, 1005, 722, 1085, "right", 1),
+    ("spectate_prematch", "prematch_right_2", "prematch_pick", 765, 1005, 855, 1085, "right", 2),
+    ("spectate_prematch", "prematch_right_3", "prematch_pick", 900, 1005, 990, 1085, "right", 3),
 ]
 
 
@@ -157,6 +177,38 @@ def main() -> None:
             (slug, description, base_resolution, half_w, top, bottom),
         )
 
+    # 2026-07-27 blue/red -> left/right position rename. A match was already recorded
+    # under the old names, so existing databases (including the shipped heroes.sqlite)
+    # need both the columns and the stored values migrated, not just fresh installs.
+    renamed = []
+    for table, old_col, new_col in RENAME_COLUMNS:
+        if (
+            table_exists(con, table)
+            and old_col in columns(con, table)
+            and new_col not in columns(con, table)
+        ):
+            con.execute(f"ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}")
+            renamed.append(f"{table}.{old_col}->{new_col}")
+
+    for table in SIDE_TABLES:
+        if table_exists(con, table) and "side" in columns(con, table):
+            con.execute(f"UPDATE {table} SET side='left' WHERE side='blue'")
+            con.execute(f"UPDATE {table} SET side='right' WHERE side='red'")
+
+    if table_exists(con, "match") and "outcome" in columns(con, "match"):
+        con.execute("UPDATE match SET outcome='left' WHERE outcome='blue'")
+        con.execute("UPDATE match SET outcome='right' WHERE outcome='red'")
+
+    if table_exists(con, "cell_registry"):
+        # REPLACE is a no-op on rows without the substring, so this is safe to run on
+        # every migration, not just ones that still carry the old names.
+        con.execute(
+            "UPDATE cell_registry SET cell_name=REPLACE(cell_name,'_blue','_left')"
+        )
+        con.execute(
+            "UPDATE cell_registry SET cell_name=REPLACE(cell_name,'_red','_right')"
+        )
+
     for cells in (
         DEFAULT_SUMMARY_CELLS, DEFAULT_DRAFT_PICK_CELLS, DEFAULT_PREMATCH_CELLS,
     ):
@@ -185,6 +237,7 @@ def main() -> None:
     print(f"  database    : {db}{' (created)' if fresh else ''}")
     print(f"  schema      : v{SCHEMA_VERSION}")
     print(f"  columns added: {added or 'none'}")
+    print(f"  columns renamed: {renamed or 'none'}")
     print(f"  config rows inserted: {inserted}")
     for t in ("hero", "hero_alias", "hero_skin", "hero_skill", "solstice_roster",
               "cell_registry", "art_transform", "library_config"):

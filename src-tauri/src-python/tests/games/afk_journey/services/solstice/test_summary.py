@@ -1,6 +1,6 @@
 """Reading the post-match summary.
 
-Ground truth: summary_01 is Faust (blue, Defeat) vs Ni Nai (red, Victory) with
+Ground truth: summary_01 is Faust (left, Defeat) vs Ni Nai (right, Victory) with
 atalanta/igor/indris versus baelran/pippa/solise. Confirmed twice - by image matching
 and independently by long-press OCR of all six names.
 """
@@ -18,8 +18,8 @@ from adb_auto_player.models import ConfidenceValue
 from adb_auto_player.models.geometry import Box, Point
 from adb_auto_player.models.ocr import OCRResult
 
-BLUE_TRUTH = ["atalanta", "igor", "indris"]
-RED_TRUTH = ["baelran", "pippa", "solise"]
+LEFT_TRUTH = ["atalanta", "igor", "indris"]
+RIGHT_TRUTH = ["baelran", "pippa", "solise"]
 
 
 @pytest.mark.parametrize(
@@ -42,10 +42,10 @@ def test_identifies_all_six_heroes(cfg, library, ocr_backend, frames):
     frame = cv2.imread(str(frames["summary_01"]))
     read = read_summary(frame, cfg, library, ocr_backend)
 
-    blue = [h.slug for h in read.heroes if h.side == "blue"]
-    red = [h.slug for h in read.heroes if h.side == "red"]
-    assert blue == BLUE_TRUTH
-    assert red == RED_TRUTH
+    left = [h.slug for h in read.heroes if h.side == "left"]
+    right = [h.slug for h in read.heroes if h.side == "right"]
+    assert left == LEFT_TRUTH
+    assert right == RIGHT_TRUTH
 
 
 def test_every_identification_clears_the_accept_rule(cfg, library, ocr_backend, frames):
@@ -57,16 +57,16 @@ def test_every_identification_clears_the_accept_rule(cfg, library, ocr_backend, 
 
 
 def test_winner_comes_from_the_header_not_the_panel_labels(cfg, library, ocr_backend, frames):
-    """summary_02's result banner independently said BLUE LOSES."""
+    """summary_02's result banner independently said LEFT LOSES."""
     frame = cv2.imread(str(frames["summary_02"]))
     read = read_summary(frame, cfg, library, ocr_backend)
-    assert read.winner == "red"
+    assert read.winner == "right"
 
 
 def test_stats_are_read_for_every_hero(cfg, library, ocr_backend, frames):
     frame = cv2.imread(str(frames["summary_01"]))
     read = read_summary(frame, cfg, library, ocr_backend)
-    first = next(h for h in read.heroes if h.side == "blue" and h.slot == 1)
+    first = next(h for h in read.heroes if h.side == "left" and h.slot == 1)
     assert first.stats.sword == 699_000
     assert first.stats.shield == 2_924_000
 
@@ -100,22 +100,22 @@ def _block(text: str, centre_x: int) -> OCRResult:
     )
 
 
-def test_read_winner_merged_block_victory_first_is_blue():
-    """'VictoryDefeat' - Victory read first (left) means blue is on the left and won.
+def test_read_winner_merged_block_victory_first_is_left():
+    """'VictoryDefeat' - Victory read first (left) means the left side won.
 
-    Neither fixture exercises this order (both are 'DefeatVictory' / red-wins), so
-    this is the only place a blue win is checked at all.
+    Neither fixture exercises this order (both are 'DefeatVictory' / right-wins), so
+    this is the only place a left win is checked at all.
     """
     ocr = _StubOCR([_block("VictoryDefeat", centre_x=537)])
     dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
-    assert summary._read_winner(dummy_frame, ocr) == "blue"
+    assert summary._read_winner(dummy_frame, ocr) == "left"
 
 
-def test_read_winner_merged_block_defeat_first_is_red():
+def test_read_winner_merged_block_defeat_first_is_right():
     """'DefeatVictory' - Defeat read first (left) means victory is on the right."""
     dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
     ocr = _StubOCR([_block("DefeatVictory", centre_x=537)])
-    assert summary._read_winner(dummy_frame, ocr) == "red"
+    assert summary._read_winner(dummy_frame, ocr) == "right"
 
 
 def test_read_winner_single_word_falls_back_to_box_position():
@@ -128,4 +128,4 @@ def test_read_winner_single_word_falls_back_to_box_position():
     """
     dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
     ocr = _StubOCR([_block("VictoryCaffu", centre_x=200)])
-    assert summary._read_winner(dummy_frame, ocr) == "blue"
+    assert summary._read_winner(dummy_frame, ocr) == "left"

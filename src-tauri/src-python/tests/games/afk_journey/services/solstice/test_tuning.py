@@ -57,7 +57,7 @@ def test_learn_if_improved_stores_a_better_transform(cfg, library, frames, tmp_d
     gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
     store = MatchStore(tmp_db)
     audit_id = store.record_audit(AuditRow(
-        screen_slug="solstice_summary", side="red", slot=3,
+        screen_slug="solstice_summary", side="right", slot=3,
         image_slug="solise", image_art_ref="Solise",
         image_score=0.781, image_margin=0.201, ocr_slug="solise", frame_path=None,
     ))
@@ -111,7 +111,7 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
         screen_slug="spectate_prematch", cell_type="prematch_pick",
         # Deliberately empty: nothing can be set-consistent, and no row may ever claim
         # ocr_slug agreement - this screen has no per-cell truth to confirm against.
-        confirmed_by_side={"blue": set(), "red": set()},
+        confirmed_by_side={"left": set(), "right": set()},
         frame_path="/tmp/x.png", match_id=None,
     )
     assert result.written == 6
@@ -140,7 +140,7 @@ def test_train_from_frame_never_confirms_even_when_set_consistent(cfg, library, 
 
     frame = cv2.imread(str(frames["spectate_prematch"]))
 
-    by_side: dict[str, set[str]] = {"blue": set(), "red": set()}
+    by_side: dict[str, set[str]] = {"left": set(), "right": set()}
     for cell in cfg.cells("prematch_pick"):
         result = identify_cell(extract_cell(frame, cell), "prematch_pick", library, cfg)
         if result.slug:
@@ -177,15 +177,15 @@ def test_train_from_frame_does_not_confirm_a_swap(cfg, tmp_db):
     from adb_auto_player.games.afk_journey.services.solstice.vision import Identification
 
     cell_a = Cell(
-        name="prematch_blue_1", cell_type="prematch_pick",
-        x0=0, y0=0, x1=90, y1=120, side="blue", slot=1,
+        name="prematch_left_1", cell_type="prematch_pick",
+        x0=0, y0=0, x1=90, y1=120, side="left", slot=1,
     )
     cell_b = Cell(
-        name="prematch_blue_2", cell_type="prematch_pick",
-        x0=90, y0=0, x1=180, y1=120, side="blue", slot=2,
+        name="prematch_left_2", cell_type="prematch_pick",
+        x0=90, y0=0, x1=180, y1=120, side="left", slot=2,
     )
     # Cell A actually shows heroA but the matcher (mis)reads heroB, and vice versa - a
-    # swap. Both slugs are in the confirmed set and each is unique on the "blue" side.
+    # swap. Both slugs are in the confirmed set and each is unique on the "left" side.
     ordered_reads = [
         Identification(
             slug="heroB", art_ref="HeroB", score=0.9, margin=0.3, status="identified",
@@ -212,7 +212,7 @@ def test_train_from_frame_does_not_confirm_a_swap(cfg, tmp_db):
         result = train_from_frame(
             store=store, cfg=cfg, library=None, frame=frame,
             screen_slug="spectate_prematch", cell_type="prematch_pick",
-            confirmed_by_side={"blue": {"heroA", "heroB"}, "red": set()},
+            confirmed_by_side={"left": {"heroA", "heroB"}, "right": set()},
             frame_path="/tmp/x.png", match_id=None,
         )
 
@@ -248,16 +248,16 @@ def test_train_from_frame_deduces_the_odd_cell_by_elimination(cfg, tmp_db):
     from adb_auto_player.games.afk_journey.services.solstice.vision import Identification
 
     cell_1 = Cell(
-        name="prematch_blue_1", cell_type="prematch_pick",
-        x0=0, y0=0, x1=90, y1=120, side="blue", slot=1,
+        name="prematch_left_1", cell_type="prematch_pick",
+        x0=0, y0=0, x1=90, y1=120, side="left", slot=1,
     )
     cell_2 = Cell(
-        name="prematch_blue_2", cell_type="prematch_pick",
-        x0=90, y0=0, x1=180, y1=120, side="blue", slot=2,
+        name="prematch_left_2", cell_type="prematch_pick",
+        x0=90, y0=0, x1=180, y1=120, side="left", slot=2,
     )
     cell_3 = Cell(
-        name="prematch_blue_3", cell_type="prematch_pick",
-        x0=180, y0=0, x1=270, y1=120, side="blue", slot=3,
+        name="prematch_left_3", cell_type="prematch_pick",
+        x0=180, y0=0, x1=270, y1=120, side="left", slot=3,
     )
     # heroA and heroB are read correctly; cell_3 misreads heroC as something outside the
     # confirmed set entirely ("junk"). heroC is unaccounted for anywhere else, so cell_3
@@ -285,7 +285,7 @@ def test_train_from_frame_deduces_the_odd_cell_by_elimination(cfg, tmp_db):
         result = train_from_frame(
             store=store, cfg=cfg, library=None, frame=frame,
             screen_slug="spectate_prematch", cell_type="prematch_pick",
-            confirmed_by_side={"blue": {"heroA", "heroB", "heroC"}, "red": set()},
+            confirmed_by_side={"left": {"heroA", "heroB", "heroC"}, "right": set()},
             frame_path="/tmp/x.png", match_id=None,
         )
 
@@ -311,13 +311,13 @@ def test_only_ocr_confirmed_slots_seed_the_confirmation_set():
     from adb_auto_player.games.afk_journey.services.solstice.tuning import confirmed_sides
 
     confirmed = confirmed_sides([
-        HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+        HeroSlot(side="left", slot=1, hero_slug="atalanta", art_ref="Atalanta",
                  status="identified", identified_by="longpress_ocr"),
-        HeroSlot(side="blue", slot=2, hero_slug="igor", art_ref="Igor",
+        HeroSlot(side="left", slot=2, hero_slug="igor", art_ref="Igor",
                  status="identified", identified_by="image"),
-        HeroSlot(side="red", slot=1, hero_slug=None, art_ref=None,
+        HeroSlot(side="right", slot=1, hero_slug=None, art_ref=None,
                  status="unknown", identified_by=None),
     ])
 
-    assert confirmed["blue"] == {"atalanta"}, "image-only reads must be excluded"
-    assert confirmed["red"] == set()
+    assert confirmed["left"] == {"atalanta"}, "image-only reads must be excluded"
+    assert confirmed["right"] == set()

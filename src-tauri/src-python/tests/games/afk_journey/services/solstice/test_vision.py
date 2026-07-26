@@ -45,7 +45,7 @@ GRID_TRUTH = {
 }
 BANNED_SLOTS = {6, 20}
 
-# data/prematch_locked.png - slots 1-3 blue, 4-6 red. Igor and Galahad are skinned.
+# data/prematch_locked.png - slots 1-3 left, 4-6 right. Igor and Galahad are skinned.
 LOCKED_TRUTH = {
     1: "berial",
     2: "eironn",

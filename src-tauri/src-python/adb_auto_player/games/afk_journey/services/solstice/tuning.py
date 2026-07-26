@@ -184,7 +184,7 @@ def confirmed_sides(slots) -> dict[str, set[str]]:
     truth and let it authorise learning on the draft and prematch screens - the exact
     self-confirmation this design exists to prevent.
     """
-    confirmed: dict[str, set[str]] = {"blue": set(), "red": set()}
+    confirmed: dict[str, set[str]] = {"left": set(), "right": set()}
     for slot in slots:
         if slot.hero_slug and slot.identified_by == "longpress_ocr":
             confirmed.setdefault(slot.side, set()).add(slot.hero_slug)

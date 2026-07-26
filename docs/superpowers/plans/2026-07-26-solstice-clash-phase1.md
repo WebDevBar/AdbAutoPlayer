@@ -29,7 +29,12 @@ every task is testable from committed fixture frames.
   moves the slider. Auto-placing is a possible v2, never a default.
 - **`unknown` is a first-class outcome.** Below threshold means "sit this round out", not "guess".
 - **SQLite always works standalone.** Postgres sync may come later and must never be required.
-- **No hardcoded geometry or tunables.** Read `cell_registry` and `library_config` from the DB.
+- **Geometry and match tunables come from the DB** (`cell_registry`, `library_config`) - never
+  hardcode a cell rectangle, a scale chain, an accept threshold or the gamma. A few decode-level
+  constants stay in code because they are properties of the file format, not tunables:
+  `ASTC_BLOCK`, `_FLATTEN_BG`. Anchor positions and the ban threshold live in code for Phase 1
+  but **must move to `library_config` before the Phase 2 device loop**, since that is when they
+  start varying with live conditions.
 - **`hero.slug` is the identity.** `external_id` is the game's id, useful but never the key.
   Positional numbering (roster index, "#1-#20") must never reach the database.
 - **Two new deps, both undeclared today:** `lz4` and `texture2ddecoder`. Add BOTH in Task 2
@@ -42,7 +47,7 @@ every task is testable from committed fixture frames.
 
 | Superseded assumption | Reality now |
 |---|---|
-| Library discovered from gameplay, slugs auto-numbered `hero_001…` | 1,123 icons decoded from the game; all 118 current heroes named and mapped to `hero.external_id` |
+| Library discovered from gameplay, slugs auto-numbered `hero_001…` | The AST container format is decoded (1,123 icons extracted offline); all 95 **usable-roster** heroes have `external_id` + `game_icon`. The `hero` table holds 153 rows, 32 of which are NPCs/story characters with no game icon - that is expected, not a gap. |
 | Wiki art is the source | **Game assets are PRIMARY** (`library_config.icon_priority = game,wiki`). Wiki is fallback. |
 | Frequency filter needed to find real heroes | Unnecessary - the library is complete and named |
 | Geometry hardcoded in a constants module | Measured and stored in `cell_registry` (32 cells, 3 types) |
@@ -355,6 +360,30 @@ git commit -m "feat(solstice): config service reading geometry and tunables from
   - `IconLibrary.build(cfg, icon_dir: Path) -> IconLibrary`
   - `.entries() -> list[IconEntry]` where `IconEntry(slug, art_ref, art_kind, gray)`
   - `.for_slugs(slugs: set[str]) -> list[IconEntry]` (the pool-constrained subset)
+
+- [ ] **Step 0: Register the `network` marker**
+
+`test_build_hero_db_does_not_touch_match_tables` is marked `@pytest.mark.network`. Neither
+`pyproject.toml` registers markers today, so the mark warns now and would ERROR under
+`--strict-markers`. Add to the ROOT `pyproject.toml` (that is where `[tool.pytest.ini_options]`
+lives - `testpaths = ["src-tauri/src-python/tests"]`):
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["src-tauri/src-python/tests"]
+markers = [
+    "network: test hits an external service (deselect with -m 'not network')",
+]
+```
+
+Verify:
+
+```bash
+cd /mnt/docs/adbautoplayer
+uv run --group dev pytest --markers | grep network
+```
+
+Expected: the marker is listed.
 
 - [ ] **Step 1: Add the dependency**
 
@@ -678,6 +707,40 @@ def test_unknown_when_no_candidate_fits(db_path, frames, library):
     assert res.status == "unknown"
 
 
+# Ground truth for data/prematch_locked.png, confirmed by the user. Slots 1-3 blue, 4-6 red.
+# Igor and Galahad are wearing skins in this frame.
+LOCKED_TRUTH = {1: "berial", 2: "eironn", 3: "igor",
+                4: "nara", 5: "galahad", 6: "temesia"}
+
+
+def test_identifies_every_locked_pick(db_path, frames, library):
+    """The 54/54 locked-pick baseline is quoted in this plan - encode it, do not just cite it."""
+    cfg = SolsticeConfig.load(db_path)
+    frame = cv2.imread(str(frames["prematch_locked"]))
+    wrong, low = [], []
+    for cell in cfg.cells("locked_pick"):
+        res = vision.identify_cell(
+            vision.extract_cell(frame, cell), "locked_pick", library, cfg)
+        expected = LOCKED_TRUTH[cell.slot]
+        if res.slug != expected:
+            wrong.append((cell.slot, expected, res.slug, round(res.score, 3)))
+        if res.score < 0.90:
+            low.append((cell.slot, expected, round(res.score, 3)))
+    assert not wrong, f"misidentified: {wrong}"
+    assert not low, f"below the measured 0.9249 floor: {low}"
+
+
+def test_locked_picks_resolve_skins_to_the_hero(db_path, frames, library):
+    """Igor and Galahad are skinned here; both must still resolve to the hero."""
+    cfg = SolsticeConfig.load(db_path)
+    frame = cv2.imread(str(frames["prematch_locked"]))
+    by_slot = {c.slot: c for c in cfg.cells("locked_pick")}
+    for slot, slug in ((3, "igor"), (5, "galahad")):
+        res = vision.identify_cell(
+            vision.extract_cell(frame, by_slot[slot]), "locked_pick", library, cfg)
+        assert res.slug == slug, f"slot {slot}: expected {slug}, got {res.slug}"
+
+
 def test_pool_constraint_narrows_candidates(db_path, frames, library):
     """Restricting to the match pool must not change the answer, and must raise the margin."""
     cfg = SolsticeConfig.load(db_path)
@@ -706,7 +769,7 @@ Expected: FAIL, no module `solstice.vision`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
@@ -723,7 +786,11 @@ class Identification:
     art_ref: str | None
     score: float
     margin: float
-    status: str          # 'identified' | 'unknown'
+    status: str                        # 'identified' | 'unknown'
+    runner_up_slug: str | None = None  # provenance: what nearly won, and by how little
+    runner_up_score: float | None = None
+    candidate_scope: str | None = None # 'pool' | 'full_library', set by identify_with_pool
+    pool_miss: int | None = None
 
 
 def extract_cell(frame: np.ndarray, cell: Cell) -> np.ndarray:
@@ -774,12 +841,15 @@ def identify_cell(cell_gray: np.ndarray, cell_type: str, library: IconLibrary,
 
     accepted = (top_score >= cfg.tunable_float("accept_score")
                 and margin >= cfg.tunable_float("accept_margin"))
+    runner_slug = ranked[1][1] if len(ranked) > 1 else None
     return Identification(
         slug=top_slug if accepted else None,
         art_ref=top_art if accepted else None,
         score=top_score,
         margin=margin,
         status="identified" if accepted else "unknown",
+        runner_up_slug=runner_slug,
+        runner_up_score=runner_up if len(ranked) > 1 else None,
     )
 ```
 
@@ -831,8 +901,36 @@ img = cv2.imread(src)
 assert img is not None and img.shape[:2] == (1920, 1080), img.shape
 cv2.imwrite(os.path.join(out, "draft_selecting.png"), img[630:720, 320:480])
 print("draft anchor 160x90 written")
+
+pre = cv2.imread(src.replace("draft_selecting", "prematch_locked"))
+assert pre is not None and pre.shape[:2] == (1920, 1080), pre.shape
+cv2.imwrite(os.path.join(out, "prematch_locked.png"), pre[1440:1500, 470:610])
+print("prematch anchor 140x60 written")
 PY
 ```
+
+Then MEASURE both anchors before relying on them - a brightness heuristic scored 1/5 here,
+so an anchor is not trusted until its separation is measured:
+
+```bash
+python3 - <<'MEASURE'
+import cv2, glob
+out = ("src-tauri/src-python/adb_auto_player/games/afk_journey/templates/"
+       "event/solstice_clash/anchors")
+data = "src-tauri/src-python/tests/games/afk_journey/services/solstice/data"
+for anchor in ("draft_selecting", "prematch_locked"):
+    a = cv2.imread(f"{out}/{anchor}.png", cv2.IMREAD_GRAYSCALE)
+    print(f"--- {anchor} ---")
+    for f in sorted(glob.glob(f"{data}/*.png")):
+        g = cv2.imread(f, cv2.IMREAD_GRAYSCALE)
+        v = float(cv2.matchTemplate(g, a, cv2.TM_CCOEFF_NORMED).max())
+        print(f"   {f.split('/')[-1]:26s} {v:.3f}")
+MEASURE
+```
+
+Expected: each anchor scores >= 0.99 on its own screen and clearly under 0.90 on the other two.
+If a non-matching screen scores above 0.90, choose a different region - do NOT lower the
+threshold.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -849,6 +947,15 @@ def test_classifies_the_three_fixture_screens(db_path, frames):
         cv2.imread(str(frames["prematch_locked"])), cfg, ANCHORS) == "prematch_locked"
 
 
+def test_prematch_is_not_mistaken_for_draft_or_spectate(db_path, frames):
+    """Each anchor must fire only on its own screen."""
+    cfg = SolsticeConfig.load(db_path)
+    assert vision.classify_screen(
+        cv2.imread(str(frames["spectate"])), cfg, ANCHORS) != "prematch_locked"
+    assert vision.classify_screen(
+        cv2.imread(str(frames["draft_selecting"])), cfg, ANCHORS) != "prematch_locked"
+
+
 def test_spectate_is_not_mistaken_for_draft(db_path, frames):
     """Spectate does NOT share the compete geometry - it must not classify as draft."""
     cfg = SolsticeConfig.load(db_path)
@@ -861,9 +968,14 @@ def test_spectate_is_not_mistaken_for_draft(db_path, frames):
 - [ ] **Step 4: Implement**
 
 ```python
+# Anchors, not brightness. Brightness/colour classification was tried and scored 1/5
+# (docs/solstice-clash/README.md), so BOTH screens use template anchors.
 _DRAFT_ANCHOR_AT = (630, 320)      # y, x where the anchor was cut
 _DRAFT_ANCHOR_PAD = 25             # search window so matchTemplate can align
 _DRAFT_ANCHOR_MIN = 0.90           # draft scores 0.999; spectate scores 0.763
+_PREMATCH_ANCHOR_AT = (1440, 470)  # static divider between the two team plates
+_PREMATCH_ANCHOR_PAD = 25
+_PREMATCH_ANCHOR_MIN = 0.90
 
 
 def classify_screen(frame: np.ndarray, cfg: SolsticeConfig, anchor_dir) -> str:
@@ -880,13 +992,16 @@ def classify_screen(frame: np.ndarray, cfg: SolsticeConfig, anchor_dir) -> str:
             if score >= _DRAFT_ANCHOR_MIN:
                 return "draft"
 
-    # Pre-match locked teams: blue team plate on the left, red on the right.
-    if frame.ndim == 3:
-        strip = frame[1300:1420].astype(np.int16)
-        blue = (strip[:, :500, 0] - strip[:, :500, 2]).mean()
-        red = (strip[:, 580:, 2] - strip[:, 580:, 0]).mean()
-        if blue > 25 and red > 25:
-            return "prematch_locked"
+    prematch = cv2.imread(str(anchor_dir / "prematch_locked.png"), cv2.IMREAD_GRAYSCALE)
+    if prematch is not None:
+        y, x = _PREMATCH_ANCHOR_AT
+        p = _PREMATCH_ANCHOR_PAD
+        window = gray[max(0, y - p):y + prematch.shape[0] + p,
+                      max(0, x - p):x + prematch.shape[1] + p]
+        if window.shape[0] >= prematch.shape[0] and window.shape[1] >= prematch.shape[1]:
+            score = float(cv2.matchTemplate(window, prematch, cv2.TM_CCOEFF_NORMED).max())
+            if score >= _PREMATCH_ANCHOR_MIN:
+                return "prematch_locked"
     return "unknown"
 ```
 
@@ -958,6 +1073,22 @@ def test_ban_detection_finds_exactly_the_two_banned_cells(db_path, frames):
     assert banned == BANNED_SLOTS, f"expected {BANNED_SLOTS}, got {banned}"
 
 
+def test_identify_with_pool_reports_which_tier_answered(db_path, frames, library):
+    """A pool hit and a full-library fallback must be distinguishable by the caller."""
+    cfg = SolsticeConfig.load(db_path)
+    frame = cv2.imread(str(frames["draft_selecting"]))
+    cell = next(c for c in cfg.cells("draft_card") if c.slot == 19)   # Sonja
+    gray = vision.extract_cell(frame, cell)
+
+    hit = vision.identify_with_pool(gray, "draft_card", library, cfg, {"sonja", "lyca"})
+    assert hit.slug == "sonja" and hit.candidate_scope == "pool" and hit.pool_miss == 0
+
+    # a pool that cannot contain the answer must fall back and say so
+    miss = vision.identify_with_pool(gray, "draft_card", library, cfg, {"berial", "tilaya"})
+    assert miss.candidate_scope == "full_library" and miss.pool_miss == 1
+    assert miss.slug == "sonja"
+
+
 def test_identify_pool_reads_the_whole_grid(db_path, frames, library):
     cfg = SolsticeConfig.load(db_path)
     frame = cv2.imread(str(frames["draft_selecting"]))
@@ -1019,12 +1150,18 @@ def identify_pool(frame: np.ndarray, cfg: SolsticeConfig, library: IconLibrary,
 
 def identify_with_pool(cell_gray: np.ndarray, cell_type: str, library: IconLibrary,
                        cfg: SolsticeConfig, pool: set[str] | None) -> Identification:
-    """Tier 1: the match pool. Tier 2: the full library. Then unknown."""
+    """Tier 1: the match pool. Tier 2: the full library. Then unknown.
+
+    The returned Identification carries `candidate_scope` and `pool_miss` so the caller can
+    record WHICH tier answered. Without that, "the pool read was wrong" and "a legitimate
+    hero outside the pool" are indistinguishable in the data forever.
+    """
     if pool:
         first = identify_cell(cell_gray, cell_type, library, cfg, candidates=pool)
         if first.status == "identified":
-            return first
-    return identify_cell(cell_gray, cell_type, library, cfg)
+            return replace(first, candidate_scope="pool", pool_miss=0)
+    fallback = identify_cell(cell_gray, cell_type, library, cfg)
+    return replace(fallback, candidate_scope="full_library", pool_miss=1 if pool else 0)
 ```
 
 - [ ] **Step 5: Run the tests.** Expected: PASS. If `test_ban_detection...` returns extra
@@ -1065,7 +1202,11 @@ Append to `schema.sql`:
 
 CREATE TABLE IF NOT EXISTS match(
   id             INTEGER PRIMARY KEY,
-  natural_key    TEXT NOT NULL UNIQUE,   -- dedupes re-observations of the same match
+  -- NULLABLE on purpose. A match observed mid-draft has no stable key yet (unknown heroes,
+  -- no outcome). Rows with a NULL key are local-only and excluded from any future sync;
+  -- the key is computed once enough stable facts exist. SQLite allows many NULLs in a
+  -- UNIQUE column, which is exactly what we want.
+  natural_key    TEXT UNIQUE,
   source         TEXT NOT NULL,          -- 'compete' | 'spectate'
   captured_at    TEXT NOT NULL,
   theme          TEXT,                   -- readable on the draft screen
@@ -1086,7 +1227,38 @@ CREATE TABLE IF NOT EXISTS match_hero(
   status        TEXT NOT NULL,           -- 'identified' | 'unknown'
   score         REAL,
   margin        REAL,
+  -- Provenance. Without this a bad pool read and a legitimate out-of-pool recovery are
+  -- indistinguishable forever, and a failed identification cannot be relabelled by hand.
+  cell_type     TEXT,                    -- 'locked_pick' | 'draft_locked_pick' | 'draft_card'
+  cell_name     TEXT,
+  candidate_scope TEXT,                  -- 'pool' | 'full_library'
+  pool_miss     INTEGER,                 -- 1 = pool tier failed and full library was used
+  runner_up_slug  TEXT,
+  runner_up_score REAL,
+  crop_path     TEXT,                    -- saved cell crop, for relabelling
+  frame_path    TEXT,                    -- source frame, for re-measuring geometry
   UNIQUE(match_id, side, slot)
+);
+
+-- The 20 heroes on offer, and which were banned. Phase 2 identifies these and Phase 5
+-- needs them: "who was available but not picked" is a real signal, and a pick that is not
+-- in the pool is a DETECTED error rather than a silent wrong answer. Computing this and
+-- discarding it would be the single most expensive omission to retrofit.
+CREATE TABLE IF NOT EXISTS match_pool(
+  id            INTEGER PRIMARY KEY,
+  match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+  slot          INTEGER NOT NULL,        -- 1..20, row-major in the 5x4 grid
+  hero_slug     TEXT REFERENCES hero(slug),
+  art_ref       TEXT,
+  status        TEXT NOT NULL,           -- 'identified' | 'unknown' | 'banned'
+  banned        INTEGER NOT NULL DEFAULT 0,
+  score         REAL,
+  margin        REAL,
+  runner_up_slug  TEXT,
+  runner_up_score REAL,
+  crop_path     TEXT,
+  frame_path    TEXT,
+  UNIQUE(match_id, slot)
 );
 
 CREATE TABLE IF NOT EXISTS match_odds(
@@ -1099,6 +1271,7 @@ CREATE TABLE IF NOT EXISTS match_odds(
 );
 
 CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id);
+CREATE INDEX IF NOT EXISTS idx_match_pool_match ON match_pool(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_odds_match ON match_odds(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_outcome    ON match(outcome);
 ```
@@ -1119,7 +1292,7 @@ print('match tables:', sorted(x for x in t if x.startswith('match')))
 print('schema version:', c.execute('SELECT MAX(version) FROM schema_version').fetchone()[0])"
 ```
 
-Expected: `match tables: ['match', 'match_hero', 'match_odds']` and `schema version: 2`.
+Expected: `match tables: ['match', 'match_hero', 'match_odds', 'match_pool']` and `schema version: 2`.
 
 `build_hero_db.py` must NOT be given a path to these tables - they are locally earned and it
 already only touches `hero_skill` and `solstice_roster`.
@@ -1132,7 +1305,7 @@ import shutil
 import pytest
 
 from adb_auto_player.games.afk_journey.services.solstice.store import (
-    MatchStore, MatchRecord, HeroSlot, OddsSample,
+    MatchStore, MatchRecord, HeroSlot, PoolSlot, OddsSample,
 )
 
 
@@ -1177,6 +1350,49 @@ def test_unknown_heroes_are_stored_not_dropped(tmp_db):
     store.record_heroes(mid, [HeroSlot("blue", i, None, None, "unknown", 0.5, 0.0)
                               for i in (1, 2, 3)])
     assert len(store.heroes_for(mid)) == 3
+
+
+def test_pool_is_recorded_including_banned_slots(tmp_db):
+    """The 20 offered heroes and the bans are the context Phase 5 needs. Computing the
+    pool and discarding it is the most expensive omission to retrofit."""
+    store = MatchStore(tmp_db)
+    mid = store.record_match(MatchRecord(source="compete", captured_at="2026-07-26T10:00:00"))
+    store.record_pool(mid, [
+        PoolSlot(1, "indris", "spui_herohead_87", "identified", 0, 0.95, 0.34),
+        PoolSlot(6, None, None, "banned", 1),
+        PoolSlot(20, None, None, "banned", 1),
+    ])
+    rows = store.pool_for(mid)
+    assert len(rows) == 3
+    assert {r.slot for r in rows if r.banned} == {6, 20}
+    assert rows[0].hero_slug == "indris"
+
+
+def test_pool_fallback_is_recorded(tmp_db):
+    """A pool miss and a legitimate out-of-pool hero must be distinguishable afterwards."""
+    store = MatchStore(tmp_db)
+    mid = store.record_match(MatchRecord(source="compete", captured_at="2026-07-26T10:00:00"))
+    store.record_heroes(mid, [
+        HeroSlot("blue", 1, "sonja", "x", "identified", 0.97, 0.4,
+                 cell_type="locked_pick", cell_name="locked_pick_1",
+                 candidate_scope="pool", pool_miss=0),
+        HeroSlot("blue", 2, "zorya", "y", "identified", 0.92, 0.5,
+                 cell_type="locked_pick", cell_name="locked_pick_2",
+                 candidate_scope="full_library", pool_miss=1),
+    ])
+    rows = store.heroes_for(mid)
+    assert rows[0].candidate_scope == "pool" and rows[0].pool_miss == 0
+    assert rows[1].candidate_scope == "full_library" and rows[1].pool_miss == 1
+
+
+def test_a_match_can_exist_without_a_natural_key(tmp_db):
+    """Mid-draft observations have no stable key yet; they must still record."""
+    store = MatchStore(tmp_db)
+    a = store.record_match(MatchRecord(source="compete", captured_at="2026-07-26T10:00:00"))
+    b = store.record_match(MatchRecord(source="compete", captured_at="2026-07-26T10:00:01"))
+    assert a != b, "unkeyed observations must not collapse into one row"
+    store.set_natural_key(a, "later-key")
+    assert store.match_by_natural_key("later-key") == a
 
 
 def test_odds_samples_accumulate(tmp_db):
@@ -1231,9 +1447,9 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class MatchRecord:
-    natural_key: str          # stable per match, so a re-observation dedupes
     source: str               # 'compete' | 'spectate'
     captured_at: str
+    natural_key: str | None = None   # NULL until the match has enough stable facts
     theme: str | None = None
     balance_epoch: str | None = None
     blue_player: str | None = None
@@ -1255,6 +1471,31 @@ class HeroSlot:
     status: str               # 'identified' | 'unknown'
     score: float | None = None
     margin: float | None = None
+    # Provenance - see the schema comment. candidate_scope/pool_miss are what separate
+    # "the pool read was wrong" from "a legitimate hero outside the pool".
+    cell_type: str | None = None
+    cell_name: str | None = None
+    candidate_scope: str | None = None
+    pool_miss: int | None = None
+    runner_up_slug: str | None = None
+    runner_up_score: float | None = None
+    crop_path: str | None = None
+    frame_path: str | None = None
+
+
+@dataclass(frozen=True)
+class PoolSlot:
+    slot: int                 # 1..20, row-major
+    hero_slug: str | None
+    art_ref: str | None
+    status: str               # 'identified' | 'unknown' | 'banned'
+    banned: int = 0
+    score: float | None = None
+    margin: float | None = None
+    runner_up_slug: str | None = None
+    runner_up_score: float | None = None
+    crop_path: str | None = None
+    frame_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1294,8 +1535,12 @@ class MatchStore:
                  rec.blue_player, rec.blue_rating, rec.blue_rank,
                  rec.red_player, rec.red_rating, rec.red_rank,
                  rec.outcome, rec.outcome_source))
-            row = con.execute("SELECT id FROM match WHERE natural_key=?",
-                              (rec.natural_key,)).fetchone()
+            if rec.natural_key is None:
+                # No key yet: this is a fresh local-only observation, so it always inserts.
+                row = con.execute("SELECT last_insert_rowid()").fetchone()
+            else:
+                row = con.execute("SELECT id FROM match WHERE natural_key=?",
+                                  (rec.natural_key,)).fetchone()
         return int(row[0])
 
     def match_by_natural_key(self, natural_key: str) -> int | None:
@@ -1304,25 +1549,58 @@ class MatchStore:
                               (natural_key,)).fetchone()
         return int(row[0]) if row else None
 
+    _HERO_COLS = ("side", "slot", "hero_slug", "art_ref", "status", "score", "margin",
+                  "cell_type", "cell_name", "candidate_scope", "pool_miss",
+                  "runner_up_slug", "runner_up_score", "crop_path", "frame_path")
+
     def record_heroes(self, match_id: int, slots: list[HeroSlot]) -> None:
         """Every slot is stored, including unknown ones. Dropping an unidentified slot
         would make a 3v3 look like a 2v3 and silently corrupt the training data."""
+        cols = ",".join(self._HERO_COLS)
+        placeholders = ",".join("?" * (len(self._HERO_COLS) + 1))
+        updates = ",".join(f"{c}=excluded.{c}" for c in self._HERO_COLS[2:])
         with self._connect() as con:
             con.executemany(
-                "INSERT INTO match_hero(match_id,side,slot,hero_slug,art_ref,status,score,margin)"
-                " VALUES(?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(match_id,side,slot) DO UPDATE SET "
-                "hero_slug=excluded.hero_slug, art_ref=excluded.art_ref, "
-                "status=excluded.status, score=excluded.score, margin=excluded.margin",
-                [(match_id, s.side, s.slot, s.hero_slug, s.art_ref, s.status, s.score, s.margin)
-                 for s in slots])
+                f"INSERT INTO match_hero(match_id,{cols}) VALUES({placeholders}) "
+                f"ON CONFLICT(match_id,side,slot) DO UPDATE SET {updates}",
+                [(match_id, *(getattr(s, c) for c in self._HERO_COLS)) for s in slots])
 
     def heroes_for(self, match_id: int) -> list[HeroSlot]:
+        cols = ",".join(self._HERO_COLS)
         with self._connect() as con:
             rows = con.execute(
-                "SELECT side,slot,hero_slug,art_ref,status,score,margin FROM match_hero "
-                "WHERE match_id=? ORDER BY side, slot", (match_id,)).fetchall()
+                f"SELECT {cols} FROM match_hero WHERE match_id=? ORDER BY side, slot",
+                (match_id,)).fetchall()
         return [HeroSlot(*r) for r in rows]
+
+    _POOL_COLS = ("slot", "hero_slug", "art_ref", "status", "banned", "score", "margin",
+                  "runner_up_slug", "runner_up_score", "crop_path", "frame_path")
+
+    def record_pool(self, match_id: int, slots: list[PoolSlot]) -> None:
+        """The 20 offered heroes and which were banned. Never skip banned slots - "this
+        hero was available but banned" is a distinct fact from "this slot was not read"."""
+        cols = ",".join(self._POOL_COLS)
+        placeholders = ",".join("?" * (len(self._POOL_COLS) + 1))
+        updates = ",".join(f"{c}=excluded.{c}" for c in self._POOL_COLS[1:])
+        with self._connect() as con:
+            con.executemany(
+                f"INSERT INTO match_pool(match_id,{cols}) VALUES({placeholders}) "
+                f"ON CONFLICT(match_id,slot) DO UPDATE SET {updates}",
+                [(match_id, *(getattr(s, c) for c in self._POOL_COLS)) for s in slots])
+
+    def pool_for(self, match_id: int) -> list[PoolSlot]:
+        cols = ",".join(self._POOL_COLS)
+        with self._connect() as con:
+            rows = con.execute(
+                f"SELECT {cols} FROM match_pool WHERE match_id=? ORDER BY slot",
+                (match_id,)).fetchall()
+        return [PoolSlot(*r) for r in rows]
+
+    def set_natural_key(self, match_id: int, natural_key: str) -> None:
+        """Set once a match has enough stable facts to be keyed. Until then it stays NULL
+        and the row is local-only."""
+        with self._connect() as con:
+            con.execute("UPDATE match SET natural_key=? WHERE id=?", (natural_key, match_id))
 
     def record_odds(self, match_id: int, sample: OddsSample) -> None:
         with self._connect() as con:

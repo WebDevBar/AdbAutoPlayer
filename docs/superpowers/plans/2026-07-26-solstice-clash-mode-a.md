@@ -1761,11 +1761,17 @@ Add to `SolsticeClashMixin`:
 
         # Optional training material. If we entered mid-match there is no draft left to
         # capture - that is normal, not an error, and must never block recording.
+        # The draft screen is up NOW (or we entered mid-match and it is not).
         draft_frame = self._capture_training_frame(
-            "event/solstice_clash/draft_anchor", late=True
+            "event/solstice_clash/draft_anchor", late=True, wait_timeout=0.0
         )
+        # The prematch screen only appears AFTER the draft ends, so it must be WAITED
+        # for, not probed. Probing immediately after the draft capture would return None
+        # on exactly the matches where training data is available.
         prematch_frame = self._capture_training_frame(
-            "event/solstice_clash/prematch_anchor", late=False
+            "event/solstice_clash/prematch_anchor",
+            late=False,
+            wait_timeout=PREMATCH_WAIT_TIMEOUT if draft_frame is not None else 0.0,
         )
 
         self.wait_for_template(
@@ -1947,22 +1953,39 @@ These are referenced by Steps 1-3 and must exist before the module imports clean
                 return texts[i + 1]
         return None
 
-    def _capture_training_frame(self, anchor: str, late: bool) -> np.ndarray | None:
-        """Grab one draft or prematch frame if that screen is currently up.
+    def _capture_training_frame(
+        self, anchor: str, late: bool, wait_timeout: float = 0.0
+    ) -> np.ndarray | None:
+        """Grab one draft or prematch frame.
 
-        Returns None when we entered mid-match, which is NORMAL: this is optional
-        training material and must never prevent the outcome from being recorded.
+        Returns None when the screen never appears, which is NORMAL - we may have entered
+        mid-match. This is optional training material and must never prevent the outcome
+        from being recorded.
 
-        `late=True` waits for as many pick slots as possible to fill before capturing -
-        the training targets are the pick slots, so an early frame with an empty strip is
-        worthless.
+        `wait_timeout=0` probes for a screen that should be up right now. A positive value
+        WAITS for one that has not happened yet, which is the prematch case: it only
+        exists after the draft ends.
+
+        `late=True` delays before capturing so more pick slots have filled - the training
+        targets are the pick slots, so an early frame with an empty strip is worthless.
         """
-        if self.game_find_template_match(template=anchor) is None:
-            return None
+        if wait_timeout <= 0:
+            if self.game_find_template_match(template=anchor) is None:
+                return None
+        else:
+            try:
+                self.wait_for_template(
+                    template=anchor, delay=1.0, timeout=wait_timeout,
+                    timeout_message=f"{anchor} never appeared - skipping training capture",
+                )
+            except GameTimeoutError:
+                # Not an error: the match may have been entered late, or the transition
+                # may have been missed. Recording the outcome does not depend on this.
+                return None
+
         if late:
             sleep(TRAINING_LATE_DELAY)
         frame = self.get_screenshot()
-        self._archive(frame, kind=anchor.rsplit("/", maxsplit=1)[-1])
         return frame
 
     def _confirm_by_longpress(self, hero: SummaryHero) -> str | None:
@@ -2013,6 +2036,7 @@ from ..services.solstice.icons import IconLibrary
 from ..services.solstice.naming import resolve_hero_name
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
+from ..services.solstice.tuning import learn_if_improved, train_from_frame
 
 SOLSTICE_DB = Path("/mnt/docs/adbautoplayer/data/solstice_clash/heroes.sqlite")
 SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
@@ -2026,6 +2050,9 @@ LONGPRESS_ATTEMPTS = 3
 TRAINING_LATE_DELAY = 8.0
 # 'Current Theme: <name>' sits just below the pick strip on the event screen.
 THEME_BAND = (820, 1000)
+# The prematch screen appears once the draft countdown expires. The draft ran ~25s
+# in the observed match, so this covers a full draft plus the transition.
+PREMATCH_WAIT_TIMEOUT = 90.0
 ```
 
 `self.hold` is confirmed to exist: `game/_input_mixin.py:211`, signature
@@ -2222,7 +2249,7 @@ Then call it from `_record_summary` in the mixin, right after the audit row is w
                 logging.info(f"tuned {confirmed} on the summary screen")
 ```
 
-Import `learn_if_improved` from `..services.solstice.tuning`.
+Import BOTH `learn_if_improved` and `train_from_frame` from `..services.solstice.tuning` - Step 5's call site uses the latter and would otherwise raise `NameError` on the first captured training frame.
 
 - [ ] **Step 4: Seed the two spectate screens' cell geometry**
 

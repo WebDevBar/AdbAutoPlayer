@@ -68,9 +68,21 @@ requiring another night of collection.
 Before the loop begins, the mode does what every other AFK Journey mode does:
 
 ```python
-self.start_up()            # opens the H264 stream
-self.navigate_to_world()   # gets to a known-good screen no matter where we started
+self.start_up(device_streaming=False)   # screencap, NOT the H264 stream - see below
+self.navigate_to_world()                # known-good screen, wherever we started
 ```
+
+**Streaming is disabled deliberately.** H264 costs nothing for template matching - the same
+six cards scored within 0.002 on stream versus screencap - but it measurably degrades OCR
+of stylised text. On the identical summary screen the header OCR'd as `'DefeatVictory'`
+from screencap and as `'Defe'` + `'featVictory'` from the stream. Since OCR is what
+establishes ground truth in this mode, that loss is not acceptable, and the mode is not
+latency-sensitive: it polls every 2 seconds and needs only a handful of frames per match.
+
+This also matches existing practice rather than inventing a rule - six AFK Journey mixins
+already pass `device_streaming=False`, and they are exactly the OCR/precision-heavy ones:
+`guild_member_scan`, `arena`, `supreme_arena`, `dailies`, `dream_realm`, and the custom
+routine.
 
 `navigate_to_world()` (`navigation.py:38-73`) is not a convenience wrapper. It handles
 exactly the "we could be anywhere" problem, and it must not be reimplemented:
@@ -405,8 +417,19 @@ cost of the mode and it is accepted deliberately, because the alternative is ret
 cost more and sometimes still fail.
 
 The popup renders **downward from ally cards and upward from enemy cards**, so its
-position is not fixed. Detection is therefore by content, not geometry: run OCR and
-check whether any returned string matches a known hero name.
+position is not fixed. Detection is therefore by content, not geometry: run OCR and check
+whether any returned string matches a known hero name.
+
+**Name matching uses `StringHelper.fuzzy_substring_match`** (`util/string_helper.py:51`),
+already used by the popup handler, rather than exact string equality. OCR of a stylised
+name can drop or substitute a character, and an exact match would throw away a perfectly
+identifiable read. Two constraints on using it:
+
+- It is a **substring** match, so a short hero name can match inside unrelated text. Run it
+  against the OCR blocks from the popup region only, never the whole frame.
+- It returns a bool, so it cannot rank. Score every hero name against the block and take
+  the **single best** match, rejecting the read if two names tie - a tie means the OCR was
+  too degraded to be ground truth, and ground truth is the whole point here.
 
 **Retry policy:** up to 2 additional attempts per card if no popup is detected. If all
 attempts fail, record the hero as `unknown` and continue - a partially identified match
@@ -501,6 +524,12 @@ That is affordable on `/mnt/vault` (3.6TB free) but not unbounded. Frames are wr
 with a disagreement, keep a rolling sample of agreements, and delete the rest beyond a
 configurable age. Never write these to `/tmp`, which is a 16GB tmpfs and has already been
 filled once by this project.
+
+**Do not copy `guild_member_scan`'s screenshot handling wholesale.** That mixin does
+`shutil.rmtree(self._screenshot_dir)` at startup (`guild_member_scan.py:52-53`), which is
+correct for throwaway debug output and catastrophic here - it would delete every previously
+archived training frame at the start of each run. Training frames accumulate across runs by
+design; only the pruning policy above ever removes them.
 
 **Geometry still to be measured.** Two new screens must be registered with their own cell
 rows, measured from frames already captured - the Phase 1 compete geometry must NOT be
@@ -776,7 +805,9 @@ worse. Confirmed reusable components, all verified present in this repo:
 | dialogs / confirmations | `PopupMessageHandler` + `PopupMessage` entries |
 | text reading | `RapidOCRBackend` / `TesseractBackend` |
 | GUI registration | `@register_command` + `GUIMetadata` |
-| closest precedent mixin | `SunlitShowdownMixin` (same event family) |
+| fuzzy name matching | `StringHelper.fuzzy_substring_match` |
+| closest precedent, navigation | `SunlitShowdownMixin` (same event family) |
+| closest precedent, long OCR scan | `guild_member_scan` (OCR backend selection + fallback, debug OCR dump, screenshot dir, results to JSON) |
 
 New code is justified only where nothing equivalent exists - which for Phase 2 means the
 summary parser, the tuning search, and the Solstice-specific navigation. Anything else

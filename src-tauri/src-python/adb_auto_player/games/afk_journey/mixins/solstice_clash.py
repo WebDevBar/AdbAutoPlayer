@@ -66,6 +66,9 @@ TRAINING_LATE_DELAY = 8.0
 # The prematch screen appears once the draft countdown expires. The draft ran ~25s
 # in the observed match, so this covers a full draft plus the transition.
 PREMATCH_WAIT_TIMEOUT = 90.0
+# Reaching the event page can involve a scene load, so this is deliberately longer than
+# the 10s default that comes from settings.
+EVENT_SCREEN_TIMEOUT = 30.0
 # The chat widget overlaps the locked hero cards. Measured on device 2026-07-26: the
 # bubble defaults to (1012, 970) and the emoji to (1012, 1075), both inside the card band.
 # Dragging the bubble to y620 clears both. The duration is load-bearing - see the helper.
@@ -115,8 +118,16 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ]
         )
         # Arrival is confirmed by WAITING for a title that persists, never by tapping it.
-        self.wait_for_template(template="event/solstice_clash/event_screen")
-        self.wait_for_template(template="event/solstice_clash/fortune_picks")
+        # Confirm we are on the Solstice Clash event page, then tap Fortune Picks by
+        # COORDINATE. The button sits in a fixed position on this page, and template
+        # matching it proved unreliable on the live screen - it scored 0.376 against a
+        # template cut from an earlier capture of the same page. Arrival is what needs
+        # verifying; the button's location does not.
+        self.wait_for_template(
+            template="event/solstice_clash/event_screen",
+            timeout=EVENT_SCREEN_TIMEOUT,
+            timeout_message="did not reach the Solstice Clash event page",
+        )
         # Read the theme HERE, while the event screen is up. It shows "Current Theme:
         # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
         theme = self._read_current_theme()

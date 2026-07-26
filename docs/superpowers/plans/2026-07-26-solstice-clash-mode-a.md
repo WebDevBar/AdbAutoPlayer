@@ -2351,9 +2351,14 @@ Add `import cv2` and `from .store import AuditRow` to `tuning.py`.
 Then call it from `_record_summary` in the mixin, after the summary rows are written:
 
 ```python
+        # ONLY long-press-OCR-confirmed identities may seed this set. Building it from
+        # `slots` would launder image-only fallbacks (HeroSlot.hero_slug is
+        # `confirmed or hero.slug`) into ground truth, and cross-screen training would
+        # then confirm draft reads against an unconfirmed summary guess - manufacturing
+        # exactly the self-confirmation this design exists to prevent.
         confirmed_by_side: dict[str, set[str]] = {"blue": set(), "red": set()}
         for slot in slots:
-            if slot.hero_slug:
+            if slot.hero_slug and slot.identified_by == "longpress_ocr":
                 confirmed_by_side[slot.side].add(slot.hero_slug)
 
         for frame_img, screen_slug, cell_type in (
@@ -2399,6 +2404,30 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
     agreed, total = store.audit_agreement_rate("spectate_prematch")
     assert total == 6
     assert agreed == 0
+
+
+def test_only_ocr_confirmed_slots_seed_the_confirmation_set(tmp_db):
+    """An image-only summary read must NEVER become cross-screen ground truth.
+
+    HeroSlot.hero_slug is `confirmed or hero.slug`, so it is populated even when the
+    long-press failed. Building the confirmation set from hero_slug alone would let an
+    unconfirmed guess authorise learning on the draft and prematch screens.
+    """
+    from adb_auto_player.games.afk_journey.services.solstice.store import HeroSlot
+
+    slots = [
+        HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+                 status="identified", identified_by="longpress_ocr"),
+        HeroSlot(side="blue", slot=2, hero_slug="igor", art_ref="Igor",
+                 status="identified", identified_by="image"),
+    ]
+
+    confirmed: dict[str, set[str]] = {"blue": set(), "red": set()}
+    for slot in slots:
+        if slot.hero_slug and slot.identified_by == "longpress_ocr":
+            confirmed[slot.side].add(slot.hero_slug)
+
+    assert confirmed["blue"] == {"atalanta"}, "image-only reads must be excluded"
 ```
 
 - [ ] **Step 7: Run the suite**

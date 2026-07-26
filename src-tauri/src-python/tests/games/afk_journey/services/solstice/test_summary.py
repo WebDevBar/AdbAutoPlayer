@@ -6,12 +6,17 @@ and independently by long-press OCR of all six names.
 """
 
 import cv2
+import numpy as np
 import pytest
 
+from adb_auto_player.games.afk_journey.services.solstice import summary
 from adb_auto_player.games.afk_journey.services.solstice.summary import (
     parse_stat_number,
     read_summary,
 )
+from adb_auto_player.models import ConfidenceValue
+from adb_auto_player.models.geometry import Box, Point
+from adb_auto_player.models.ocr import OCRResult
 
 BLUE_TRUTH = ["atalanta", "igor", "indris"]
 RED_TRUTH = ["baelran", "pippa", "solise"]
@@ -64,3 +69,63 @@ def test_stats_are_read_for_every_hero(cfg, library, ocr_backend, frames):
     first = next(h for h in read.heroes if h.side == "blue" and h.slot == 1)
     assert first.stats.sword == 699_000
     assert first.stats.shield == 2_924_000
+
+
+class _StubOCR:
+    """Returns a fixed list of blocks regardless of the image it is given.
+
+    _read_winner takes exactly one full-width crop and passes it to
+    detect_text_blocks once - a stub that ignores the image entirely is a faithful
+    substitute for RapidOCR here, and lets each case pin down exactly one code path
+    (merged-block word order, or single-word box position) without depending on
+    RapidOCR's actual detection behaviour or a second fixture frame.
+    """
+
+    def __init__(self, blocks: list[OCRResult]) -> None:
+        self._blocks = blocks
+
+    def detect_text_blocks(self, image, min_confidence=ConfidenceValue(0.0)):
+        return self._blocks
+
+    def extract_text(self, image) -> str:
+        return " ".join(b.text for b in self._blocks)
+
+
+def _block(text: str, centre_x: int) -> OCRResult:
+    """An OCRResult whose box centre.x is exactly `centre_x` (y is unused here)."""
+    return OCRResult(
+        text=text,
+        confidence=ConfidenceValue(1.0),
+        box=Box(Point(centre_x - 5, 260), 10, 10),
+    )
+
+
+def test_read_winner_merged_block_victory_first_is_blue():
+    """'VictoryDefeat' - Victory read first (left) means blue is on the left and won.
+
+    Neither fixture exercises this order (both are 'DefeatVictory' / red-wins), so
+    this is the only place a blue win is checked at all.
+    """
+    ocr = _StubOCR([_block("VictoryDefeat", centre_x=537)])
+    dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
+    assert summary._read_winner(dummy_frame, ocr) == "blue"
+
+
+def test_read_winner_merged_block_defeat_first_is_red():
+    """'DefeatVictory' - Defeat read first (left) means victory is on the right."""
+    dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
+    ocr = _StubOCR([_block("DefeatVictory", centre_x=537)])
+    assert summary._read_winner(dummy_frame, ocr) == "red"
+
+
+def test_read_winner_single_word_falls_back_to_box_position():
+    """Only 'Victory' survived OCR (merged with a player name, as on summary_02).
+
+    Box centre on the LEFT of the split line here - the opposite side from the
+    merged-block case above - so this proves the position fallback actually flips
+    the answer rather than the test just happening to agree with the string-order
+    branch.
+    """
+    dummy_frame = np.zeros((640, 1080, 3), dtype=np.uint8)
+    ocr = _StubOCR([_block("VictoryCaffu", centre_x=200)])
+    assert summary._read_winner(dummy_frame, ocr) == "blue"

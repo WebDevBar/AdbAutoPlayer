@@ -85,20 +85,38 @@ the mode has lost track of where it is.
 
 ### The per-match loop
 
-Verified end to end over ADB on 2026-07-26; each step below was executed and captured.
+**Verified end to end over ADB on 2026-07-26.** Every step below was executed by driving
+the device directly, and the full 701-frame recording is archived at
+`/mnt/vault/solstice/live/navflow/raw/`. The run confirmed three things the design depends
+on: the chain reaches a live match, a match can be caught early enough to capture its draft
+phase (entered at countdown 24), and the exit path lands back on the **overworld** - a
+known-good state - so the loop restarts at step 1 without re-running `navigate_to_world()`.
 
 1. Hamburger menu -> Events
 2. Solstice Clash
 3. **Fortune Picks** icon
-3a. **OPTIONAL interstitial** - if the character is not already standing next to the event
-    NPC, a dialog appears: *"Teleport to the Waystone closest to the target?"* with an X
-    and a green check. Tap the **green check**; the game then auto-paths to the NPC, which
-    takes several seconds longer than the normal transition.
+3a. **Three possible branches after Fortune Picks**, depending on where the character is
+    standing. All three were executed and observed on 2026-07-26 and all converge on the
+    same NPC dialog, so the mode handles them uniformly: *tap the popup if present, then
+    poll for the NPC dialog.*
 
-    This step is conditional, not guaranteed - it depends on where the character happens to
-    be. The mode must therefore treat it as "handle if present, continue if absent" rather
-    than waiting for it. The step after it needs a longer timeout to absorb the auto-path
-    travel time.
+    | branch | condition | observed timing |
+    |---|---|---|
+    | already at the NPC | standing next to it | dialog immediate |
+    | nearby, same waystone area | short walk, **no popup** | avatar walks, dialog at **~4s** |
+    | far away, different area | **teleport popup** appears | ~12s including auto-path |
+
+    The teleport popup reads *"Teleport to the Waystone closest to the target?"* with an X
+    and a green check; tap the **green check**.
+
+    **Poll every 1 second, with a 10-second timeout, in every branch.** The middle branch
+    is the one that makes a fixed sleep wrong: there is no popup to detect and no signal
+    that anything is happening, so code that assumed the dialog appears immediately would
+    silently fall through. Polling costs nothing and resolves the fast cases in ~4s rather
+    than waiting out a worst-case sleep.
+
+    Captured frames: `summary/teleport_dialog.png` (the popup at native 1080x1920),
+    plus full recordings at `live/teleflow/raw/` and `live/walkflow/raw/`.
 
     **Reuse the existing handler.** `games/afk_journey/popup_message_handler.py` already
     does exactly this job - OCR the dialog text, match it against a registered
@@ -711,12 +729,11 @@ All but one are cuttable from frames we already hold. The 1110-frame spectate ar
 | chart/details icon | same result frames |
 | green Back button | same result frames |
 | summary back arrow | `summary/summary_01.png` |
-| teleport confirm dialog | **no ADB capture yet** |
+| teleport confirm dialog | `summary/teleport_dialog.png` (captured over ADB, 1080x1920) |
 
-**The only prerequisite capture is the teleport dialog.** The screenshot we have of it is a
-desktop capture of the gamescope window, not a device frame - wrong dimensions and scaling,
-so it cannot be cut into a template. It needs one ADB capture at 1080x1920, taken by
-starting the flow from somewhere away from the event NPC.
+**No prerequisite captures remain.** The teleport dialog was the last gap and has since been
+captured by driving the flow from a distant location. Every template above can be cut from
+frames already on disk.
 
 ### The theme comes from the event screen
 

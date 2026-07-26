@@ -540,6 +540,27 @@ reused for either:
 | `spectate_draft_picks` | 6 pick slots in the top strip | `live/match01/raw/000039317.png`, `frames/182527_374.png` |
 | `spectate_prematch` | 6 locked cards, 3 per side | `live/match01/raw/000104002.png` |
 
+Measured starting values for `spectate_draft_picks`, read off a gridded overlay of
+`000039317.png` at 1080x1920 (card outer edges, so the art crop sits inside these):
+
+| slot | label | x range | centre |
+|---|---|---|---|
+| 1 | Blue 1 | 60-180 | 120 |
+| 2 | Blue 4 | 200-320 | 260 |
+| 3 | Blue 5 | 340-460 | 400 |
+| 4 | Red 2 | 610-745 | 678 |
+| 5 | Red 3 | 755-890 | 822 |
+| 6 | Red 6 | 900-1030 | 965 |
+
+Vertically the cards span roughly y 400-530, with the `Lvl 240` badge overlaying the bottom
+~30px, so the usable art is about y 410-495. The countdown occupies the gap between slots 3
+and 4 (x ~500-600), which is why the pitch is not uniform across the middle.
+
+These are starting values, not final: they were read from one frame by eye. The
+implementation must verify them against both source frames and tune the crop the same way
+the summary crop was tuned, because an off-centre crop cost 0.08-0.09 of match score on the
+summary screen.
+
 **What this cannot validate.** The summary confirms only the six *picked* heroes. The
 unpicked cards in the draft grid are never confirmed by anything, so accuracy on them
 remains unmeasured - but since the grid is not read at all, that is a gap in coverage, not

@@ -19,6 +19,7 @@ Measured baselines this must not regress: locked_pick 54/54 correct across 9 mat
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -27,6 +28,26 @@ from .config import Cell, SolsticeConfig
 from .icons import IconLibrary
 
 _COLOUR_NDIM = 3  # a BGR frame; 2 means it is already grayscale
+
+# Screen anchors. Brightness-based classification was tried and scored 1/5, so both
+# screens are identified by template anchor. Measured separation on the fixture frames:
+#   draft_selecting  1.000 on its own screen, 0.432 / 0.450 on the others
+#   prematch_locked  1.000 on its own screen, 0.553 / 0.490 on the others
+_DRAFT_ANCHOR_AT = (630, 320)  # (y, x) where the anchor was cut
+_DRAFT_ANCHOR_MIN = 0.90
+_PREMATCH_ANCHOR_AT = (1000, 360)
+# Lower than draft on purpose: across other real prematch frames the worst observed
+# self-score was 0.873, so 0.90 would reject genuine screens. The colour-split check
+# below is the second, independent signal that keeps this safe.
+_PREMATCH_ANCHOR_MIN = 0.80
+_ANCHOR_PAD = 30  # search window, so matchTemplate can align
+
+# The blue/red team-plate split. This is a structural colour signature, not the
+# discredited "overall brightness" heuristic: it correctly identified all 23 prematch
+# frames in the capture set.
+_PLATE_BAND = (1300, 1420)
+_PLATE_SPLIT_X = (500, 580)
+_PLATE_MIN_DELTA = 25
 
 
 @dataclass(frozen=True)
@@ -143,3 +164,53 @@ def identify_with_pool(
             return replace(first, candidate_scope="pool", pool_miss=0)
     fallback = identify_cell(cell_gray, cell_type, library, cfg)
     return replace(fallback, candidate_scope="full_library", pool_miss=1 if pool else 0)
+
+
+def _anchor_score(gray: np.ndarray, anchor: np.ndarray, at: tuple[int, int]) -> float:
+    """Match an anchor near where it was cut, with a pad so alignment can drift."""
+    y, x = at
+    window = gray[
+        max(0, y - _ANCHOR_PAD) : y + anchor.shape[0] + _ANCHOR_PAD,
+        max(0, x - _ANCHOR_PAD) : x + anchor.shape[1] + _ANCHOR_PAD,
+    ]
+    if window.shape[0] < anchor.shape[0] or window.shape[1] < anchor.shape[1]:
+        return -1.0
+    return float(cv2.matchTemplate(window, anchor, cv2.TM_CCOEFF_NORMED).max())
+
+
+def _has_team_plates(frame: np.ndarray) -> bool:
+    """Blue plate on the left, red on the right - the pre-match team banners."""
+    if frame.ndim != _COLOUR_NDIM:
+        return False
+    band = frame[_PLATE_BAND[0] : _PLATE_BAND[1]].astype(np.int16)
+    left, right = _PLATE_SPLIT_X
+    blue = (band[:, :left, 0] - band[:, :left, 2]).mean()
+    red = (band[:, right:, 2] - band[:, right:, 0]).mean()
+    return bool(blue > _PLATE_MIN_DELTA and red > _PLATE_MIN_DELTA)
+
+
+def classify_screen(frame: np.ndarray, anchor_dir: Path) -> str:
+    """Return 'draft', 'prematch_locked' or 'unknown'.
+
+    Spectate must never classify as draft - the two do NOT share geometry (the draft
+    anchor scores 0.450 on a spectate frame), and reading draft cells off a spectate
+    screen would silently produce nonsense.
+    """
+    gray = (
+        cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == _COLOUR_NDIM else frame
+    )
+
+    draft = cv2.imread(str(anchor_dir / "draft_selecting.png"), cv2.IMREAD_GRAYSCALE)
+    if (
+        draft is not None
+        and _anchor_score(gray, draft, _DRAFT_ANCHOR_AT) >= _DRAFT_ANCHOR_MIN
+    ):
+        return "draft"
+
+    prematch = cv2.imread(str(anchor_dir / "prematch_locked.png"), cv2.IMREAD_GRAYSCALE)
+    if prematch is not None:
+        score = _anchor_score(gray, prematch, _PREMATCH_ANCHOR_AT)
+        # BOTH signals required - either alone is too weak to trust.
+        if score >= _PREMATCH_ANCHOR_MIN and _has_team_plates(frame):
+            return "prematch_locked"
+    return "unknown"

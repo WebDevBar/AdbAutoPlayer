@@ -136,6 +136,19 @@ misc_messages = [
         text="Exit the game",
         confirm_button_template="navigation/x.png",
     ),
+    PopupMessage(
+        # Appears when the character is not near the event NPC. Confirming auto-paths there.
+        # The default confirm_button_template ("navigation/confirm.png") is correct here:
+        # measured 0.996 against the captured dialog at (799, 1223), which is the green
+        # check. navigation/x.png likewise matches the X at 0.999. This dialog uses the
+        # STANDARD buttons, so no new template is needed and the handler's preprocessing
+        # (which only proceeds after finding navigation/confirm.png or
+        # continue_top_right_corner.png - popup_message_handler.py:321) will find it.
+        text="Teleport to the Waystone closest to the target",
+        # MUST stay False. When True the handler taps the "Don't remind for 7 days"
+        # checkbox, which permanently changes the user's game settings.
+        has_dont_remind_me=False,
+    ),
 ]
 
 fishing_messages = [

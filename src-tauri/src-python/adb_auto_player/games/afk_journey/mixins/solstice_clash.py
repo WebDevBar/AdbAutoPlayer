@@ -9,6 +9,7 @@ import logging
 from abc import ABC
 from datetime import UTC, datetime
 from pathlib import Path
+import time as time_module
 from time import sleep
 
 import cv2
@@ -75,6 +76,9 @@ TRAINING_LATE_DELAY = 8.0
 # The prematch screen appears once the draft countdown expires. The draft ran ~25s
 # in the observed match, so this covers a full draft plus the transition.
 PREMATCH_WAIT_TIMEOUT = 90.0
+# How long to wait for the prematch screen to clear, which marks combat starting.
+PREMATCH_CLEAR_TIMEOUT = 60.0
+PREMATCH_CLEAR_POLL = 2.0
 # Reaching the event page can involve a scene load, so this is deliberately longer than
 # the 10s default that comes from settings.
 EVENT_SCREEN_TIMEOUT = 30.0
@@ -197,6 +201,13 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             late=False,
             wait_timeout=PREMATCH_WAIT_TIMEOUT if draft_frame is not None else 0.0,
         )
+
+        # Anchor the match clock to COMBAT START, not to spectate entry. The draft phase
+        # is long and variable, so a timeout measured from entry has to cover draft plus
+        # prematch plus combat, and a 3 minute budget was exhausted mid-combat on a live
+        # run. Combat begins when the prematch screen goes away.
+        if prematch_frame is not None:
+            self._wait_for_combat_to_start()
 
         # Wait for EITHER outcome. A decided match reaches the result screen; a DRAW never
         # does - the game drops straight back to the overworld with no result and no
@@ -457,6 +468,22 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
         except Exception as exc:  # noqa: BLE001 - cosmetic step, never fatal
             logging.debug(f"could not move the chat widget: {exc}")
+
+    def _wait_for_combat_to_start(self) -> None:
+        """Block until the prematch screen goes away, which is combat starting.
+
+        Best effort. If it never clears we fall through and let the result wait run its own
+        timeout, rather than failing the match here.
+        """
+        deadline = time_module.monotonic() + PREMATCH_CLEAR_TIMEOUT
+        while time_module.monotonic() < deadline:
+            if self.game_find_template_match(
+                template="event/solstice_clash/prematch_anchor"
+            ) is None:
+                logging.debug("prematch cleared - combat started")
+                return
+            sleep(PREMATCH_CLEAR_POLL)
+        logging.debug("prematch never cleared - starting the match clock anyway")
 
     def _capture_training_frame(
         self, anchor: str, late: bool, wait_timeout: float = 0.0

@@ -2053,15 +2053,17 @@ with an error rather than looping silently."
 
 ---
 
-### Task 9: Learn transforms from confirmed evidence
+### Task 9: Learn transforms, and train the draft and prematch screens
 
 **Files:**
-- Modify: `AFKJ/mixins/solstice_clash.py`
+- Modify: `SVC/tuning.py` (add `learn_if_improved`, `train_from_frame`)
+- Modify: `AFKJ/mixins/solstice_clash.py` (call sites)
+- Modify: `data/solstice_clash/migrate.py` (seed draft/prematch cells)
 - Test: `TST/test_tuning.py` (extend)
 
 **Interfaces:**
-- Consumes: `tune_cell` (Task 6), `MatchStore.learn_transform` / `record_audit` / `transform_for` (Task 2), `read_summary` (Task 5).
-- Produces: `tuning.learn_if_improved(...) -> bool` (pure, keyword-only) and its call site in `_record_summary`.
+- Consumes: `tune_cell` (Task 6), `MatchStore.learn_transform` / `record_audit` / `transform_for` / `audit_agreement_rate` (Task 2), `read_summary` (Task 5), `extract_cell` / `identify_cell` (existing `vision.py`).
+- Produces: `tuning.learn_if_improved(...) -> bool` and `tuning.train_from_frame(...) -> int` (both pure and keyword-only), their call sites in `_record_summary`, and seeded `draft_pick` / `prematch_pick` cells.
 
 Without this task the transform table, the store API and the tuner all exist and nothing
 ever writes a transform - the "training" half of Mode A would be inert.
@@ -2222,16 +2224,194 @@ Then call it from `_record_summary` in the mixin, right after the audit row is w
 
 Import `learn_if_improved` from `..services.solstice.tuning`.
 
-- [ ] **Step 4: Run the suite**
+- [ ] **Step 4: Seed the two spectate screens' cell geometry**
+
+Cross-screen training needs cells to read. Add to `migrate.py` beside
+`DEFAULT_SUMMARY_CELLS`, applied by the same loop.
+
+Measured from the fixture frames at 1080x1920. Draft pick slots are numbered by the
+game's own labels (Blue 1/4/5, Red 2/3/6), not 1-3 per side:
+
+```python
+# spectate_draft_picks: top strip, from live/match01/raw/000039317.png.
+# Cards span y 400-530; the "Lvl 240" badge covers the bottom ~30px, so the art ends
+# at 495. Centres x: 120/260/400 (blue) and 678/822/965 (red).
+DEFAULT_DRAFT_PICK_CELLS = [
+    ("spectate_draft_picks", "draft_pick_blue_1", "draft_pick",  75, 410, 165, 495, "blue", 1),
+    ("spectate_draft_picks", "draft_pick_blue_4", "draft_pick", 215, 410, 305, 495, "blue", 4),
+    ("spectate_draft_picks", "draft_pick_blue_5", "draft_pick", 355, 410, 445, 495, "blue", 5),
+    ("spectate_draft_picks", "draft_pick_red_2",  "draft_pick", 633, 410, 723, 495, "red",  2),
+    ("spectate_draft_picks", "draft_pick_red_3",  "draft_pick", 777, 410, 867, 495, "red",  3),
+    ("spectate_draft_picks", "draft_pick_red_6",  "draft_pick", 920, 410, 1010, 495, "red", 6),
+]
+
+# spectate_prematch: from live/match01/raw/000104002.png. Cards span y 940-1120 with the
+# level badge at the bottom, so the art is y 965-1085. Centres x: 132/270/405 (blue) and
+# 677/810/945 (red).
+DEFAULT_PREMATCH_CELLS = [
+    ("spectate_prematch", "prematch_blue_1", "prematch_pick",  87, 965, 177, 1085, "blue", 1),
+    ("spectate_prematch", "prematch_blue_2", "prematch_pick", 225, 965, 315, 1085, "blue", 2),
+    ("spectate_prematch", "prematch_blue_3", "prematch_pick", 360, 965, 450, 1085, "blue", 3),
+    ("spectate_prematch", "prematch_red_1",  "prematch_pick", 632, 965, 722, 1085, "red",  1),
+    ("spectate_prematch", "prematch_red_2",  "prematch_pick", 765, 965, 855, 1085, "red",  2),
+    ("spectate_prematch", "prematch_red_3",  "prematch_pick", 900, 965, 990, 1085, "red",  3),
+]
+```
+
+These are read off gridded overlays, so treat them as starting values: after the first
+live run, confirm each cell actually frames a card by cropping it from the fixture and
+looking, before trusting any score computed from it.
+
+- [ ] **Step 5: Implement cross-screen training**
+
+This is the training half of Mode A, and without it the draft and prematch frames are
+archived and never used. Add to `SVC/tuning.py`:
+
+```python
+def train_from_frame(
+    *,
+    store,
+    cfg: SolsticeConfig,
+    library: IconLibrary,
+    frame: np.ndarray,
+    screen_slug: str,
+    cell_type: str,
+    confirmed_by_side: dict[str, set[str]],
+    frame_path: str,
+    match_id: int | None,
+) -> int:
+    """Score one training frame against the summary's confirmed identities.
+
+    Confirmation here is at SIDE-SET level, not per slot. The summary lists three heroes
+    per side but does NOT state which draft pick slot each came from, and that mapping has
+    never been verified - Blue's picks are slots 1, 4 and 5 while the summary shows a plain
+    list of three. Asserting a positional correspondence we have not measured would
+    manufacture false disagreements.
+
+    So a read counts as confirmed when the identified hero is in that side's confirmed set
+    AND no other cell on the same side claimed the same hero. Uniqueness is what pins the
+    cell-to-hero mapping; set membership alone would let two cells both claim one hero.
+
+    Returns:
+        The number of audit rows written.
+    """
+    from .vision import extract_cell, identify_cell
+
+    reads: list[tuple] = []
+    for cell in cfg.cells(cell_type):
+        result = identify_cell(extract_cell(frame, cell), cell_type, library, cfg)
+        reads.append((cell, result))
+
+    written = 0
+    for cell, result in reads:
+        side = cell.side or ""
+        confirmed = confirmed_by_side.get(side, set())
+        unique = (
+            result.slug is not None
+            and sum(
+                1
+                for other_cell, other in reads
+                if (other_cell.side or "") == side and other.slug == result.slug
+            )
+            == 1
+        )
+        ocr_slug = result.slug if (result.slug in confirmed and unique) else None
+
+        audit_id = store.record_audit(
+            AuditRow(
+                screen_slug=screen_slug,
+                side=side,
+                slot=cell.slot or 0,
+                image_slug=result.slug,
+                image_art_ref=result.art_ref,
+                image_score=result.score,
+                image_margin=result.margin,
+                ocr_slug=ocr_slug,
+                # Training frames are ALWAYS archived, agreements included: by the time a
+                # draft read is found wrong the screen is minutes gone and unrecoverable.
+                frame_path=frame_path,
+                match_id=match_id,
+            )
+        )
+        written += 1
+
+        learn_if_improved(
+            store=store, cfg=cfg, library=library,
+            gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+            centre=((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2),
+            screen_slug=screen_slug, image_slug=result.slug, confirmed_slug=ocr_slug,
+            art_ref=result.art_ref or (ocr_slug or ""),
+            current_score=result.score, current_margin=result.margin, audit_id=audit_id,
+        )
+    return written
+```
+
+Add `import cv2` and `from .store import AuditRow` to `tuning.py`.
+
+Then call it from `_record_summary` in the mixin, after the summary rows are written:
+
+```python
+        confirmed_by_side: dict[str, set[str]] = {"blue": set(), "red": set()}
+        for slot in slots:
+            if slot.hero_slug:
+                confirmed_by_side[slot.side].add(slot.hero_slug)
+
+        for frame_img, screen_slug, cell_type in (
+            (draft_frame, "spectate_draft_picks", "draft_pick"),
+            (prematch_frame, "spectate_prematch", "prematch_pick"),
+        ):
+            if frame_img is None:
+                continue  # entered mid-match: normal, never an error
+            train_from_frame(
+                store=self._store, cfg=self._solstice_cfg,
+                library=self._solstice_library, frame=frame_img,
+                screen_slug=screen_slug, cell_type=cell_type,
+                confirmed_by_side=confirmed_by_side,
+                frame_path=self._archive(frame_img, kind=screen_slug),
+                match_id=match_id,
+            )
+```
+
+- [ ] **Step 6: Add a test for the set-level confirmation rule**
+
+Append to `TST/test_tuning.py`:
+
+```python
+def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
+    """A hero in that side's confirmed set is confirmed; anything else is not."""
+    import cv2
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import train_from_frame
+
+    frame = cv2.imread(str(frames["spectate_prematch"]))
+    store = MatchStore(tmp_db)
+
+    written = train_from_frame(
+        store=store, cfg=cfg, library=library, frame=frame,
+        screen_slug="spectate_prematch", cell_type="prematch_pick",
+        # Deliberately empty: nothing can be confirmed, so every row must record
+        # ocr_slug=None rather than inventing agreement.
+        confirmed_by_side={"blue": set(), "red": set()},
+        frame_path="/tmp/x.png", match_id=None,
+    )
+    assert written == 6
+    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    assert total == 6
+    assert agreed == 0
+```
+
+- [ ] **Step 7: Run the suite**
 
 Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
 
 Expected: green.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/tuning.py src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_tuning.py
+git add data/solstice_clash/migrate.py data/solstice_clash/heroes.sqlite \
+        src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/tuning.py src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_tuning.py
 git commit -m "feat(solstice): learn per-hero transforms from confirmed evidence
 
 Only tunes cards in the 0.70-0.80 band whose identity OCR confirmed, and

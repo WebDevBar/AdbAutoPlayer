@@ -49,7 +49,10 @@ NPC_DIALOG_TIMEOUT = 30.0
 # A match runs about a minute at 2x speed. Ults and animations stretch that, so 3 minutes
 # is a safe ceiling; 10 minutes was pure dead time on any match that never resolves.
 MATCH_TIMEOUT = 180.0
-RESULT_POLL_DELAY = 2.0
+# Poll every 20 seconds for either the result screen or the overworld. Both WAIT for
+# input once reached, so nothing is missed by checking less often - and at 2 seconds this
+# was taking about 90 screenshots per match for no benefit.
+RESULT_POLL_DELAY = 20.0
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
 # native capture). Cropped tight to the theme name line only - "Current Theme" (the

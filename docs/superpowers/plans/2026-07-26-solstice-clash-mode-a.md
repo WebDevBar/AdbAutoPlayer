@@ -448,14 +448,19 @@ the same hero and comes from the same screen."
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `TST/test_store.py`:
+Append to `TST/test_store.py`. Every one of these uses the existing `tmp_db` fixture
+(`test_store.py:22-26`), which copies the database to a temp path. Using `db_path` would
+write audit, transform, match and hero rows into the **shipped** `heroes.sqlite` on every
+test run - the existing store tests avoid it for exactly that reason.
+
+Tests:
 
 ```python
-def test_record_audit_computes_agreement(db_path):
+def test_record_audit_computes_agreement(tmp_db):
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         AuditRow, MatchStore,
     )
-    store = MatchStore(db_path)
+    store = MatchStore(tmp_db)
     same = store.record_audit(AuditRow(
         screen_slug="solstice_summary", side="blue", slot=1,
         image_slug="atalanta", image_art_ref="Atalanta",
@@ -471,13 +476,13 @@ def test_record_audit_computes_agreement(db_path):
     assert (agreed, total) == (1, 2)
 
 
-def test_learn_transform_requires_agreement(db_path):
+def test_learn_transform_requires_agreement(tmp_db):
     """A disagreeing audit row must not be usable as confirmation."""
     import pytest
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         AuditRow, MatchStore,
     )
-    store = MatchStore(db_path)
+    store = MatchStore(tmp_db)
     bad = store.record_audit(AuditRow(
         screen_slug="solstice_summary", side="blue", slot=1,
         image_slug="igor", image_art_ref="Igor",
@@ -487,11 +492,11 @@ def test_learn_transform_requires_agreement(db_path):
         store.learn_transform(bad, "solstice_summary", "igor", "Igor", 0.55, 0.72, 0.11)
 
 
-def test_learn_transform_roundtrip_and_retune(db_path):
+def test_learn_transform_roundtrip_and_retune(tmp_db):
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         AuditRow, MatchStore,
     )
-    store = MatchStore(db_path)
+    store = MatchStore(tmp_db)
     good = store.record_audit(AuditRow(
         screen_slug="solstice_summary", side="blue", slot=1,
         image_slug="atalanta", image_art_ref="Atalanta",
@@ -508,12 +513,12 @@ def test_learn_transform_roundtrip_and_retune(db_path):
     assert got["scale"] == 0.58 and got["margin"] == 0.40
 
 
-def test_unknown_source_is_rejected(db_path):
+def test_unknown_source_is_rejected(tmp_db):
     import pytest
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         MatchRecord, MatchStore,
     )
-    store = MatchStore(db_path)
+    store = MatchStore(tmp_db)
     store.record_match(MatchRecord(source="spectate_summary", captured_at="2026-07-26"))
     with pytest.raises(ValueError):
         store.record_match(MatchRecord(source="history", captured_at="2026-07-26"))
@@ -561,11 +566,11 @@ Add a test proving they round-trip, since a column that is written but never rea
 indistinguishable from one that was silently dropped:
 
 ```python
-def test_hero_stats_round_trip(db_path):
+def test_hero_stats_round_trip(tmp_db):
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         HeroSlot, MatchRecord, MatchStore,
     )
-    store = MatchStore(db_path)
+    store = MatchStore(tmp_db)
     match_id = store.record_match(
         MatchRecord(source="spectate_summary", captured_at="2026-07-26")
     )
@@ -1519,7 +1524,7 @@ never be tuned into looking correct."
 ### Task 7: Templates and the navigation chain
 
 **Files:**
-- Create: `AFKJ/templates/event/solstice_clash/{event_screen,fortune_picks,spectate_live,result_back,result_chart,summary_back,draft_anchor,prematch_anchor}.png`
+- Create: `AFKJ/templates/event/solstice_clash/{events_card,event_screen,fortune_picks,spectate_live,result_back,result_chart,summary_back,draft_anchor,prematch_anchor}.png`
 - Create: `AFKJ/mixins/solstice_clash.py`
 - Modify: `AFKJ/popup_message_handler.py` (register the teleport dialog)
 - Test: manual, on device
@@ -1534,7 +1539,8 @@ Every source frame is already on disk. Crop tightly around each control - a temp
 
 | template | source frame | region |
 |---|---|---|
-| `event_screen.png` | `/mnt/vault/solstice/live/teleflow/raw/` (Solstice Clash event screen) | the "Solstice Clash" title |
+| `events_card.png` | events list frame | the "Solstice Clash" CARD in Ongoing Events - this is what gets TAPPED |
+| `event_screen.png` | `/mnt/vault/solstice/live/teleflow/raw/` (Solstice Clash event screen) | the "Solstice Clash" title - only ever WAITED for, never tapped |
 | `fortune_picks.png` | same | the Fortune Picks button, bottom left |
 | `spectate_live.png` | `/mnt/vault/solstice/live/navflow/raw/` (NPC dialog) | the "Spectate Live" row |
 | `result_back.png` | `/mnt/vault/solstice/live/navflow/raw/` (result screen) | the green Back button |
@@ -1633,13 +1639,20 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             (opened, theme). `theme` is read from the event screen on the way through -
             the only screen in the whole flow that shows it - and is None if unreadable.
         """
+        # _navigate_menu_chain taps each template until it DISAPPEARS
+        # (_tap_till_template_disappears, up to 3 attempts, then GameActionFailedError).
+        # So every entry must be a tappable control that goes away when tapped. The last
+        # entry is therefore the Solstice Clash CARD in the events list - NOT the event
+        # screen's title, which stays on screen after arrival and would fail the chain.
         self._navigate_menu_chain(
             [
                 "navigation/hamburger_menu",
                 "dailies/hamburger/events",
-                "event/solstice_clash/event_screen",
+                "event/solstice_clash/events_card",
             ]
         )
+        # Arrival is confirmed by WAITING for a title that persists, never by tapping it.
+        self.wait_for_template(template="event/solstice_clash/event_screen")
         self.wait_for_template(template="event/solstice_clash/fortune_picks")
         # Read the theme HERE, while the event screen is up. It shows "Current Theme:
         # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
@@ -2023,60 +2036,70 @@ with an error rather than looping silently."
 - Test: `TST/test_tuning.py` (extend)
 
 **Interfaces:**
-- Consumes: `tune_cell` (Task 6), `MatchStore.learn_transform` / `record_audit` (Task 2), `read_summary` (Task 5).
-- Produces: `SolsticeClashMixin._learn_from(frame, hero, confirmed_slug, audit_id)`.
+- Consumes: `tune_cell` (Task 6), `MatchStore.learn_transform` / `record_audit` / `transform_for` (Task 2), `read_summary` (Task 5).
+- Produces: `tuning.learn_if_improved(...) -> bool` (pure, keyword-only) and its call site in `_record_summary`.
 
 Without this task the transform table, the store API and the tuner all exist and nothing
 ever writes a transform - the "training" half of Mode A would be inert.
+
+**Design note.** The decision logic ("is this worth tuning, did it improve, store it")
+lives in `tuning.py` as a pure function, NOT in the mixin. A method on `SolsticeClashMixin`
+cannot be tested without a device, so the previous shape of this task had a test that
+exercised `tune_cell` and `learn_transform` directly and would still pass if the mixin
+never called either - it could not fail for the reason it claimed to check.
 
 - [ ] **Step 1: Write the failing test**
 
 Append to `TST/test_tuning.py`:
 
 ```python
-def test_learned_transform_is_reusable(cfg, library, frames, tmp_path):
-    """A tuned result must survive the round trip and be retrievable by screen+hero."""
-    import shutil
-    import subprocess
-    import sys
-    from pathlib import Path
-
+def test_learn_if_improved_stores_a_better_transform(cfg, library, frames, tmp_db):
+    """The real wiring: confirmed identity in, stored+retrievable transform out."""
     import cv2
 
     from adb_auto_player.games.afk_journey.services.solstice.store import (
         AuditRow, MatchStore,
     )
-    from adb_auto_player.games.afk_journey.services.solstice.tuning import tune_cell
-
-    repo = Path(__file__).resolve().parents[7]
-    db = tmp_path / "heroes.sqlite"
-    shutil.copy(repo / "data" / "solstice_clash" / "heroes.sqlite", db)
-    subprocess.run(
-        [sys.executable, str(repo / "data" / "solstice_clash" / "migrate.py"), str(db)],
-        check=True, capture_output=True,
-    )
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import learn_if_improved
 
     gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
-    tuned = tune_cell(gray, (90, 1307), "solise", library, cfg)
-    assert tuned is not None
-
-    store = MatchStore(db)
+    store = MatchStore(tmp_db)
     audit_id = store.record_audit(AuditRow(
         screen_slug="solstice_summary", side="red", slot=3,
         image_slug="solise", image_art_ref="Solise",
-        image_score=tuned.score, image_margin=tuned.margin,
-        ocr_slug="solise", frame_path=None,
+        image_score=0.781, image_margin=0.201, ocr_slug="solise", frame_path=None,
     ))
-    store.learn_transform(
-        audit_id, "solstice_summary", "solise", "Solise",
-        tuned.scale, tuned.score, tuned.margin,
-        crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
+
+    stored = learn_if_improved(
+        store=store, cfg=cfg, library=library, gray=gray, centre=(90, 1307),
+        screen_slug="solstice_summary", confirmed_slug="solise", art_ref="Solise",
+        current_score=0.781, current_margin=0.201, audit_id=audit_id,
     )
 
+    assert stored is True
     got = store.transform_for("solstice_summary", "solise")
     assert got is not None
-    assert got["scale"] == tuned.scale
-    assert got["margin"] >= 0.10
+    assert got["margin"] > 0.201, "must only store an IMPROVEMENT"
+
+
+def test_learn_if_improved_refuses_unconfirmed(cfg, library, frames, tmp_db):
+    """No confirmation means nothing is stored, however good the tuning looks."""
+    import cv2
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import learn_if_improved
+
+    gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
+    store = MatchStore(tmp_db)
+
+    stored = learn_if_improved(
+        store=store, cfg=cfg, library=library, gray=gray, centre=(90, 1307),
+        screen_slug="solstice_summary", confirmed_slug=None, art_ref="Solise",
+        current_score=0.781, current_margin=0.201, audit_id=None,
+    )
+
+    assert stored is False
+    assert store.transform_for("solstice_summary", "solise") is None
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -2089,62 +2112,82 @@ Expected: FAIL until Task 2's `learn_transform` and Task 6's `tune_cell` are bot
 
 Add to `SolsticeClashMixin`:
 
+First add the pure function to `SVC/tuning.py`:
+
 ```python
-    # Only tune cards in this band. Above it there is nothing to gain; below it the read
-    # was rejected outright and the identity is not trustworthy enough to tune toward.
-    TUNE_BAND = (0.70, 0.80)
+# Only tune reads in this band. Above it there is nothing worth gaining; below it the read
+# was rejected outright, so the identity is not trustworthy enough to tune toward.
+TUNE_BAND = (0.70, 0.80)
 
-    def _learn_from(
-        self,
-        gray: np.ndarray,
-        hero: SummaryHero,
-        confirmed_slug: str | None,
-        audit_id: int,
-    ) -> None:
-        """Tune and store this hero's transform, but ONLY from confirmed evidence.
 
-        Tuning toward an unconfirmed identity would make a wrong answer score better and
-        could push it past the accept threshold, suppressing the very check that would
-        have caught it. So a missing or contradicting confirmation stores nothing.
-        """
-        if confirmed_slug is None or confirmed_slug != hero.slug:
-            return
-        low, high = self.TUNE_BAND
-        if not (low <= hero.score < high):
-            return
+def learn_if_improved(
+    *,
+    store,
+    cfg: SolsticeConfig,
+    library: IconLibrary,
+    gray: np.ndarray,
+    centre: tuple[int, int],
+    screen_slug: str,
+    confirmed_slug: str | None,
+    art_ref: str,
+    current_score: float,
+    current_margin: float,
+    audit_id: int | None,
+) -> bool:
+    """Tune this cell and store the result, but ONLY from confirmed evidence.
 
-        cell = next(
-            c
-            for c in self._solstice_cfg.cells("summary_hero")
-            if c.side == hero.side and c.slot == hero.slot
-        )
-        centre = ((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2)
-        tuned = tune_cell(
-            gray, centre, confirmed_slug, self._solstice_library, self._solstice_cfg
-        )
-        if tuned is None or tuned.margin <= hero.margin:
-            # Never store a result that is not an improvement.
-            return
+    Tuning toward an UNCONFIRMED identity would make a wrong answer score better and could
+    push it past the accept threshold, suppressing the very check that would have caught
+    it - the optimiser amplifies whatever it is pointed at, including an error.
 
-        self._store.learn_transform(
-            audit_id, "solstice_summary", confirmed_slug, hero.art_ref or confirmed_slug,
-            tuned.scale, tuned.score, tuned.margin,
-            crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
-        )
-        logging.info(
-            f"tuned {confirmed_slug}: margin {hero.margin:.3f} -> {tuned.margin:.3f}"
-        )
+    Returns:
+        True if a transform was stored.
+    """
+    if confirmed_slug is None or audit_id is None:
+        return False
+    low, high = TUNE_BAND
+    if not (low <= current_score < high):
+        return False
+
+    tuned = tune_cell(gray, centre, confirmed_slug, library, cfg)
+    if tuned is None or tuned.margin <= current_margin:
+        # Never store a result that is not an improvement on what we already had.
+        return False
+
+    store.learn_transform(
+        audit_id, screen_slug, confirmed_slug, art_ref,
+        tuned.scale, tuned.score, tuned.margin,
+        crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
+    )
+    return True
 ```
 
-Call it from `_record_summary`, right after the audit row is written, capturing the id:
+Then call it from `_record_summary` in the mixin, right after the audit row is written:
 
 ```python
             audit_id = self._store.record_audit(AuditRow(...))
-            self._learn_from(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), hero,
-                             confirmed, audit_id)
+            cell = next(
+                c
+                for c in self._solstice_cfg.cells("summary_hero")
+                if c.side == hero.side and c.slot == hero.slot
+            )
+            if learn_if_improved(
+                store=self._store,
+                cfg=self._solstice_cfg,
+                library=self._solstice_library,
+                gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+                centre=((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2),
+                screen_slug="solstice_summary",
+                confirmed_slug=confirmed,
+                art_ref=hero.art_ref or (confirmed or ""),
+                current_score=hero.score,
+                current_margin=hero.margin,
+                audit_id=audit_id,
+            ):
+                logging.info(f"tuned {confirmed} on the summary screen")
 ```
 
-Import `tune_cell` from `..services.solstice.tuning`.
+Import `learn_if_improved` from `..services.solstice.tuning`.
 
 - [ ] **Step 4: Run the suite**
 

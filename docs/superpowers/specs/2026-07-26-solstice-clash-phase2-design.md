@@ -63,7 +63,29 @@ requiring another night of collection.
 
 ## 3. Navigation flow
 
-The exact chain, per the user:
+### Startup: establish a known-good state, once
+
+Before the loop begins, the mode does what every other AFK Journey mode does:
+
+```python
+self.start_up()            # opens the H264 stream
+self.navigate_to_world()   # gets to a known-good screen no matter where we started
+```
+
+`navigate_to_world()` (`navigation.py:38-73`) is not a convenience wrapper - it retries up
+to 40 times, **restarts the game** if it is not running or after 20 failed attempts, and
+raises `GameNotRunningOrFrozenError` rather than spinning forever. For an unattended
+overnight run that is exactly the recovery behaviour needed, and it already exists.
+`SunlitShowdownMixin` uses the same two calls (`sunlit_showdown.py:29-30`).
+
+**This step runs once, at mode start - not per match.** After a match completes, the exit
+path already lands on the overworld, which *is* a known-good state, so the loop re-enters
+directly at step 1 below. `navigate_to_world()` is re-invoked only on an error path, when
+the mode has lost track of where it is.
+
+### The per-match loop
+
+Verified end to end over ADB on 2026-07-26; each step below was executed and captured.
 
 1. Hamburger menu -> Events
 2. Solstice Clash
@@ -93,9 +115,13 @@ The exact chain, per the user:
 4a. **If the match is still in its draft phase**, capture one draft frame (full grid, before
     picks resolve) and one prematch-locked frame for cross-screen training (section 5.4).
     If we entered mid-match, skip this - it is optional material, never a precondition.
-5. Wait for the match to end. The end state is identified by three co-occurring
-   signals: the **Back** button, the **chart/details** icon to its left, and the
-   **"... WINS!" / "... LOSES!"** banner text.
+5. Wait for the match to end, **polling every 2 seconds** for the result screen. The end
+   state is identified by three co-occurring signals: the **Back** button, the
+   **chart/details** icon to its left, and the **"... WINS!" / "... LOSES!"** banner text.
+
+   A 2-second interval is deliberate. Combat runs for minutes and the result screen waits
+   for input, so there is nothing to miss - polling faster would burn CPU decoding frames
+   for no gain, and this is a mode meant to run for hours.
 6. Tap the chart/details icon -> match summary
 7. Identify heroes, read screen data, record
 8. Tap the **back arrow** (bottom left of the summary) -> returns to the result screen
@@ -168,23 +194,40 @@ summary:
 | Ally tab | 167.7 | 121.7 | blue |
 | Enemy tab | 95.1 | 184.6 | orange |
 
-So **`Ally` = blue = left player** in this frame. But the words themselves are
-spectator-relative and arbitrary in spectate - there is no "ally" when watching two other
-players - so **the label text is never parsed.** Side is derived per-frame from the tab
-colour (blue channel dominant = blue side), which is the actual signal and stays correct
-even if the game swaps the panels or relabels them.
+**The tab colours are static UI, NOT a per-match signal.** Measured across two different
+matches with different winners:
 
-That is one match's evidence. Because getting this backwards would invert every recorded
-outcome, it must be re-confirmed on a second match with a known winner before any bulk
-collection runs.
+| | summary_01 | summary_02 |
+|---|---|---|
+| Ally tab | B=167.71 R=121.73 | B=167.67 R=121.72 |
+| Enemy tab | B=95.10 R=184.57 | B=95.10 R=184.57 |
 
-**This is not merely defensive.** In compete mode - which Modes B and C and any future
-ranked collection will use - `Ally` means *the player's own side*, and the game assigns
-that side at random. A run where the player is placed on red would have `Ally` = red. Code
-that keyed off the label would therefore work correctly in spectate and silently invert
-every outcome in compete, which is the worst possible failure: undetectable in testing,
-and it corrupts the training target rather than crashing. Colour derivation is correct in
-both modes and is the only acceptable implementation.
+Identical to within 0.05. The Ally tab is simply drawn blue and the Enemy tab orange,
+always. An earlier draft of this spec proposed deriving side from tab colour; that would
+have appeared to work while actually reading a constant. It is not a usable discriminator
+and must not be implemented.
+
+**What is actually established, and how.** Confirmed on two matches with known winners:
+
+| match | banner | header left | header right | Ally panel |
+|---|---|---|---|---|
+| summary_01 | - | Faust, Defeat | 莉奈, Victory | Faust's heroes |
+| summary_02 | `BLUE LOSES!` | OdieLuvr69, Defeat | Caffu, Victory | OdieLuvr69's heroes |
+
+In summary_02 the result banner independently says blue lost, and the left player lost. So
+in spectate: **blue = left player = the Ally panel**, verified twice, once against an
+independent banner.
+
+The mode therefore reads the winner from **which side of the header carries "Victory"**
+(section 4), and maps the Ally panel to the left/blue player. The `Ally` / `Enemy` words
+are never parsed - they are spectator-relative and meaningless when watching two other
+players.
+
+**This mapping is verified for SPECTATE ONLY.** In compete, `Ally` means the player's own
+side and the game assigns that side at random, so a compete run could have `Ally` = red.
+Mode A only ever spectates, so it is safe here - but Modes B and C must re-verify this
+before recording compete outcomes. Getting it wrong there would invert every result
+silently: no crash, no failed test, just a corrupted training target.
 
 ### The three stat bars - semantics UNVERIFIED
 
@@ -243,7 +286,7 @@ the matcher chose. That is enough to reproduce the misfire offline without the d
 
 **Graduation.** Verification mode is a setting, not a permanent cost. Once the measured
 false-positive rate over a large sample justifies it, it can be turned off, at which point
-5.2b applies and the loop speeds up by roughly 15s per match.
+5.2b applies and the loop speeds up by roughly 18s per match.
 
 **Side benefit:** with every card OCR-confirmed, the learning gate in 5.3 is satisfied on
 every sighting, so optimal per-hero transforms accumulate across the whole roster as a
@@ -253,9 +296,19 @@ by-product rather than one hero at a time.
 
 On rejection (`unknown`), long-press that card and OCR the hero name from the popup.
 
-Verified working: a 800ms long-press at the card centre opens a tooltip containing the
-hero name, power, class, and skill levels. RapidOCR read all six names exactly -
-Atalanta, Igor, Indris, Baelran, Pippa, Solise - matching the image matcher 6/6.
+Verified working: a long-press at the card centre opens a tooltip containing the hero name,
+power, class, and skill levels. RapidOCR read all six names exactly - Atalanta, Igor,
+Indris, Baelran, Pippa, Solise - matching the image matcher 6/6.
+
+**Press duration: 3000ms.** An 800ms press happened to work in the first test, but user
+testing found short presses can fail to open the popup while over-long presses do no harm
+at all. The cost is asymmetric - a press that is too short costs a failed read plus a
+retry cycle, a press that is too long costs only the extra wall-clock - so the correct
+choice is to bias long rather than to tune for the minimum that worked once.
+
+At six cards this is ~18s per match in verification mode. That is the dominant per-match
+cost of the mode and it is accepted deliberately, because the alternative is retries that
+cost more and sometimes still fail.
 
 The popup renders **downward from ally cards and upward from enemy cards**, so its
 position is not fixed. Detection is therefore by content, not geometry: run OCR and
@@ -309,11 +362,25 @@ appear on the **draft** screen (as the numbered picks) and on the **prematch loc
 screen. So every completed match yields up to twelve extra labelled identifications on
 screens whose accuracy has never been measured against ground truth.
 
+**The draft GRID is not a training target.** Only 3 of its 4 rows are visible in spectate
+(section 2), so it is systematically biased, and Phase 1's own vision module warns that
+spectate and compete do not share grid geometry - reading compete draft cells off a
+spectate frame "would silently produce nonsense". No spectate grid geometry is defined and
+none is needed.
+
+**The training targets are the pick slots instead.** The spectate draft screen carries a
+top strip of six pick slots (Blue 1 / Blue 4 / Blue 5, Red 2 / Red 3 / Red 6) which fill in
+as picks land. Up to five are locked while the draft is still running; the sixth - and any
+that were missed - come from the prematch locked screen. Every one of those six is
+confirmed later by the summary, so all six are usable as labelled training data, and none
+of them depend on the grid.
+
 Each match therefore:
 
-1. Captures one **draft** frame and one **prematch locked** frame while spectating, saving
-   both to disk unconditionally.
-2. Runs identification on those frames using their own screens' geometry.
+1. Captures one **draft** frame (late enough to have up to five picks locked) and one
+   **prematch locked** frame, saving both to disk unconditionally.
+2. Runs identification on the **six pick-slot cells**, taking each hero from whichever
+   screen first shows it locked.
 3. After the summary confirms the six heroes, scores those earlier reads against the
    confirmed answers and writes an `identification_audit` row per cell, tagged with the
    screen it came from.
@@ -341,10 +408,19 @@ with a disagreement, keep a rolling sample of agreements, and delete the rest be
 configurable age. Never write these to `/tmp`, which is a 16GB tmpfs and has already been
 filled once by this project.
 
-**What this cannot validate.** The summary confirms only the six *picked* heroes. The other
-nine to fourteen cards in the draft grid are never confirmed by anything, so draft-grid
-accuracy on unpicked heroes remains unmeasured by this mode. That gap is real and is not
-closed here.
+**Geometry still to be measured.** Two new screens must be registered with their own cell
+rows, measured from frames already captured - the Phase 1 compete geometry must NOT be
+reused for either:
+
+| screen | cells | source frames |
+|---|---|---|
+| `spectate_draft_picks` | 6 pick slots in the top strip | `live/match01/raw/000039317.png`, `frames/182527_374.png` |
+| `spectate_prematch` | 6 locked cards, 3 per side | `live/match01/raw/000104002.png` |
+
+**What this cannot validate.** The summary confirms only the six *picked* heroes. The
+unpicked cards in the draft grid are never confirmed by anything, so accuracy on them
+remains unmeasured - but since the grid is not read at all, that is a gap in coverage, not
+a source of bad data.
 
 ### 5.5 What Modes B and C inherit
 
@@ -411,7 +487,15 @@ CREATE TABLE IF NOT EXISTS identification_audit(
     ocr_slug      TEXT,                   -- OCR answer, NULL if no popup
     agreed        INTEGER NOT NULL,       -- 1 | 0 - the thing we are measuring
     frame_path    TEXT,                   -- full frame saved ONLY on disagreement
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    -- 'agreed' must MEAN what it says. Without this, a row could be written with
+    -- agreed=1 while image_slug and ocr_slug disagree, and that row would then be
+    -- accepted as confirming evidence by the trigger below - laundering a contradiction
+    -- into a learned transform.
+    CHECK(agreed IN (0, 1)),
+    CHECK(agreed = 0 OR (image_slug IS NOT NULL
+                         AND ocr_slug IS NOT NULL
+                         AND image_slug = ocr_slug))
 );
 
 CREATE TABLE IF NOT EXISTS hero_screen_transform(
@@ -443,11 +527,29 @@ CREATE TABLE IF NOT EXISTS hero_screen_transform(
 -- OCR answer, names this same hero, or came from this same screen - SQLite CHECK cannot
 -- reference another table. A trigger can, so the remaining conditions are enforced here
 -- rather than left to the calling code to remember.
-CREATE TRIGGER IF NOT EXISTS hero_screen_transform_requires_confirmation
+CREATE TRIGGER IF NOT EXISTS hero_screen_transform_confirm_insert
 BEFORE INSERT ON hero_screen_transform
 FOR EACH ROW
 BEGIN
     SELECT RAISE(ABORT, 'transform requires an agreeing OCR-confirmed audit row for the same hero and screen')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM identification_audit a
+        WHERE a.id        = NEW.audit_id
+          AND a.agreed    = 1
+          AND a.ocr_slug  = NEW.hero_slug
+          AND a.screen_id = NEW.screen_id
+    );
+END;
+
+-- Section 5.4 says transforms are "learned/updated", and re-tuning an existing row is an
+-- UPDATE (or an upsert's DO UPDATE). A BEFORE INSERT trigger alone would let an update
+-- swap audit_id to unconfirmed evidence without ever firing - the gate would hold on the
+-- first write and leak on every subsequent one.
+CREATE TRIGGER IF NOT EXISTS hero_screen_transform_confirm_update
+BEFORE UPDATE ON hero_screen_transform
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'transform update requires an agreeing OCR-confirmed audit row for the same hero and screen')
     WHERE NOT EXISTS (
         SELECT 1 FROM identification_audit a
         WHERE a.id        = NEW.audit_id
@@ -585,6 +687,47 @@ worse. Confirmed reusable components, all verified present in this repo:
 New code is justified only where nothing equivalent exists - which for Phase 2 means the
 summary parser, the tuning search, and the Solstice-specific navigation. Anything else
 should be an existing call, not a reimplementation.
+
+## 8b. Templates required, and what we can cut them from
+
+Navigation primitives already exist and are reused unchanged:
+`navigation/hamburger_menu.png`, `dailies/hamburger/events.png`, `navigation/confirm.png`,
+`navigation/x.png`.
+
+Solstice-specific templates do **not** exist yet - the only ones present are
+`event/solstice_clash/anchors/{draft_selecting, prematch_locked, ban_glyph_*}.png` from
+Phase 1. The following must be cut before the loop can run:
+
+All but one are cuttable from frames we already hold. The 1110-frame spectate archive at
+`/mnt/vault/solstice/frames/` captured a full navigation run and contains the screens:
+
+| template | source frame |
+|---|---|
+| events carousel, Solstice Clash tab | `frames/182315_111.png` (bottom strip) |
+| Solstice Clash event screen | `frames/182315_111.png` |
+| Fortune Picks button | `frames/182315_111.png` (bottom left) |
+| Spectate Live button | `frames/182426_146.png` (NPC dialog) |
+| result banner (`... WINS!` / `... LOSES!`) | `frames/190923_801.png`, `live/match01/raw/000151423.png` |
+| chart/details icon | same result frames |
+| green Back button | same result frames |
+| summary back arrow | `summary/summary_01.png` |
+| teleport confirm dialog | **no ADB capture yet** |
+
+**The only prerequisite capture is the teleport dialog.** The screenshot we have of it is a
+desktop capture of the gamescope window, not a device frame - wrong dimensions and scaling,
+so it cannot be cut into a template. It needs one ADB capture at 1080x1920, taken by
+starting the flow from somewhere away from the event NPC.
+
+### The theme comes from the event screen
+
+`frames/182315_111.png` also resolves the "theme is not on the summary" problem from
+section 4: the Solstice Clash event screen displays **"Current Theme: Fierce Duel"** and
+**"Rotates in 7h"**. Since the mode passes through this screen on every navigation cycle,
+the theme can be read there - no extra navigation - and attached to the match recorded in
+that cycle.
+
+The "Rotates in Nh" countdown is a bonus: it makes the epoch boundary computable rather
+than guessed, so matches either side of a rotation can be separated exactly.
 
 ## 9. Testing
 

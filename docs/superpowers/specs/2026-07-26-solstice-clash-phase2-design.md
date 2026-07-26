@@ -597,9 +597,14 @@ CREATE TABLE IF NOT EXISTS screen(
 -- order in schema.sql is load-bearing, not cosmetic.
 CREATE TABLE IF NOT EXISTS identification_audit(
     id            INTEGER PRIMARY KEY,
-    -- Nullable: an audit row can be written before the match row is committed, and a
-    -- match that fails to record entirely should still leave its audit evidence behind.
-    match_id      INTEGER REFERENCES match(id) ON DELETE CASCADE,
+    -- Nullable, and SET NULL rather than CASCADE on purpose. An audit row can be written
+    -- before the match row is committed, and a match that fails to record entirely should
+    -- still leave its evidence behind. More importantly, CASCADE here is a hard bug:
+    -- hero_screen_transform.audit_id is NOT NULL, so cascading a match delete into its
+    -- audit rows makes SQLite abort the delete with FOREIGN KEY constraint failed once any
+    -- transform has been learned from that match. Audit evidence outlives the match it
+    -- came from - it is evidence about identification, not about the match.
+    match_id      INTEGER REFERENCES match(id) ON DELETE SET NULL,
     screen_id     INTEGER NOT NULL REFERENCES screen(id),
     side          TEXT NOT NULL,          -- 'blue' | 'red'
     slot          INTEGER NOT NULL,
@@ -609,7 +614,9 @@ CREATE TABLE IF NOT EXISTS identification_audit(
     image_margin  REAL NOT NULL,
     ocr_slug      TEXT,                   -- OCR answer, NULL if no popup
     agreed        INTEGER NOT NULL,       -- 1 | 0 - the thing we are measuring
-    frame_path    TEXT,                   -- full frame saved ONLY on disagreement
+    -- Populated whenever a frame was archived. Which frames those are depends on the
+    -- screen, and the rule is NOT "disagreements only" - see the note below the DDL.
+    frame_path    TEXT,
     created_at    TEXT NOT NULL,
     -- 'agreed' must MEAN what it says. Without this, a row could be written with
     -- agreed=1 while image_slug and ocr_slug disagree, and that row would then be
@@ -684,9 +691,21 @@ END;
 
 ```
 
-Every identified card writes one `identification_audit` row. Agreements are cheap (no
-frame saved) and are what make the false-positive rate computable; disagreements also
-persist the frame so a misfire can be reproduced offline without the device.
+Every identified card writes one `identification_audit` row - that is what makes the
+false-positive rate computable.
+
+**Frame archiving differs by screen, and section 5.4 governs the training screens:**
+
+| screen | agreement | disagreement |
+|---|---|---|
+| `solstice_summary` | no frame - the identity is already confirmed by OCR, so the pixels add nothing | frame archived, `frame_path` set |
+| `spectate_draft_picks`, `spectate_prematch` | **frame archived** - agreeing reads are training examples and are the material for tuning transforms | frame archived |
+
+The training frames are the ones that cannot be recreated: by the time a draft read is
+found wrong, the draft screen is minutes gone. Summary agreements are recreatable in the
+sense that nothing about them is in question. `frame_path` is therefore populated for every
+draft/prematch audit row and for summary rows only on disagreement, and one archived frame
+is referenced by the several audit rows cut from it.
 
 `confirmed_by` exists so the gate in 5.3 is enforceable *in the data*, not only in the
 code path that writes it. A row that cannot name its confirming evidence is a bug.
@@ -743,7 +762,7 @@ afterthought.
 | unexpected screen | back out, re-navigate the chain from Events, continue |
 | summary unreadable | record the match with winner only, continue |
 | one hero unidentifiable after retries | record that slot `unknown`, keep the rest |
-| no match available to spectate | wait and retry the Spectate Live entry |
+| no match available to spectate | wait and retry the Spectate Live entry - but **bounded**: this counts as a cycle-level failure, so repeated unavailability walks into the mode-level stop rather than waiting forever. The event ending overnight is exactly this case, and it must terminate the run, not hang it. |
 | device/stream dies | stop cleanly with a clear log line; do not spin |
 
 **The loop must never abort the run because of one bad match.** Every recoverable failure

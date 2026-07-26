@@ -66,6 +66,13 @@ TRAINING_LATE_DELAY = 8.0
 # The prematch screen appears once the draft countdown expires. The draft ran ~25s
 # in the observed match, so this covers a full draft plus the transition.
 PREMATCH_WAIT_TIMEOUT = 90.0
+# The chat widget overlaps the locked hero cards. Measured on device 2026-07-26: the
+# bubble defaults to (1012, 970) and the emoji to (1012, 1075), both inside the card band.
+# Dragging the bubble to y620 clears both. The duration is load-bearing - see the helper.
+CHAT_DRAG_X = 1012
+CHAT_DRAG_FROM_Y = 970
+CHAT_DRAG_TO_Y = 620
+CHAT_DRAG_SECONDS = 2.0
 
 
 class SolsticeClashMixin(AFKJourneyBase, ABC):
@@ -153,6 +160,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # Optional training material. If we entered mid-match there is no draft left to
         # capture - that is normal, not an error, and must never block recording.
         # The draft screen is up NOW (or we entered mid-match and it is not).
+        # Shift the chat widget out of the card band before anything is read. By default
+        # the chat bubble sits at y970 and the emoji at y1075, both INSIDE the locked-card
+        # band (y1005-1085), and the emoji overlaps the last red card. Measured cost of
+        # the overlay on that cell: about 0.10-0.14 of match score.
+        self._move_chat_out_of_the_way()
+
         draft_frame = self._capture_training_frame(
             "event/solstice_clash/draft_anchor", late=True, wait_timeout=0.0
         )
@@ -362,6 +375,26 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         path = directory / f"{kind}_{stamp}.png"
         cv2.imwrite(str(path), frame)
         return str(path)
+
+    def _move_chat_out_of_the_way(self) -> None:
+        """Drag the chat bubble upward so it and the emoji clear the hero cards.
+
+        The drag MUST be slow. Measured on device: a 600ms swipe is treated as a fling and
+        moves the widget only about 40px, while a 2000ms drag moves it fully. Dragging the
+        bubble carries the emoji with it.
+
+        Best effort - a failure here costs a little match score, never a match, so it must
+        never raise into the loop.
+        """
+        try:
+            self.swipe_up(
+                x=CHAT_DRAG_X,
+                sy=CHAT_DRAG_FROM_Y,
+                ey=CHAT_DRAG_TO_Y,
+                duration=CHAT_DRAG_SECONDS,
+            )
+        except Exception as exc:  # noqa: BLE001 - cosmetic step, never fatal
+            logging.debug(f"could not move the chat widget: {exc}")
 
     def _capture_training_frame(
         self, anchor: str, late: bool, wait_timeout: float = 0.0

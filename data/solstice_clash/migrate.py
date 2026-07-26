@@ -105,12 +105,16 @@ DEFAULT_DRAFT_PICK_CELLS = [
 # level badge at the bottom, so the art is y 965-1085. Centres x: 132/270/405 (blue) and
 # 677/810/945 (red).
 DEFAULT_PREMATCH_CELLS = [
-    ("spectate_prematch", "prematch_blue_1", "prematch_pick",  87, 965, 177, 1085, "blue", 1),
-    ("spectate_prematch", "prematch_blue_2", "prematch_pick", 225, 965, 315, 1085, "blue", 2),
-    ("spectate_prematch", "prematch_blue_3", "prematch_pick", 360, 965, 450, 1085, "blue", 3),
-    ("spectate_prematch", "prematch_red_1",  "prematch_pick", 632, 965, 722, 1085, "red",  1),
-    ("spectate_prematch", "prematch_red_2",  "prematch_pick", 765, 965, 855, 1085, "red",  2),
-    ("spectate_prematch", "prematch_red_3",  "prematch_pick", 900, 965, 990, 1085, "red",  3),
+    # y0 is 1005, NOT 965. Measured on device 2026-07-26: the card spans y954-1125 and
+    # the star crown occupies its top ~40px, so a window starting at 965 crops the crown
+    # into the template and depresses the score. With 965 only 3 of 6 cells identified
+    # (0.53-0.78); with 1005 all 6 do, at 0.94-0.99 with margins 0.36-0.50.
+    ("spectate_prematch", "prematch_blue_1", "prematch_pick",  87, 1005, 177, 1085, "blue", 1),
+    ("spectate_prematch", "prematch_blue_2", "prematch_pick", 225, 1005, 315, 1085, "blue", 2),
+    ("spectate_prematch", "prematch_blue_3", "prematch_pick", 360, 1005, 450, 1085, "blue", 3),
+    ("spectate_prematch", "prematch_red_1",  "prematch_pick", 632, 1005, 722, 1085, "red",  1),
+    ("spectate_prematch", "prematch_red_2",  "prematch_pick", 765, 1005, 855, 1085, "red",  2),
+    ("spectate_prematch", "prematch_red_3",  "prematch_pick", 900, 1005, 990, 1085, "red",  3),
 ]
 
 
@@ -164,6 +168,12 @@ def main() -> None:
                 " VALUES(?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
                 (screen, name, cell_type, x0, y0, x1, y1, side, slot),
             )
+
+    # Correct prematch cells seeded before the 2026-07-26 measurement. INSERT OR IGNORE
+    # above cannot update an existing row, so databases carrying the old y0=965 need this.
+    con.execute(
+        "UPDATE cell_registry SET y0=1005 WHERE cell_type='prematch_pick' AND y0=965"
+    )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")
     con.execute(

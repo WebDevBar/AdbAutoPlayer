@@ -438,6 +438,7 @@ the same hero and comes from the same screen."
 **Interfaces:**
 - Consumes: schema v3 from Task 1.
 - Produces:
+  - `HeroSlot` gains `stat_sword: int | None = None`, `stat_heart: int | None = None`, `stat_shield: int | None = None`, `power: int | None = None`, `identified_by: str | None = None`, and `_HERO_COLS` gains the same five names
   - `AuditRow` frozen dataclass: `screen_slug: str`, `side: str`, `slot: int`, `image_slug: str | None`, `image_art_ref: str | None`, `image_score: float`, `image_margin: float`, `ocr_slug: str | None`, `frame_path: str | None`, `match_id: int | None = None`
   - `MatchStore.record_audit(row: AuditRow) -> int` (returns audit id; computes `agreed` itself)
   - `MatchStore.learn_transform(audit_id: int, screen_slug: str, hero_slug: str, art_ref: str, scale: float, score: float, margin: float, crop: tuple[int, int, int] | None = None) -> None`
@@ -532,7 +533,55 @@ Add `spectate_summary` to `_SOURCES`:
 _SOURCES = frozenset({"compete", "spectate", "spectate_summary"})
 ```
 
-Add the dataclass next to the other record types:
+Extend `HeroSlot` with the summary's per-hero numbers. Task 1 added the columns; without
+this they would stay NULL forever and the mode would record matches with no performance
+data, which is half its stated output:
+
+```python
+    # From the post-match summary. Named for the column ICONS (sword/heart/shield), not
+    # for a guess at their meaning - the shield column's semantics are unconfirmed.
+    stat_sword: int | None = None
+    stat_heart: int | None = None
+    stat_shield: int | None = None
+    power: int | None = None        # long-press popup only
+    identified_by: str | None = None  # 'image' | 'longpress_ocr'
+```
+
+and add the same five names to the end of `_HERO_COLS`, which is what builds the INSERT:
+
+```python
+        "stat_sword",
+        "stat_heart",
+        "stat_shield",
+        "power",
+        "identified_by",
+```
+
+Add a test proving they round-trip, since a column that is written but never read back is
+indistinguishable from one that was silently dropped:
+
+```python
+def test_hero_stats_round_trip(db_path):
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        HeroSlot, MatchRecord, MatchStore,
+    )
+    store = MatchStore(db_path)
+    match_id = store.record_match(
+        MatchRecord(source="spectate_summary", captured_at="2026-07-26")
+    )
+    store.record_heroes(match_id, [
+        HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+                 status="identified", score=0.87, margin=0.36,
+                 stat_sword=699_000, stat_heart=0, stat_shield=2_924_000,
+                 power=490_000, identified_by="longpress_ocr"),
+    ])
+    got = store.heroes_for(match_id)[0]
+    assert got.stat_sword == 699_000
+    assert got.stat_shield == 2_924_000
+    assert got.identified_by == "longpress_ocr"
+```
+
+Then add the audit dataclass next to the other record types:
 
 ```python
 @dataclass(frozen=True)
@@ -953,11 +1002,23 @@ A `scale_summary_hero` key would therefore be seeded and then never read - the s
         return tuple(float(x) for x in self._tunables[key].split(","))
 ```
 
-`scale_draft_card` already follows that naming, so existing behaviour is preserved exactly. Then seed the new chain in `DEFAULT_CONFIG`:
+`scale_draft_card` already follows that naming, so existing behaviour is preserved exactly.
+
+Note the stored format: the value is an **explicit comma-separated list of scales**, not a
+range specification. `scale_chain` is `1.01,0.95,1.08` and `scale_draft_card` is
+`1.19,1.10,1.30`, parsed by `tuple(float(x) for x in value.split(","))`. Writing
+`"0.30,0.90,0.02"` would mean three scales - 0.30, 0.90 and 0.02 - not a sweep.
+
+The chain below is short because it was measured rather than guessed: on `summary_01.png`
+all six cards peak at 0.47-0.48 (atalanta/igor/indris/baelran/pippa at 0.48, solise at
+0.47). Five scales cover that with margin, and a shorter chain is proportionally faster -
+6 cells x 173 icons x 5 scales instead of x 31.
+
+Then seed the new chain in `DEFAULT_CONFIG`:
 
 ```python
-    ("scale_summary_hero", "0.30,0.90,0.02",
-     "summary cards are ~104px; measured optima sit near 0.5"),
+    ("scale_summary_hero", "0.48,0.47,0.49,0.46,0.50",
+     "measured: all six summary cards peak at 0.47-0.48"),
 ```
 
 Add a test to `TST/test_config.py` proving both paths:
@@ -1764,6 +1825,10 @@ Import `GameTimeoutError` from `adb_auto_player.exceptions`. Call `self._collect
                     score=hero.score,
                     margin=hero.margin,
                     cell_type="summary_hero",
+                    stat_sword=hero.stats.sword,
+                    stat_heart=hero.stats.heart,
+                    stat_shield=hero.stats.shield,
+                    identified_by="longpress_ocr" if confirmed else "image",
                 )
             )
             self._store.record_audit(
@@ -1883,9 +1948,12 @@ These are referenced by Steps 1-3 and must exist before the module imports clean
             # position is not fixed - it is detected by CONTENT, not geometry.
             blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
             slug = resolve_hero_name([b.text for b in blocks], self._solstice_cfg)
+            # Dismiss on EVERY path, including failure. A popup left open covers the
+            # screen, so the next long-press and the navigation that follows would act on
+            # the wrong UI state - and that failure would look like a matching problem.
+            self.tap(Point(540, 1750))
+            sleep(0.5)
             if slug is not None:
-                self.tap(Point(540, 1750))  # dismiss
-                sleep(0.5)
                 return slug
         return None
 ```
@@ -1948,7 +2016,155 @@ with an error rather than looping silently."
 
 ---
 
-### Task 9: Live test
+### Task 9: Learn transforms from confirmed evidence
+
+**Files:**
+- Modify: `AFKJ/mixins/solstice_clash.py`
+- Test: `TST/test_tuning.py` (extend)
+
+**Interfaces:**
+- Consumes: `tune_cell` (Task 6), `MatchStore.learn_transform` / `record_audit` (Task 2), `read_summary` (Task 5).
+- Produces: `SolsticeClashMixin._learn_from(frame, hero, confirmed_slug, audit_id)`.
+
+Without this task the transform table, the store API and the tuner all exist and nothing
+ever writes a transform - the "training" half of Mode A would be inert.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `TST/test_tuning.py`:
+
+```python
+def test_learned_transform_is_reusable(cfg, library, frames, tmp_path):
+    """A tuned result must survive the round trip and be retrievable by screen+hero."""
+    import shutil
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    import cv2
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        AuditRow, MatchStore,
+    )
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import tune_cell
+
+    repo = Path(__file__).resolve().parents[7]
+    db = tmp_path / "heroes.sqlite"
+    shutil.copy(repo / "data" / "solstice_clash" / "heroes.sqlite", db)
+    subprocess.run(
+        [sys.executable, str(repo / "data" / "solstice_clash" / "migrate.py"), str(db)],
+        check=True, capture_output=True,
+    )
+
+    gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
+    tuned = tune_cell(gray, (90, 1307), "solise", library, cfg)
+    assert tuned is not None
+
+    store = MatchStore(db)
+    audit_id = store.record_audit(AuditRow(
+        screen_slug="solstice_summary", side="red", slot=3,
+        image_slug="solise", image_art_ref="Solise",
+        image_score=tuned.score, image_margin=tuned.margin,
+        ocr_slug="solise", frame_path=None,
+    ))
+    store.learn_transform(
+        audit_id, "solstice_summary", "solise", "Solise",
+        tuned.scale, tuned.score, tuned.margin,
+        crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
+    )
+
+    got = store.transform_for("solstice_summary", "solise")
+    assert got is not None
+    assert got["scale"] == tuned.scale
+    assert got["margin"] >= 0.10
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py::test_learned_transform_is_reusable -v`
+
+Expected: FAIL until Task 2's `learn_transform` and Task 6's `tune_cell` are both present. If both are already implemented this test may pass immediately - that is fine, it is a regression guard for the wiring below.
+
+- [ ] **Step 3: Wire learning into the loop**
+
+Add to `SolsticeClashMixin`:
+
+```python
+    # Only tune cards in this band. Above it there is nothing to gain; below it the read
+    # was rejected outright and the identity is not trustworthy enough to tune toward.
+    TUNE_BAND = (0.70, 0.80)
+
+    def _learn_from(
+        self,
+        gray: np.ndarray,
+        hero: SummaryHero,
+        confirmed_slug: str | None,
+        audit_id: int,
+    ) -> None:
+        """Tune and store this hero's transform, but ONLY from confirmed evidence.
+
+        Tuning toward an unconfirmed identity would make a wrong answer score better and
+        could push it past the accept threshold, suppressing the very check that would
+        have caught it. So a missing or contradicting confirmation stores nothing.
+        """
+        if confirmed_slug is None or confirmed_slug != hero.slug:
+            return
+        low, high = self.TUNE_BAND
+        if not (low <= hero.score < high):
+            return
+
+        cell = next(
+            c
+            for c in self._solstice_cfg.cells("summary_hero")
+            if c.side == hero.side and c.slot == hero.slot
+        )
+        centre = ((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2)
+        tuned = tune_cell(
+            gray, centre, confirmed_slug, self._solstice_library, self._solstice_cfg
+        )
+        if tuned is None or tuned.margin <= hero.margin:
+            # Never store a result that is not an improvement.
+            return
+
+        self._store.learn_transform(
+            audit_id, "solstice_summary", confirmed_slug, hero.art_ref or confirmed_slug,
+            tuned.scale, tuned.score, tuned.margin,
+            crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
+        )
+        logging.info(
+            f"tuned {confirmed_slug}: margin {hero.margin:.3f} -> {tuned.margin:.3f}"
+        )
+```
+
+Call it from `_record_summary`, right after the audit row is written, capturing the id:
+
+```python
+            audit_id = self._store.record_audit(AuditRow(...))
+            self._learn_from(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), hero,
+                             confirmed, audit_id)
+```
+
+Import `tune_cell` from `..services.solstice.tuning`.
+
+- [ ] **Step 4: Run the suite**
+
+Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
+
+Expected: green.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_tuning.py
+git commit -m "feat(solstice): learn per-hero transforms from confirmed evidence
+
+Only tunes cards in the 0.70-0.80 band whose identity OCR confirmed, and
+only stores a result that actually improves the margin."
+```
+
+---
+
+### Task 10: Live test
 
 **Files:** none - this task only runs and observes.
 
@@ -2002,7 +2218,7 @@ Report the result. **Stop after this test whether it succeeded or failed** - thi
 
 **Placeholder scan:** every helper referenced by Task 8 is now written out in Task 8 Step 4. `_current_theme` was a dangling name and is now the method `_read_current_theme()`; Task 8 Step 3 must call that and hold the result for the cycle.
 
-**Type consistency:** `AuditRow`, `HeroSlot`, `MatchRecord`, `MatchStore` (Task 2) are used with those exact names in Task 8. `read_summary` / `SummaryHero` (Task 5) and `resolve_hero_name` (Task 4) likewise. `tune_cell` (Task 6) is not yet wired into the loop - it is used by the follow-up tuning pass, not by collection, so the loop does not reference it.
+**Type consistency:** `AuditRow`, `HeroSlot`, `MatchRecord`, `MatchStore` (Task 2) are used with those exact names in Task 8. `read_summary` / `SummaryHero` (Task 5) and `resolve_hero_name` (Task 4) likewise. `tune_cell` (Task 6) is wired into the loop by Task 9, which is what makes the training half of the mode actually run.
 
 **Two things the implementer must derive rather than copy:**
 - Two anchor templates, `draft_anchor` and `prematch_anchor` under `event/solstice_clash/`, are referenced by `_capture_training_frame` in Task 8 but not listed in Task 7's template table. Cut them in Task 7 from `TST/data/spectate_draft.png` and `TST/data/spectate_prematch.png`, and verify each matches its own source at >= 0.95 before use. Phase 1's existing `draft_selecting.png` is a COMPETE anchor and scored only 0.450 against a spectate frame - it will not work here.

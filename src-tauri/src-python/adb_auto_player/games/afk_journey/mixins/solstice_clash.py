@@ -307,13 +307,20 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         ):
             if frame_img is None:
                 continue  # entered mid-match: normal, never an error
-            train_from_frame(
+            result = train_from_frame(
                 store=self._store, cfg=self._solstice_cfg,
                 library=self._solstice_library, frame=frame_img,
                 screen_slug=screen_slug, cell_type=cell_type,
                 confirmed_by_side=confirmed_by_side,
                 frame_path=self._archive(frame_img, kind=screen_slug),
                 match_id=match_id,
+            )
+            # deduced/set_consistent are MEASUREMENTS, never confirmation - see
+            # train_from_frame's docstring. Logged only, never used to learn a transform.
+            logging.info(
+                f"{screen_slug}: recorded {result.written} rows, "
+                f"{result.deduced} deduced by elimination, "
+                f"{result.set_consistent} set-consistent"
             )
 
     # --- lazily built, because IconLibrary decoding takes seconds and the GUI imports

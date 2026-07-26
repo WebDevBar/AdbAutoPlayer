@@ -191,6 +191,23 @@ def confirmed_sides(slots) -> dict[str, set[str]]:
     return confirmed
 
 
+@dataclass(frozen=True)
+class TrainResult:
+    """What one training frame produced. All three counters are for LOGGING only.
+
+    written: audit rows recorded.
+    deduced: cells whose true hero was pinned by elimination (see train_from_frame) and
+        recorded as a disagreement, never as a confirmation.
+    set_consistent: reads that were in that side's confirmed set AND unique among that
+        side's reads. A plausibility measurement, not confirmation - a swap of two
+        same-side heroes is also set-consistent (see train_from_frame's docstring).
+    """
+
+    written: int
+    deduced: int
+    set_consistent: int
+
+
 def train_from_frame(
     *,
     store,
@@ -202,21 +219,40 @@ def train_from_frame(
     confirmed_by_side: dict[str, set[str]],
     frame_path: str,
     match_id: int | None,
-) -> int:
-    """Score one training frame against the summary's confirmed identities.
+) -> TrainResult:
+    """Record one training frame's reads against the summary's confirmed identities.
 
-    Confirmation here is at SIDE-SET level, not per slot. The summary lists three heroes
-    per side but does NOT state which draft pick slot each came from, and that mapping has
-    never been verified - Blue's picks are slots 1, 4 and 5 while the summary shows a plain
-    list of three. Asserting a positional correspondence we have not measured would
-    manufacture false disagreements.
+    This screen has NO per-cell ground truth. The summary lists three heroes per side but
+    does NOT state which draft pick slot each came from, and that mapping has never been
+    verified - Blue's picks are slots 1, 4 and 5 while the summary shows a plain list of
+    three.
 
-    So a read counts as confirmed when the identified hero is in that side's confirmed set
-    AND no other cell on the same side claimed the same hero. Uniqueness is what pins the
-    cell-to-hero mapping; set membership alone would let two cells both claim one hero.
+    Set membership plus uniqueness (no other cell on the same side claiming the same hero)
+    only tells us a read is PLAUSIBLE - consistent with the confirmed set - it cannot tell
+    a correct read apart from a SWAP: if the image matcher mis-assigns two heroes that are
+    both genuinely on that side, cell 1 reads B when it is really A and cell 2 reads A when
+    it is really B, each read is still in the confirmed set and still unique on that side.
+    A swap is still a bijection with the set, so no amount of extra set logic closes this
+    gap - such rows record ocr_slug=None, never a confirmation.
+
+    The ONE case with genuine per-cell truth is elimination: if exactly one cell on a side
+    reads something NOT in that side's confirmed set, and exactly one confirmed hero is
+    unaccounted for by every other cell's read on that side, then that hero must be the
+    odd cell's true content - there is nowhere else for it to be. That row's ocr_slug is
+    set to the deduced hero. By construction this always differs from the image read (the
+    read was, after all, not in the set), so record_audit always writes agreed=0 for it -
+    intentional: this exists to be counted and analysed, never to teach the matcher a
+    transform. learn_if_improved is deliberately never called from here; it stays available
+    only where real per-cell truth exists, the long-press-confirmed summary screen, via the
+    call in the mixin's summary loop.
+
+    ASSUMPTION, stated plainly: elimination is sound only when AT MOST ONE read per side is
+    wrong. Two simultaneous errors can pin the WRONG hero - e.g. true C/B/A read as A/B/X
+    would conclude the odd cell is C when it is actually A. This is not detectable from a
+    single frame; it is a known limitation of the deduction, not a bug.
 
     Returns:
-        The number of audit rows written.
+        A TrainResult with written/deduced/set_consistent counts, for logging only.
     """
     from .vision import extract_cell, identify_cell
 
@@ -225,8 +261,29 @@ def train_from_frame(
         result = identify_cell(extract_cell(frame, cell), cell_type, library, cfg)
         reads.append((cell, result))
 
+    # Per-cell deduced truth, computed once per side before the recording pass below.
+    deduced_ocr_slug: dict[int, str] = {}  # keyed by index into `reads`
+    sides_present = {(cell.side or "") for cell, _ in reads}
+    for side in sides_present:
+        confirmed = confirmed_by_side.get(side, set())
+        side_reads = [
+            (i, result) for i, (cell, result) in enumerate(reads) if (cell.side or "") == side
+        ]
+        odd_out = [(i, result) for i, result in side_reads if result.slug not in confirmed]
+        if len(odd_out) != 1:
+            continue  # zero or multiple reads outside the set: nothing is pinned
+        odd_i, _odd_result = odd_out[0]
+        accounted = {
+            result.slug for i, result in side_reads if i != odd_i and result.slug is not None
+        }
+        unaccounted = confirmed - accounted
+        if len(unaccounted) == 1:
+            deduced_ocr_slug[odd_i] = next(iter(unaccounted))
+
     written = 0
-    for cell, result in reads:
+    deduced_count = 0
+    set_consistent = 0
+    for i, (cell, result) in enumerate(reads):
         side = cell.side or ""
         confirmed = confirmed_by_side.get(side, set())
         unique = (
@@ -238,9 +295,14 @@ def train_from_frame(
             )
             == 1
         )
-        ocr_slug = result.slug if (result.slug in confirmed and unique) else None
+        if result.slug is not None and result.slug in confirmed and unique:
+            set_consistent += 1
 
-        audit_id = store.record_audit(
+        ocr_slug = deduced_ocr_slug.get(i)
+        if ocr_slug is not None:
+            deduced_count += 1
+
+        store.record_audit(
             AuditRow(
                 screen_slug=screen_slug,
                 side=side,
@@ -250,20 +312,12 @@ def train_from_frame(
                 image_score=result.score,
                 image_margin=result.margin,
                 ocr_slug=ocr_slug,
-                # Training frames are ALWAYS archived, agreements included: by the time a
-                # draft read is found wrong the screen is minutes gone and unrecoverable.
+                # Training frames are ALWAYS archived: by the time a draft read is found
+                # wrong the screen is minutes gone and unrecoverable.
                 frame_path=frame_path,
                 match_id=match_id,
             )
         )
         written += 1
 
-        learn_if_improved(
-            store=store, cfg=cfg, library=library,
-            gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-            centre=((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2),
-            screen_slug=screen_slug, image_slug=result.slug, confirmed_slug=ocr_slug,
-            art_ref=result.art_ref or (ocr_slug or ""),
-            current_score=result.score, current_margin=result.margin, audit_id=audit_id,
-        )
-    return written
+    return TrainResult(written=written, deduced=deduced_count, set_consistent=set_consistent)

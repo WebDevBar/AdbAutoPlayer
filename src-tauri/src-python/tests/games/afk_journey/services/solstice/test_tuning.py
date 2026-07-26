@@ -23,6 +23,7 @@ def tmp_db(tmp_path, db_path):
     return target
 
 
+@pytest.mark.slow
 def test_tuning_improves_the_weakest_card(cfg, library, frames):
     frame = cv2.imread(str(frames["summary_01"]))
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -43,6 +44,7 @@ def test_tuning_returns_none_when_the_truth_never_wins(cfg, library, frames):
     assert tune_cell(gray, SOLISE_CENTRE, "thoran", library, cfg) is None
 
 
+@pytest.mark.slow
 def test_learn_if_improved_stores_a_better_transform(cfg, library, frames, tmp_db):
     """The real wiring: confirmed identity in, stored+retrievable transform out."""
     import cv2

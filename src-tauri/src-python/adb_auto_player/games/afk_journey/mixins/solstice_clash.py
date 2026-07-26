@@ -33,7 +33,6 @@ from ..services.solstice.tuning import (
     learn_if_improved,
     train_from_frame,
 )
-# NOTE: tuning imports (learn_if_improved, train_from_frame) are added in TASK 9, which
 # is where those functions are defined. Importing them here would leave this module
 # unimportable at the end of Task 8 and fail its green-suite gate.
 

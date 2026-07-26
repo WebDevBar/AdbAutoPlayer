@@ -29,6 +29,7 @@ adb-auto-player = { workspace = true }
 testpaths = ["src-tauri/src-python/tests"]
 markers = [
     "network: test hits an external service (deselect with -m 'not network')",
+    "slow: test takes minutes (deselect with -m 'not slow')",
 ]
 
 

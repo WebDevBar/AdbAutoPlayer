@@ -65,3 +65,43 @@ pre-match screen. Leave them empty rather than guessing.
 2026-07-26). Matches are only comparable within a theme, so anything not collected under this
 theme before the rotation cannot be recovered afterwards - it belongs to a different
 generating process. Collection needs to be running before then.
+
+---
+
+## match-002
+
+![match-002](match-002.png)
+
+```
+id: 002
+screenshot: match-002.png
+mode: spectate
+date: 2026-07-26 10:05
+theme: Converging Paths
+winning_side: left
+winning_player: leeler
+winning_heroes: Cassadee, Reinier, Pippa
+losing_player: Santa
+losing_heroes: Granny Dahnie, Lily May, Cryonaia
+```
+
+| side | hero | sword | heart | shield |
+|---|---|---|---|---|
+| won | Cassadee | 1,761K | 0 | 3,759K |
+| won | Reinier | 1,145K | 1,948K | 804K |
+| won | Pippa | 4,121K | 0 | 591K |
+| lost | Granny Dahnie | 0 | 449K | 8,246K |
+| lost | Lily May | 1,123K | 0 | 3,168K |
+| lost | Cryonaia | 2,205K | 0 | 2,978K |
+
+**Parse notes.** All six heroes identified at 0.836-0.924.
+
+This screenshot caught a real bug. It is the first frame where the LEFT side won, and the
+parser reported the winner as the right side - inverted. Cause: OCR found no "Victory" or
+"Defeat" text at all in the header band, only the player names, because those words are
+faint watermark-style text. The two earlier frames both happened to have the right side
+winning, so a wrong implementation passed them.
+
+Fixed by reading the winner from which header half is tinted orange (the winning half) and
+keeping OCR only as a fallback. Verified on all four frames with independently known
+winners, two right-wins and one left-win: 4/4 correct, no side favoured.

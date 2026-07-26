@@ -25,6 +25,9 @@ SCREEN_SLUG = "solstice_summary"
 # The Defeat/Victory banner and the two player names share this vertical band.
 _HEADER_BAND = (200, 320)
 _HEADER_SPLIT_X = 540
+# Minimum orange-vs-blue separation between the two header halves before the colour is
+# trusted. Observed separations were far above this on every frame checked.
+_WINNER_COLOUR_MIN_DELTA = 30.0
 _HEADER_LEFT = (60, 470)
 _HEADER_RIGHT = (610, 1020)
 
@@ -102,6 +105,23 @@ def parse_stat_number(text: str) -> int | None:
     return int(value)
 
 
+def _winner_by_colour(frame: np.ndarray) -> str | None:
+    """Which header half is orange. The winning side is tinted orange, the loser blue.
+
+    Returns None when neither half is clearly tinted, so the caller can fall back to OCR
+    rather than guessing from a weak difference.
+    """
+    band = frame[_HEADER_BAND[0] : _HEADER_BAND[1]]
+    left = band[:, _HEADER_LEFT[0] : _HEADER_LEFT[1]].reshape(-1, 3).mean(axis=0)
+    right = band[:, _HEADER_RIGHT[0] : _HEADER_RIGHT[1]].reshape(-1, 3).mean(axis=0)
+    # index 2 is red, index 0 is blue in BGR. Positive means orange-tinted.
+    left_orange = float(left[2] - left[0])
+    right_orange = float(right[2] - right[0])
+    if abs(left_orange - right_orange) < _WINNER_COLOUR_MIN_DELTA:
+        return None
+    return "blue" if left_orange > right_orange else "red"
+
+
 def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
     """Which side the Defeat/Victory banner declares the winner.
 
@@ -111,6 +131,15 @@ def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
     is on that side) or, when only one word survived OCR, from that block's horizontal
     position relative to the halfway line.
     """
+    # Colour FIRST. "Victory" and "Defeat" are faint watermark-style text and OCR misses
+    # them entirely on some frames - on a 2026-07-26 capture the header band returned only
+    # the player names, and the OCR path then produced the WRONG side. The winning half is
+    # tinted orange and the losing half blue, which is a strong signal and was correct on
+    # all four frames with independently known winners.
+    winner = _winner_by_colour(frame)
+    if winner is not None:
+        return winner
+
     blocks = ocr.detect_text_blocks(frame[0:_WINNER_BAND_Y1, :], ConfidenceValue(0.4))
     for block in blocks:
         text = block.text.lower()

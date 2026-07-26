@@ -940,8 +940,9 @@ channel, so a wrong answer would be recorded as truth."
 
 **Files:**
 - Create: `SVC/summary.py`
-- Test: `TST/test_summary.py` (create)
-- Modify: `data/solstice_clash/migrate.py` (seed `cell_registry` rows for `summary_hero`)
+- Modify: `SVC/config.py` (generalise `scale_chain` to a per-cell-type key)
+- Modify: `data/solstice_clash/migrate.py` (seed `summary_hero` cells and `scale_summary_hero`)
+- Test: `TST/test_summary.py` (create), `TST/test_config.py` (extend)
 
 **Interfaces:**
 - Consumes: `vision.identify_cell`, `IconLibrary`, `SolsticeConfig.cells("summary_hero")`, `resolve_hero_name`.
@@ -1123,9 +1124,28 @@ def library(cfg):
     return IconLibrary.build(cfg, icon_dir)
 ```
 
-- [ ] **Step 3: Run to verify failure**
+- [ ] **Step 3: Apply the migration, then run to verify failure**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
+The seeds above only reach the database when `migrate.py` runs. The tests load the shipped
+`heroes.sqlite` through `cfg`, which today has **zero** `summary_hero` cells and no
+`scale_summary_hero`, so without this step `read_summary()` would iterate an empty cell
+list and the tests could not pass no matter how correct the parser is.
+
+```bash
+cd /mnt/docs/adbautoplayer
+/mnt/docs/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
+/mnt/docs/adbautoplayer/.venv/bin/python -c "
+import sqlite3
+c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
+print('summary cells:', c.execute(
+    \"select count(*) from cell_registry where cell_type='summary_hero'\").fetchone()[0])
+print('scale key:', c.execute(
+    \"select value from library_config where key='scale_summary_hero'\").fetchone())"
+```
+
+Expected: `summary cells: 6` and the five-scale chain.
+
+Then run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
 
 Expected: FAIL - `No module named ...summary`.
 
@@ -1309,7 +1329,11 @@ Expected: all pass. If a stat column or header band is off, adjust the constants
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/summary.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_summary.py data/solstice_clash/migrate.py data/solstice_clash/heroes.sqlite
+git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/summary.py \
+        src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/config.py \
+        src-tauri/src-python/tests/games/afk_journey/services/solstice/test_summary.py \
+        src-tauri/src-python/tests/games/afk_journey/services/solstice/test_config.py \
+        data/solstice_clash/migrate.py data/solstice_clash/heroes.sqlite
 git commit -m "feat(solstice): summary parser - winner, both comps, per-hero stats
 
 The winner is read positionally: OCR merges the header into 'DefeatVictory',
@@ -2072,7 +2096,8 @@ def test_learn_if_improved_stores_a_better_transform(cfg, library, frames, tmp_d
 
     stored = learn_if_improved(
         store=store, cfg=cfg, library=library, gray=gray, centre=(90, 1307),
-        screen_slug="solstice_summary", confirmed_slug="solise", art_ref="Solise",
+        screen_slug="solstice_summary", image_slug="solise",
+        confirmed_slug="solise", art_ref="Solise",
         current_score=0.781, current_margin=0.201, audit_id=audit_id,
     )
 
@@ -2094,7 +2119,8 @@ def test_learn_if_improved_refuses_unconfirmed(cfg, library, frames, tmp_db):
 
     stored = learn_if_improved(
         store=store, cfg=cfg, library=library, gray=gray, centre=(90, 1307),
-        screen_slug="solstice_summary", confirmed_slug=None, art_ref="Solise",
+        screen_slug="solstice_summary", image_slug="solise",
+        confirmed_slug=None, art_ref="Solise",
         current_score=0.781, current_margin=0.201, audit_id=None,
     )
 
@@ -2104,7 +2130,7 @@ def test_learn_if_improved_refuses_unconfirmed(cfg, library, frames, tmp_db):
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py::test_learned_transform_is_reusable -v`
+Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py::test_learn_if_improved_stores_a_better_transform -v`
 
 Expected: FAIL until Task 2's `learn_transform` and Task 6's `tune_cell` are both present. If both are already implemented this test may pass immediately - that is fine, it is a regression guard for the wiring below.
 
@@ -2128,6 +2154,7 @@ def learn_if_improved(
     gray: np.ndarray,
     centre: tuple[int, int],
     screen_slug: str,
+    image_slug: str | None,
     confirmed_slug: str | None,
     art_ref: str,
     current_score: float,
@@ -2143,7 +2170,12 @@ def learn_if_improved(
     Returns:
         True if a transform was stored.
     """
-    if confirmed_slug is None or audit_id is None:
+    # The audit row only counts as confirmation when BOTH channels named the same hero.
+    # Checking merely that OCR produced a name is not enough: on a real false positive
+    # record_audit() writes agreed=0, and learn_transform() would then raise out of the
+    # caller mid-write, failing the whole cycle after some rows were already persisted.
+    # A disagreement is an expected outcome here, not an error - it returns False.
+    if confirmed_slug is None or audit_id is None or confirmed_slug != image_slug:
         return False
     low, high = TUNE_BAND
     if not (low <= current_score < high):
@@ -2178,6 +2210,7 @@ Then call it from `_record_summary` in the mixin, right after the audit row is w
                 gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
                 centre=((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2),
                 screen_slug="solstice_summary",
+                image_slug=hero.slug,
                 confirmed_slug=confirmed,
                 art_ref=hero.art_ref or (confirmed or ""),
                 current_score=hero.score,
@@ -2198,7 +2231,7 @@ Expected: green.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_tuning.py
+git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/tuning.py src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py src-tauri/src-python/tests/games/afk_journey/services/solstice/test_tuning.py
 git commit -m "feat(solstice): learn per-hero transforms from confirmed evidence
 
 Only tunes cards in the 0.70-0.80 band whose identity OCR confirmed, and

@@ -179,6 +179,11 @@ CREATE TABLE IF NOT EXISTS match_hero(
   runner_up_score REAL,
   crop_path       TEXT,                  -- saved cell crop, for relabelling
   frame_path      TEXT,                  -- source frame, for re-measuring geometry
+  stat_sword      INTEGER,               -- summary column 1, sword icon
+  stat_heart      INTEGER,               -- summary column 2, heart icon
+  stat_shield     INTEGER,               -- summary column 3, shield icon
+  power           INTEGER,               -- from the long-press popup only
+  identified_by   TEXT,                  -- 'image' | 'longpress_ocr'
   UNIQUE(match_id, side, slot)
 );
 
@@ -215,3 +220,96 @@ CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_pool_match ON match_pool(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_odds_match ON match_odds(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_outcome    ON match(outcome);
+
+-- ---------------------------------------------------------------------------
+-- Schema v3: screen registry, identification audit trail, learned transforms.
+-- ---------------------------------------------------------------------------
+
+-- Named screens. cell_registry.cell_type stays as-is; this table adds the
+-- screen-level crop defaults that a per-hero transform can override.
+CREATE TABLE IF NOT EXISTS screen(
+  id              INTEGER PRIMARY KEY,
+  slug            TEXT NOT NULL UNIQUE,
+  description     TEXT NOT NULL,
+  base_resolution TEXT NOT NULL,
+  crop_half_w     INTEGER,
+  crop_top        INTEGER,
+  crop_bottom     INTEGER
+);
+
+-- One row per identified cell, agreements included. Agreements are what make the
+-- false-positive RATE computable: recording only misfires gives a numerator with no
+-- denominator.
+--
+-- match_id is ON DELETE SET NULL, NOT CASCADE. hero_screen_transform.audit_id is
+-- NOT NULL, so cascading a match delete into its audit rows makes SQLite abort the
+-- delete with FOREIGN KEY constraint failed as soon as any transform has been learned
+-- from that match. Audit rows are evidence about identification, not about the match,
+-- so they outlive it.
+CREATE TABLE IF NOT EXISTS identification_audit(
+  id            INTEGER PRIMARY KEY,
+  match_id      INTEGER REFERENCES match(id) ON DELETE SET NULL,
+  screen_id     INTEGER NOT NULL REFERENCES screen(id),
+  side          TEXT NOT NULL,
+  slot          INTEGER NOT NULL,
+  image_slug    TEXT,
+  image_art_ref TEXT,
+  image_score   REAL NOT NULL,
+  image_margin  REAL NOT NULL,
+  ocr_slug      TEXT,
+  agreed        INTEGER NOT NULL,
+  frame_path    TEXT,
+  created_at    TEXT NOT NULL,
+  CHECK(agreed IN (0, 1)),
+  -- 'agreed' must MEAN what it says. Without this a row could claim agreed=1 while the
+  -- two channels disagree, and the trigger below would accept it as confirmation.
+  CHECK(agreed = 0 OR (image_slug IS NOT NULL
+                       AND ocr_slug IS NOT NULL
+                       AND image_slug = ocr_slug))
+);
+
+CREATE TABLE IF NOT EXISTS hero_screen_transform(
+  id            INTEGER PRIMARY KEY,
+  screen_id     INTEGER NOT NULL REFERENCES screen(id),
+  hero_slug     TEXT NOT NULL REFERENCES hero(slug),
+  art_ref       TEXT NOT NULL,
+  scale         REAL NOT NULL,
+  -- NULL means "use the screen default". Measured: the optimum crop differs per hero.
+  crop_half_w   INTEGER,
+  crop_top      INTEGER,
+  crop_bottom   INTEGER,
+  score         REAL NOT NULL,
+  margin        REAL NOT NULL,
+  confirmed_by  TEXT NOT NULL CHECK(confirmed_by IN ('longpress_ocr')),
+  audit_id      INTEGER NOT NULL REFERENCES identification_audit(id),
+  verified_at   TEXT NOT NULL,
+  UNIQUE(screen_id, hero_slug, art_ref)
+);
+
+-- NOT NULL only proves an audit row exists. It cannot prove the row agrees, names this
+-- hero, or came from this screen, and SQLite CHECK cannot reference another table.
+CREATE TRIGGER IF NOT EXISTS hero_screen_transform_confirm_insert
+BEFORE INSERT ON hero_screen_transform
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'transform requires an agreeing OCR-confirmed audit row for the same hero and screen')
+  WHERE NOT EXISTS (
+    SELECT 1 FROM identification_audit a
+    WHERE a.id = NEW.audit_id AND a.agreed = 1
+      AND a.ocr_slug = NEW.hero_slug AND a.screen_id = NEW.screen_id
+  );
+END;
+
+-- Re-tuning is an UPDATE. A BEFORE INSERT trigger alone would hold on the first write
+-- and leak on every subsequent one.
+CREATE TRIGGER IF NOT EXISTS hero_screen_transform_confirm_update
+BEFORE UPDATE ON hero_screen_transform
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'transform update requires an agreeing OCR-confirmed audit row for the same hero and screen')
+  WHERE NOT EXISTS (
+    SELECT 1 FROM identification_audit a
+    WHERE a.id = NEW.audit_id AND a.agreed = 1
+      AND a.ocr_slug = NEW.hero_slug AND a.screen_id = NEW.screen_id
+  );
+END;

@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "schema.sql")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Columns added after a table's original CREATE. schema.sql has them in the CREATE for
 # fresh databases; these entries upgrade databases that predate them.
@@ -39,6 +39,11 @@ ADD_COLUMNS = [
     ("solstice_roster", "phys_def_pct", "INTEGER"),
     ("solstice_roster", "magic_def_pct", "INTEGER"),
     ("solstice_roster", "atk_spd_pct", "INTEGER"),
+    ("match_hero", "stat_sword", "INTEGER"),
+    ("match_hero", "stat_heart", "INTEGER"),
+    ("match_hero", "stat_shield", "INTEGER"),
+    ("match_hero", "power", "INTEGER"),
+    ("match_hero", "identified_by", "TEXT"),
 ]
 
 # Measured defaults. Only inserted if absent - never overwrites tuned values.
@@ -51,6 +56,18 @@ DEFAULT_CONFIG = [
     ("accept_margin", "0.10", "minimum margin over runner-up; this catches the real errors"),
     ("scale_chain", "1.01,0.95,1.08", "locked_pick / draft_locked_pick scale fallback chain"),
     ("scale_draft_card", "1.19,1.10,1.30", "draft_card scale fallback chain"),
+]
+
+# Screens Mode A reads. crop_* are the screen-level defaults a per-hero transform may
+# override. Summary values are measured; the two spectate screens are seeded without a
+# crop until Task 6 measures them.
+DEFAULT_SCREENS = [
+    ("solstice_summary", "Post-match summary: both comps, winner, per-hero stats",
+     "1080x1920", 26, 18, 30),
+    ("spectate_draft_picks", "Spectate draft: the six pick slots in the top strip",
+     "1080x1920", None, None, None),
+    ("spectate_prematch", "Spectate prematch: six locked cards, three per side",
+     "1080x1920", None, None, None),
 ]
 
 
@@ -84,6 +101,14 @@ def main() -> None:
             (key, value, note),
         )
         inserted += cur.rowcount
+
+    for slug, description, base_resolution, half_w, top, bottom in DEFAULT_SCREENS:
+        con.execute(
+            "INSERT OR IGNORE INTO screen"
+            "(slug,description,base_resolution,crop_half_w,crop_top,crop_bottom)"
+            " VALUES(?,?,?,?,?,?)",
+            (slug, description, base_resolution, half_w, top, bottom),
+        )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")
     con.execute(

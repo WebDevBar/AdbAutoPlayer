@@ -49,6 +49,11 @@ _PLATE_BAND = (1300, 1420)
 _PLATE_SPLIT_X = (500, 580)
 _PLATE_MIN_DELTA = 25
 
+# Ban-overlay glyph matching. Measured: 0.709 and 1.000 on the two banned cards in
+# the fixture frame, versus 0.117-0.380 on the other eighteen. Do not relax this -
+# a failure means a missing glyph variant, not a bad threshold.
+BAN_MATCH_THRESHOLD = 0.60
+
 
 @dataclass(frozen=True)
 class Identification:
@@ -214,3 +219,78 @@ def classify_screen(frame: np.ndarray, anchor_dir: Path) -> str:
         if score >= _PREMATCH_ANCHOR_MIN and _has_team_plates(frame):
             return "prematch_locked"
     return "unknown"
+
+
+def load_ban_glyphs(anchor_dir: Path) -> list[np.ndarray]:
+    """Every ban_glyph_*.png in the anchor directory.
+
+    There are at least THREE variants. Matching only the red/blue pair missed one
+    hero's overlay (0.279 / 0.241, under the 0.60 threshold), so a banned card leaked
+    into results as a phantom hero.
+    """
+    return [
+        img
+        for img in (
+            cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
+            for p in sorted(anchor_dir.glob("ban_glyph_*.png"))
+        )
+        if img is not None
+    ]
+
+
+def is_banned(
+    cell_gray: np.ndarray,
+    ban_glyphs: list[np.ndarray],
+    threshold: float = BAN_MATCH_THRESHOLD,
+) -> bool:
+    """Detect the circle-slash overlay on a banned card.
+
+    A colour-cast test was tried first and false-positived on 10 of 20 real cards -
+    red-haired heroes trip it. Measured separation with glyph templates: 0.709 and
+    1.000 on the two banned cards, versus 0.117-0.380 on the other eighteen.
+    """
+    for glyph in ban_glyphs:
+        if glyph.shape[0] > cell_gray.shape[0] or glyph.shape[1] > cell_gray.shape[1]:
+            continue
+        score = float(cv2.matchTemplate(cell_gray, glyph, cv2.TM_CCOEFF_NORMED).max())
+        if score >= threshold:
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class PoolRead:
+    """The 20 heroes on offer for one match, and which were banned."""
+
+    slugs: set[str]
+    per_slot: dict[int, Identification]
+    banned_slots: set[int]
+
+
+def identify_pool(
+    frame: np.ndarray,
+    cfg: SolsticeConfig,
+    library: IconLibrary,
+    anchor_dir: Path,
+) -> PoolRead:
+    """Read the 5x4 draft grid.
+
+    Capturing this at draft start constrains every later identification from ~121
+    candidates to <= 20, and self-validates: a locked pick that is not in the pool is a
+    DETECTED error rather than a silent wrong answer. The window is multi-second, since
+    a human has to read the grid and decide a ban, so a 3/sec poll catches it.
+    """
+    glyphs = load_ban_glyphs(anchor_dir)
+    per_slot: dict[int, Identification] = {}
+    banned: set[int] = set()
+    for cell in cfg.cells("draft_card"):
+        slot = cell.slot
+        if slot is None:
+            continue
+        gray = extract_cell(frame, cell)
+        if is_banned(gray, glyphs):
+            banned.add(slot)
+            continue
+        per_slot[slot] = identify_cell(gray, "draft_card", library, cfg)
+    slugs = {r.slug for r in per_slot.values() if r.slug is not None}
+    return PoolRead(slugs=slugs, per_slot=per_slot, banned_slots=banned)

@@ -199,3 +199,43 @@ on and flips between matches.
 
 Correct on all six frames with known winners: four right-wins and two left-wins, across both
 compete and spectate.
+
+---
+
+## match-005
+
+![match-005](match-005.png)
+
+```
+id: 005
+screenshot: match-005.png
+mode: spectate
+date: 2026-07-26 23:55
+theme: Converging Paths
+winning_side: last three (bottom panel)
+winning_player: Silver Bull
+winning_heroes: Thoran, Solise, Zorya
+losing_player: Pray4You
+losing_heroes: Berial, Dunlingr, Pippa
+```
+
+| side | hero | sword | heart | shield |
+|---|---|---|---|---|
+| won | Thoran | 826K | 2,800K | 22,507K |
+| won | Solise | 601K | 6,501K | 6,361K |
+| won | Zorya | 9,199K | 1,709K | 8,615K |
+| lost | Berial | 4,099K | 0 | 17,710K |
+| lost | Dunlingr | 1,208K | 0 | 6,092K |
+| lost | Pippa | 11,021K | 0 | 3,460K |
+
+**Parse notes.** 6/6 at 0.794-0.920.
+
+This frame settles the panel-order question. The bet was on the LEFT player, so `Ally` was
+the top panel and the left side - and the left side LOST while its tab was blue. So:
+
+- **first three = left player, last three = right player** - the invariant
+- **orange tab = that trio won, blue tab = they lost** - independent of which is `Ally`
+- `Ally` / `Enemy` track who you bet on and are irrelevant to the data
+
+Running tally across all frames with known winners: 7 frames, 4 right-wins and 2 left-wins
+plus this one, across compete and spectate, all read correctly.

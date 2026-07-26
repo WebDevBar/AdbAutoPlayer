@@ -89,6 +89,30 @@ DEFAULT_SUMMARY_CELLS = [
     ("solstice_summary", "summary_red_3", "summary_hero", 70, 1287, 110, 1327, "red", 3),
 ]
 
+# spectate_draft_picks: top strip, from live/match01/raw/000039317.png.
+# Cards span y 400-530; the "Lvl 240" badge covers the bottom ~30px, so the art ends
+# at 495. Centres x: 120/260/400 (blue) and 678/822/965 (red).
+DEFAULT_DRAFT_PICK_CELLS = [
+    ("spectate_draft_picks", "draft_pick_blue_1", "draft_pick",  75, 410, 165, 495, "blue", 1),
+    ("spectate_draft_picks", "draft_pick_blue_4", "draft_pick", 215, 410, 305, 495, "blue", 4),
+    ("spectate_draft_picks", "draft_pick_blue_5", "draft_pick", 355, 410, 445, 495, "blue", 5),
+    ("spectate_draft_picks", "draft_pick_red_2",  "draft_pick", 633, 410, 723, 495, "red",  2),
+    ("spectate_draft_picks", "draft_pick_red_3",  "draft_pick", 777, 410, 867, 495, "red",  3),
+    ("spectate_draft_picks", "draft_pick_red_6",  "draft_pick", 920, 410, 1010, 495, "red", 6),
+]
+
+# spectate_prematch: from live/match01/raw/000104002.png. Cards span y 940-1120 with the
+# level badge at the bottom, so the art is y 965-1085. Centres x: 132/270/405 (blue) and
+# 677/810/945 (red).
+DEFAULT_PREMATCH_CELLS = [
+    ("spectate_prematch", "prematch_blue_1", "prematch_pick",  87, 965, 177, 1085, "blue", 1),
+    ("spectate_prematch", "prematch_blue_2", "prematch_pick", 225, 965, 315, 1085, "blue", 2),
+    ("spectate_prematch", "prematch_blue_3", "prematch_pick", 360, 965, 450, 1085, "blue", 3),
+    ("spectate_prematch", "prematch_red_1",  "prematch_pick", 632, 965, 722, 1085, "red",  1),
+    ("spectate_prematch", "prematch_red_2",  "prematch_pick", 765, 965, 855, 1085, "red",  2),
+    ("spectate_prematch", "prematch_red_3",  "prematch_pick", 900, 965, 990, 1085, "red",  3),
+]
+
 
 def table_exists(con: sqlite3.Connection, name: str) -> bool:
     return con.execute(
@@ -129,13 +153,17 @@ def main() -> None:
             (slug, description, base_resolution, half_w, top, bottom),
         )
 
-    for screen, name, cell_type, x0, y0, x1, y1, side, slot in DEFAULT_SUMMARY_CELLS:
-        con.execute(
-            "INSERT OR IGNORE INTO cell_registry"
-            "(screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
-            " VALUES(?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
-            (screen, name, cell_type, x0, y0, x1, y1, side, slot),
-        )
+    for cells in (
+        DEFAULT_SUMMARY_CELLS, DEFAULT_DRAFT_PICK_CELLS, DEFAULT_PREMATCH_CELLS,
+    ):
+        for screen, name, cell_type, x0, y0, x1, y1, side, slot in cells:
+            con.execute(
+                "INSERT OR IGNORE INTO cell_registry"
+                "(screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,base_resolution,"
+                " verified_at)"
+                " VALUES(?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
+                (screen, name, cell_type, x0, y0, x1, y1, side, slot),
+            )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")
     con.execute(

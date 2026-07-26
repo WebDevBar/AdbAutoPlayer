@@ -28,6 +28,11 @@ from ..services.solstice.icons import IconLibrary
 from ..services.solstice.naming import resolve_hero_name
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
+from ..services.solstice.tuning import (
+    confirmed_sides,
+    learn_if_improved,
+    train_from_frame,
+)
 # NOTE: tuning imports (learn_if_improved, train_from_frame) are added in TASK 9, which
 # is where those functions are defined. Importing them here would leave this module
 # unimportable at the end of Task 8 and fail its green-suite gate.
@@ -257,7 +262,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     identified_by="longpress_ocr" if confirmed else "image",
                 )
             )
-            self._store.record_audit(
+            audit_id = self._store.record_audit(
                 AuditRow(
                     screen_slug="solstice_summary",
                     side=hero.side,
@@ -271,7 +276,45 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     match_id=match_id,
                 )
             )
+            cell = next(
+                c
+                for c in self._solstice_cfg.cells("summary_hero")
+                if c.side == hero.side and c.slot == hero.slot
+            )
+            if learn_if_improved(
+                store=self._store,
+                cfg=self._solstice_cfg,
+                library=self._solstice_library,
+                gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+                centre=((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2),
+                screen_slug="solstice_summary",
+                image_slug=hero.slug,
+                confirmed_slug=confirmed,
+                art_ref=hero.art_ref or (confirmed or ""),
+                current_score=hero.score,
+                current_margin=hero.margin,
+                audit_id=audit_id,
+            ):
+                logging.info(f"tuned {confirmed} on the summary screen")
         self._store.record_heroes(match_id, slots)
+
+        # Only long-press-OCR-confirmed identities may seed this - see confirmed_sides().
+        confirmed_by_side = confirmed_sides(slots)
+
+        for frame_img, screen_slug, cell_type in (
+            (draft_frame, "spectate_draft_picks", "draft_pick"),
+            (prematch_frame, "spectate_prematch", "prematch_pick"),
+        ):
+            if frame_img is None:
+                continue  # entered mid-match: normal, never an error
+            train_from_frame(
+                store=self._store, cfg=self._solstice_cfg,
+                library=self._solstice_library, frame=frame_img,
+                screen_slug=screen_slug, cell_type=cell_type,
+                confirmed_by_side=confirmed_by_side,
+                frame_path=self._archive(frame_img, kind=screen_slug),
+                match_id=match_id,
+            )
 
     # --- lazily built, because IconLibrary decoding takes seconds and the GUI imports
     # --- this module at startup.

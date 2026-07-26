@@ -45,7 +45,9 @@ TRAINING_ROOT = Path("/mnt/vault/solstice/training")
 NPC_DIALOG_TIMEOUT = 30.0
 # Combat runs for minutes. wait_for_template defaults to template_timeout (10s), which
 # would raise GameTimeoutError on every normal match, so this is always passed explicitly.
-MATCH_TIMEOUT = 600.0
+# A match runs about a minute at 2x speed. Ults and animations stretch that, so 3 minutes
+# is a safe ceiling; 10 minutes was pure dead time on any match that never resolves.
+MATCH_TIMEOUT = 180.0
 RESULT_POLL_DELAY = 2.0
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
@@ -196,12 +198,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             wait_timeout=PREMATCH_WAIT_TIMEOUT if draft_frame is not None else 0.0,
         )
 
-        self.wait_for_template(
-            template="event/solstice_clash/result_back",
+        # Wait for EITHER outcome. A decided match reaches the result screen; a DRAW never
+        # does - the game drops straight back to the overworld with no result and no
+        # summary. Watching only for the result screen would burn the whole timeout on
+        # every draw and then count it as a failure, so a few draws in a row could end an
+        # otherwise healthy run.
+        found = self.wait_for_any_template(
+            [
+                "event/solstice_clash/result_back",
+                "navigation/homestead/homestead_enter",
+            ],
             delay=RESULT_POLL_DELAY,
             timeout=MATCH_TIMEOUT,
-            timeout_message="no result screen - abandoning this match",
+            timeout_message="neither a result screen nor the overworld appeared",
         )
+        if "homestead_enter" in str(found.template):
+            # Draw: nothing to record, and NOT a failure. Returning True keeps the
+            # consecutive-failure counter clear, because the loop behaved correctly.
+            logging.info("match ended in a draw - no result screen, skipping")
+            return True
         chart = self.wait_for_template(template="event/solstice_clash/result_chart")
         self.tap(chart)
         sleep(2)
@@ -269,8 +284,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 theme=theme,
                 outcome=read.winner,
                 outcome_source="observed",
-                blue_player=read.blue_player,
-                red_player=read.red_player,
+                left_player=read.left_player,
+                right_player=read.right_player,
             )
         )
 

@@ -56,3 +56,4 @@ vite.config.ts.timestamp-*
 /data/afkj_tracker_corretto.json
 /src-tauri/src-python/scratch/
 /scratch/
+data/solstice_clash/__pycache__/

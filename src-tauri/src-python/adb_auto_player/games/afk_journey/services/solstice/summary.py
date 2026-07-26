@@ -30,6 +30,12 @@ _HEADER_SPLIT_X = 540
 _WINNER_COLOUR_MIN_DELTA = 30.0
 _HEADER_LEFT = (60, 470)
 _HEADER_RIGHT = (610, 1020)
+# Colour probes, deliberately narrower than the OCR windows above. The player AVATARS sit
+# at the far left and far right of the banner and are full-colour portraits: sampling from
+# x40-160 reads orange regardless of who won. The sash boundary sits near x540. These
+# windows avoid both, and the sash is a solid fill so a modest patch is plenty.
+_PROBE_LEFT = (200, 500)
+_PROBE_RIGHT = (580, 880)
 
 # The banner text itself ('Defeat' / 'Victory') is a low-contrast, gradient-backed
 # script font. RapidOCR only detects it given a tall, full-width crop - a crop sized
@@ -112,8 +118,16 @@ def _winner_by_colour(frame: np.ndarray) -> str | None:
     rather than guessing from a weak difference.
     """
     band = frame[_HEADER_BAND[0] : _HEADER_BAND[1]]
-    left = band[:, _HEADER_LEFT[0] : _HEADER_LEFT[1]].reshape(-1, 3).mean(axis=0)
-    right = band[:, _HEADER_RIGHT[0] : _HEADER_RIGHT[1]].reshape(-1, 3).mean(axis=0)
+    # MEDIAN, not mean. The "Victory" / "Defeat" watermark is a lighter shade painted over
+    # the sash, and it sits in the middle of each half - exactly where these probes are. A
+    # mean is dragged by those lighter pixels; the median ignores them because they are a
+    # minority of the window, and the sash itself is a solid fill.
+    left = np.median(
+        band[:, _PROBE_LEFT[0] : _PROBE_LEFT[1]].reshape(-1, 3), axis=0
+    )
+    right = np.median(
+        band[:, _PROBE_RIGHT[0] : _PROBE_RIGHT[1]].reshape(-1, 3), axis=0
+    )
     # index 2 is red, index 0 is blue in BGR. Positive means orange-tinted.
     left_orange = float(left[2] - left[0])
     right_orange = float(right[2] - right[0])

@@ -145,3 +145,57 @@ while on the WINNING side, and **Oipiq** carries Victory letters while on the LO
 
 So the winner is read from colour alone, which was correct on all five frames checked in both
 directions. A tie returns None rather than a guess.
+
+---
+
+## match-004
+
+![match-004](match-004.png)
+
+```
+id: 004
+screenshot: match-004.png
+mode: spectate
+date: 2026-07-26 23:40
+theme: Converging Paths
+winning_side: first three (top panel)
+winning_player: S | Aez
+winning_heroes: Phraesto, Lyca, Odie
+losing_player: Player
+losing_heroes: Eironn, Rhys, Perseus
+```
+
+| side | hero | sword | heart | shield |
+|---|---|---|---|---|
+| won | Phraesto | 1,156K | 988K | 10,791K |
+| won | Lyca | 3,408K | 0 | 1,929K |
+| won | Odie | 3,388K | 0 | 1,310K |
+| lost | Eironn | 2,500K | 0 | 6,282K |
+| lost | Rhys | 2,575K | 0 | 2,241K |
+| lost | Perseus | 425K | 1,603K | 6,437K |
+
+**Parse notes.** 6/6 at 0.884-0.913. Second independent case of the FIRST three winning, and
+the winner was read correctly from the roster panel tint. Verified against the screenshot by
+eye as well: Victory sits on the left and the top panel tab is orange.
+
+Player names read as `S | Aez` and `Player`, which look like genuine display names rather
+than OCR damage.
+
+## Winner detection - current state
+
+Three signals, tried in order:
+
+1. **Roster panel tint** - orange on a tab means that panel's trio won. Primary. Ignores left
+   and right entirely, which is all that matters here, and the tab is a solid fill with no
+   name, avatar or watermark near it.
+2. **Banner colour** - the winning half is orange. Probed in the top strip only, using the
+   median, to dodge avatars, the watermark and long player names.
+3. **OCR of Victory / Defeat** - last resort only. It returned the WRONG side on the first
+   left-win frame we captured, because those words are faint watermarks that OCR frequently
+   misses entirely.
+
+The panel labels themselves are never read. In spectate `Ally` means whichever side you bet
+on and flips between matches.
+
+Correct on all six frames with known winners: four right-wins and two left-wins, across both
+compete and spectate.

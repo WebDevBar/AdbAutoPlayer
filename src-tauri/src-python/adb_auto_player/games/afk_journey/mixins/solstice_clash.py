@@ -81,7 +81,10 @@ LONGPRESS_VERIFICATION = False
 # risk the Android gesture area - and NOT the top gap at y170, which does nothing at all.
 POPUP_DISMISS_AT = Point(540, 1700)
 # Wait before grabbing the draft frame so more pick slots have filled.
-TRAINING_LATE_DELAY = 8.0
+# Delay before grabbing the draft frame, so more pick slots have filled. Kept small: the
+# long-press confirmation it was feeding is shelved, so a late frame buys little today.
+# Raise it again if cross-screen training is turned back on.
+TRAINING_LATE_DELAY = 1.0
 # The prematch screen appears once the draft countdown expires. The draft ran ~25s
 # in the observed match, so this covers a full draft plus the transition.
 PREMATCH_WAIT_TIMEOUT = 90.0

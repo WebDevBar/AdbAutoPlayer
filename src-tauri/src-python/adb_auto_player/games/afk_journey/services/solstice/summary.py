@@ -7,6 +7,7 @@ pure, so it can be tested against saved frames with no device.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 
@@ -140,6 +141,11 @@ def _winner_by_panel_tint(frame: np.ndarray) -> str | None:
     )
     top_orange = float(top[2] - top[0])
     bottom_orange = float(bottom[2] - bottom[0])
+    # A frame smaller than the probe regions slices to empty, and np.median of an empty
+    # array is nan. Every comparison with nan is False, so without this guard the function
+    # would fall through and return a side for a frame it never actually looked at.
+    if math.isnan(top_orange) or math.isnan(bottom_orange):
+        return None
     if abs(top_orange - bottom_orange) < _WINNER_COLOUR_MIN_DELTA:
         return None
     # The top panel is the first three heroes, which the cell registry labels "blue".
@@ -170,6 +176,8 @@ def _winner_by_colour(frame: np.ndarray) -> str | None:
     # index 2 is red, index 0 is blue in BGR. Positive means orange-tinted.
     left_orange = float(left[2] - left[0])
     right_orange = float(right[2] - right[0])
+    if math.isnan(left_orange) or math.isnan(right_orange):
+        return None
     if abs(left_orange - right_orange) < _WINNER_COLOUR_MIN_DELTA:
         return None
     return "blue" if left_orange > right_orange else "red"

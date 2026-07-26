@@ -133,7 +133,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         screenshot = self.get_screenshot()
         y0, y1, x0, x1 = _THEME_NAME_REGION
         crop = screenshot[y0:y1, x0:x1]
-        text = RapidOCRBackend().extract_text(crop).strip()
+        text = self._ocr.extract_text(crop).strip()
         return text or None
 
     def _run_one_match(self) -> bool:
@@ -363,18 +363,24 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         point = Point((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2)
 
         for _ in range(LONGPRESS_ATTEMPTS):
-            self.hold(point, duration=LONGPRESS_SECONDS)
-            sleep(1.0)
-            frame = self.get_screenshot()
-            # The popup renders downward from blue cards and upward from red ones, so its
-            # position is not fixed - it is detected by CONTENT, not geometry.
-            blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
-            slug = resolve_hero_name([b.text for b in blocks], self._solstice_cfg)
-            # Dismiss on EVERY path, including failure. A popup left open covers the
-            # screen, so the next long-press and the navigation that follows would act on
-            # the wrong UI state - and that failure would look like a matching problem.
-            self.tap(Point(540, 1750))
-            sleep(0.5)
+            slug: str | None = None
+            try:
+                self.hold(point, duration=LONGPRESS_SECONDS)
+                sleep(1.0)
+                frame = self.get_screenshot()
+                # The popup renders downward from blue cards and upward from red ones, so
+                # its position is not fixed - it is detected by CONTENT, not geometry.
+                blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
+                slug = resolve_hero_name([b.text for b in blocks], self._solstice_cfg)
+            except Exception as exc:  # noqa: BLE001 - one unreadable card must not end the match
+                logging.warning(f"long-press confirm failed: {exc}")
+            finally:
+                # Dismiss on EVERY path, including failure - even if hold or
+                # get_screenshot raised above. A popup left open covers the screen, so
+                # the next long-press and the navigation that follows would act on the
+                # wrong UI state - and that failure would look like a matching problem.
+                self.tap(Point(540, 1750))
+                sleep(0.5)
             if slug is not None:
                 return slug
         return None

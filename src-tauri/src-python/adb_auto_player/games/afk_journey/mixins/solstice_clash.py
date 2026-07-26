@@ -222,6 +222,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         sleep(2)
 
         self._record_summary(draft_frame, prematch_frame, theme)
+        # Durably recorded. Anything that fails after this point is a navigation problem,
+        # not a lost match, and must not count against the failure budget.
+        self._match_recorded_this_cycle = True
 
         back = self.wait_for_template(template="event/solstice_clash/summary_back")
         self.tap(back)
@@ -245,24 +248,50 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         consecutive_failures = 0
         recorded = 0
         while consecutive_failures < max_restarts:
+            self._match_recorded_this_cycle = False
             if max_matches is not None and recorded >= max_matches:
                 logging.info(f"recorded {recorded} match(es), stopping as requested")
                 return
             try:
                 if self._run_one_match():
                     consecutive_failures = 0
-                    recorded += 1
+                    # Count only cycles that actually WROTE a match. A draw returns True
+                    # (the loop behaved correctly and must not be penalised) but records
+                    # nothing, so counting it would let max_matches be satisfied by a run
+                    # that collected no data.
+                    if self._match_recorded_this_cycle:
+                        recorded += 1
                     continue
                 consecutive_failures += 1
                 logging.warning(
                     f"no match recorded ({consecutive_failures}/{max_restarts})"
                 )
             except Exception as exc:  # noqa: BLE001 - one bad match must not end the run
+                # A match that was already RECORDED does not count as a failure, however
+                # the cycle ended. _run_one_match writes the match before navigating back,
+                # so an exception in that back-navigation used to burn a failure against a
+                # perfectly good match - three unlucky exits could end the night despite
+                # three matches collected.
+                if self._match_recorded_this_cycle:
+                    recorded += 1
+                    consecutive_failures = 0
+                    logging.warning(f"recorded, but the cycle ended badly: {exc}")
+                else:
+                    consecutive_failures += 1
+                    logging.warning(
+                        f"match failed ({consecutive_failures}/{max_restarts}): {exc}"
+                    )
+
+            # Recovery runs INSIDE protection. It is invoked in the state most likely to
+            # make it raise, and an unguarded failure here would end the run on the first
+            # bad cycle instead of the third.
+            try:
+                self.navigate_to_world()
+            except Exception as exc:  # noqa: BLE001
                 consecutive_failures += 1
                 logging.warning(
-                    f"match failed ({consecutive_failures}/{max_restarts}): {exc}"
+                    f"recovery failed ({consecutive_failures}/{max_restarts}): {exc}"
                 )
-            self.navigate_to_world()
 
         raise GameTimeoutError(
             f"stopping: {max_restarts} consecutive cycles recorded no match"

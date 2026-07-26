@@ -140,6 +140,15 @@ def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
     if winner is not None:
         return winner
 
+    # Letter matching on the watermark was evaluated and REJECTED. "Victory" and "Defeat"
+    # share only e and t, so partial text should disambiguate them - but across four
+    # frames OCR never recovered "Victory" at all, only "feat"/"Defea". The one readable
+    # word is also the one a player name can imitate: names sit in the same band, a long
+    # one bleeds inward, and real examples cut both ways - "Tamau" contains a Defeat
+    # letter while sitting on the winning side, and "Oipiq" contains Victory letters
+    # while sitting on the losing side. It would add failure modes without adding
+    # reliability, so the OCR fallback below looks for whole words only.
+
     blocks = ocr.detect_text_blocks(frame[0:_WINNER_BAND_Y1, :], ConfidenceValue(0.4))
     for block in blocks:
         text = block.text.lower()

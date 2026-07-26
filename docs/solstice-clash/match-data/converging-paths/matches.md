@@ -105,3 +105,43 @@ winning, so a wrong implementation passed them.
 Fixed by reading the winner from which header half is tinted orange (the winning half) and
 keeping OCR only as a fallback. Verified on all four frames with independently known
 winners, two right-wins and one left-win: 4/4 correct, no side favoured.
+
+---
+
+## match-003
+
+![match-003](match-003.png)
+
+```
+id: 003
+screenshot: match-003.png
+mode: spectate
+date: 2026-07-26 23:10
+theme: Converging Paths
+winning_side: right
+winning_player: Tamau
+winning_heroes: Eironn, Baelran, Ludovic
+losing_player: Oipiq
+losing_heroes: Hugin, Galahad, Nazrik
+```
+
+| side | hero | sword | heart | shield |
+|---|---|---|---|---|
+| won | Eironn | 1,745K | 0 | 5,591K |
+| won | Baelran | 2,735K | 1,771K | 3,333K |
+| won | Ludovic | 783K | 7,221K | 0 |
+| lost | Hugin | 65,774 | 0 | 2,562K |
+| lost | Galahad | 2,119K | 0 | 2,509K |
+| lost | Nazrik | 508K | 0 | 3,480K |
+
+**Parse notes.** 6/6 at 0.802-0.910, winner and both player names correct.
+
+This frame settled the letter-matching question. The idea was sound - "Victory" and "Defeat"
+share only e and t, so partial text should disambiguate - but across four frames OCR never
+recovered "Victory" at all, only "feat" and "Defea". Worse, the one word that does read is
+the one a player name can imitate: names sit in the same band, a long name bleeds inward past
+any inner-band crop, and real examples cut both ways. Here **Tamau** carries a Defeat letter
+while on the WINNING side, and **Oipiq** carries Victory letters while on the LOSING side.
+
+So the winner is read from colour alone, which was correct on all five frames checked in both
+directions. A tie returns None rather than a guess.

@@ -69,3 +69,18 @@ def read_frame():
 @pytest.fixture(scope="session")
 def slot_of():
     return _slot_of
+
+
+@pytest.fixture(scope="session")
+def cfg(db_path):
+    from adb_auto_player.games.afk_journey.services.solstice.config import SolsticeConfig
+
+    return SolsticeConfig.load(db_path)
+
+
+@pytest.fixture(scope="session")
+def ocr_backend():
+    """RapidOCR loads ONNX models on first use, so build it once per session."""
+    from adb_auto_player.ocr import RapidOCRBackend
+
+    return RapidOCRBackend()

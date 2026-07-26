@@ -66,6 +66,10 @@ _THEME_NAME_REGION = (1195, 1280, 10, 540)  # y0, y1, x0, x1
 # cost is asymmetric, so bias long rather than tuning for the minimum that worked once.
 LONGPRESS_SECONDS = 3.0
 LONGPRESS_ATTEMPTS = 3
+# Master switch for long-press OCR confirmation. OFF: the popup proved unreliable on
+# device and each attempt costs a full-frame OCR. Turn back on once popup opening is
+# solved; everything downstream already handles its absence.
+LONGPRESS_VERIFICATION = False
 # Empty middle of the details overlay. Verified on device: tapping here closes an open
 # hero popup and returns the screen to its exact prior state (delta 0.07).
 #
@@ -334,7 +338,19 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
         slots: list[HeroSlot] = []
         for hero in read.heroes:
-            confirmed = self._confirm_by_longpress(hero)
+            # SHELVED. Long-press OCR is left in place but switched off: on device the
+            # popup did not open reliably enough, and each attempt costs a full-frame OCR,
+            # so a single match could take minutes and still come back unconfirmed.
+            # Identification therefore rests on image matching alone for now, which scored
+            # 0.81-0.95 across 54 heroes in nine captured matches.
+            #
+            # The consequence is recorded honestly rather than hidden: identified_by is
+            # "image" for every hero, confirmed_sides stays empty, and because transform
+            # learning is gated on longpress_ocr confirmation it simply never fires. No
+            # unconfirmed data can be promoted to ground truth by accident.
+            confirmed = (
+                self._confirm_by_longpress(hero) if LONGPRESS_VERIFICATION else None
+            )
             slots.append(
                 HeroSlot(
                     side=hero.side,

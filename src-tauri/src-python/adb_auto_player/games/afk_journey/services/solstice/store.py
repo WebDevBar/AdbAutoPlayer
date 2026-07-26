@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -54,6 +55,13 @@ class HeroSlot:
     runner_up_score: float | None = None
     crop_path: str | None = None
     frame_path: str | None = None
+    # From the post-match summary. Named for the column ICONS (sword/heart/shield), not
+    # for a guess at their meaning - the shield column's semantics are unconfirmed.
+    stat_sword: int | None = None
+    stat_heart: int | None = None
+    stat_shield: int | None = None
+    power: int | None = None        # long-press popup only
+    identified_by: str | None = None  # 'image' | 'longpress_ocr'
 
 
 @dataclass(frozen=True)
@@ -81,9 +89,30 @@ class OddsSample:
     spectators: int | None = None
 
 
+@dataclass(frozen=True)
+class AuditRow:
+    """One identification, recorded whether or not the two channels agreed.
+
+    Agreements are recorded too. Logging only misfires yields a numerator with no
+    denominator: three errors means nothing without knowing if it was three in fifty or
+    three in five thousand.
+    """
+
+    screen_slug: str
+    side: str
+    slot: int
+    image_slug: str | None
+    image_art_ref: str | None
+    image_score: float
+    image_margin: float
+    ocr_slug: str | None
+    frame_path: str | None
+    match_id: int | None = None
+
+
 # Valid values. The schema documents these in comments only, so the store enforces them:
 # without this a Phase 2 caller could persist source='comptee' or side='blu' silently.
-_SOURCES = frozenset({"compete", "spectate"})
+_SOURCES = frozenset({"compete", "spectate", "spectate_summary"})
 _SIDES = frozenset({"blue", "red"})
 _HERO_STATUSES = frozenset({"identified", "unknown"})
 _POOL_STATUSES = frozenset({"identified", "unknown", "banned"})
@@ -108,6 +137,11 @@ class MatchStore:
         "runner_up_score",
         "crop_path",
         "frame_path",
+        "stat_sword",
+        "stat_heart",
+        "stat_shield",
+        "power",
+        "identified_by",
     )
     _POOL_COLS = (
         "slot",
@@ -306,3 +340,100 @@ class MatchStore:
                 (match_id,),
             ).fetchall()
         return [OddsSample(*r) for r in rows]
+
+    def _screen_id(self, con: sqlite3.Connection, slug: str) -> int:
+        row = con.execute("SELECT id FROM screen WHERE slug=?", (slug,)).fetchone()
+        if row is None:
+            raise ValueError(f"unknown screen slug: {slug!r}")
+        return int(row[0])
+
+    def record_audit(self, row: AuditRow) -> int:
+        """Persist one identification comparison and return its id."""
+        self._check(row.side in _SIDES, f"invalid side: {row.side!r}")
+        # agreed is DERIVED, never taken from the caller: the schema CHECK requires it to
+        # be consistent with the slugs, and computing it here keeps that impossible to
+        # get wrong at a call site.
+        agreed = int(
+            row.image_slug is not None
+            and row.ocr_slug is not None
+            and row.image_slug == row.ocr_slug
+        )
+        with self._connect() as con:
+            cur = con.execute(
+                "INSERT INTO identification_audit"
+                "(match_id,screen_id,side,slot,image_slug,image_art_ref,image_score,"
+                " image_margin,ocr_slug,agreed,frame_path,created_at)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    row.match_id, self._screen_id(con, row.screen_slug), row.side,
+                    row.slot, row.image_slug, row.image_art_ref, row.image_score,
+                    row.image_margin, row.ocr_slug, agreed, row.frame_path,
+                    datetime.now(UTC).isoformat(timespec="seconds"),
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
+    def learn_transform(
+        self,
+        audit_id: int,
+        screen_slug: str,
+        hero_slug: str,
+        art_ref: str,
+        scale: float,
+        score: float,
+        margin: float,
+        crop: tuple[int, int, int] | None = None,
+    ) -> None:
+        """Store tuned parameters, upserting on (screen, hero, art).
+
+        The database triggers reject unconfirmed evidence; this raises ValueError rather
+        than sqlite3.IntegrityError so callers get one exception type to handle.
+        """
+        half_w, top, bottom = crop if crop is not None else (None, None, None)
+        try:
+            with self._connect() as con:
+                con.execute(
+                    "INSERT INTO hero_screen_transform"
+                    "(screen_id,hero_slug,art_ref,scale,crop_half_w,crop_top,"
+                    " crop_bottom,score,margin,confirmed_by,audit_id,verified_at)"
+                    " VALUES(?,?,?,?,?,?,?,?,?,'longpress_ocr',?,?)"
+                    " ON CONFLICT(screen_id,hero_slug,art_ref) DO UPDATE SET"
+                    "  scale=excluded.scale, crop_half_w=excluded.crop_half_w,"
+                    "  crop_top=excluded.crop_top, crop_bottom=excluded.crop_bottom,"
+                    "  score=excluded.score, margin=excluded.margin,"
+                    "  audit_id=excluded.audit_id, verified_at=excluded.verified_at",
+                    (
+                        self._screen_id(con, screen_slug), hero_slug, art_ref, scale,
+                        half_w, top, bottom, score, margin, audit_id,
+                        datetime.now(UTC).isoformat(timespec="seconds"),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(
+                f"refusing to learn a transform for {hero_slug!r} on {screen_slug!r}: "
+                f"audit {audit_id} does not confirm it ({exc})"
+            ) from exc
+
+    def transform_for(self, screen_slug: str, hero_slug: str) -> dict | None:
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT t.scale,t.crop_half_w,t.crop_top,t.crop_bottom,t.score,t.margin"
+                " FROM hero_screen_transform t JOIN screen s ON s.id=t.screen_id"
+                " WHERE s.slug=? AND t.hero_slug=? ORDER BY t.margin DESC LIMIT 1",
+                (screen_slug, hero_slug),
+            ).fetchone()
+        if row is None:
+            return None
+        keys = ("scale", "crop_half_w", "crop_top", "crop_bottom", "score", "margin")
+        return dict(zip(keys, row, strict=True))
+
+    def audit_agreement_rate(self, screen_slug: str) -> tuple[int, int]:
+        """(agreed, total) for one screen - the false-positive rate's two halves."""
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT COALESCE(SUM(a.agreed),0), COUNT(*)"
+                " FROM identification_audit a JOIN screen s ON s.id=a.screen_id"
+                " WHERE s.slug=?",
+                (screen_slug,),
+            ).fetchone()
+        return int(row[0]), int(row[1])

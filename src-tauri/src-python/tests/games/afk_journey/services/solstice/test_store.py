@@ -282,3 +282,91 @@ def test_pool_is_complete_detects_a_partial_pool(tmp_db):
         mid, [PoolSlot(i, "sonja", "x", "identified") for i in range(5, 21)]
     )
     assert store.pool_is_complete(mid) is True
+
+
+def test_hero_stats_round_trip(tmp_db):
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        HeroSlot, MatchRecord, MatchStore,
+    )
+    store = MatchStore(tmp_db)
+    match_id = store.record_match(
+        MatchRecord(source="spectate_summary", captured_at="2026-07-26")
+    )
+    store.record_heroes(match_id, [
+        HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+                 status="identified", score=0.87, margin=0.36,
+                 stat_sword=699_000, stat_heart=0, stat_shield=2_924_000,
+                 power=490_000, identified_by="longpress_ocr"),
+    ])
+    got = store.heroes_for(match_id)[0]
+    assert got.stat_sword == 699_000
+    assert got.stat_shield == 2_924_000
+    assert got.identified_by == "longpress_ocr"
+
+
+def test_record_audit_computes_agreement(tmp_db):
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        AuditRow, MatchStore,
+    )
+    store = MatchStore(tmp_db)
+    same = store.record_audit(AuditRow(
+        screen_slug="solstice_summary", side="blue", slot=1,
+        image_slug="atalanta", image_art_ref="Atalanta",
+        image_score=0.87, image_margin=0.36, ocr_slug="atalanta", frame_path=None,
+    ))
+    differ = store.record_audit(AuditRow(
+        screen_slug="solstice_summary", side="red", slot=1,
+        image_slug="igor", image_art_ref="Igor",
+        image_score=0.72, image_margin=0.11, ocr_slug="thoran", frame_path="/x.png",
+    ))
+    assert same != differ
+    agreed, total = store.audit_agreement_rate("solstice_summary")
+    assert (agreed, total) == (1, 2)
+
+
+def test_learn_transform_requires_agreement(tmp_db):
+    """A disagreeing audit row must not be usable as confirmation."""
+    import pytest
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        AuditRow, MatchStore,
+    )
+    store = MatchStore(tmp_db)
+    bad = store.record_audit(AuditRow(
+        screen_slug="solstice_summary", side="blue", slot=1,
+        image_slug="igor", image_art_ref="Igor",
+        image_score=0.72, image_margin=0.11, ocr_slug="thoran", frame_path=None,
+    ))
+    with pytest.raises(ValueError):
+        store.learn_transform(bad, "solstice_summary", "igor", "Igor", 0.55, 0.72, 0.11)
+
+
+def test_learn_transform_roundtrip_and_retune(tmp_db):
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        AuditRow, MatchStore,
+    )
+    store = MatchStore(tmp_db)
+    good = store.record_audit(AuditRow(
+        screen_slug="solstice_summary", side="blue", slot=1,
+        image_slug="atalanta", image_art_ref="Atalanta",
+        image_score=0.87, image_margin=0.36, ocr_slug="atalanta", frame_path=None,
+    ))
+    store.learn_transform(good, "solstice_summary", "atalanta", "Atalanta",
+                          0.55, 0.87, 0.36, crop=(22, 18, 26))
+    got = store.transform_for("solstice_summary", "atalanta")
+    assert got["scale"] == 0.55 and got["crop_half_w"] == 22
+
+    store.learn_transform(good, "solstice_summary", "atalanta", "Atalanta",
+                          0.58, 0.89, 0.40, crop=(24, 16, 28))
+    got = store.transform_for("solstice_summary", "atalanta")
+    assert got["scale"] == 0.58 and got["margin"] == 0.40
+
+
+def test_unknown_source_is_rejected(tmp_db):
+    import pytest
+    from adb_auto_player.games.afk_journey.services.solstice.store import (
+        MatchRecord, MatchStore,
+    )
+    store = MatchStore(tmp_db)
+    store.record_match(MatchRecord(source="spectate_summary", captured_at="2026-07-26"))
+    with pytest.raises(ValueError):
+        store.record_match(MatchRecord(source="history", captured_at="2026-07-26"))

@@ -739,14 +739,14 @@ databases that predate a column; `schema.sql` carries the same columns in the `C
 fresh databases. Both places must be updated or Phase 2 will fail with `no such column` on
 the existing v2 database.
 
-New columns, to be added in **both** `schema.sql` and `ADD_COLUMNS`:
+**`match` needs no new columns.** It already carries `theme`, `balance_epoch`,
+`blue_player` / `blue_rating` / `blue_rank`, `red_player` / `red_rating` / `red_rank`,
+`outcome` and `outcome_source` (`schema.sql:145-160`), and `MatchRecord` already exposes all
+of them (`store.py:21-35`). Phase 2 populates fields that exist rather than adding any.
+
+Only `match_hero` gains columns, in **both** `schema.sql` and `ADD_COLUMNS`:
 
 ```python
-("match",      "theme",         "TEXT"),
-("match",      "blue_player",   "TEXT"),
-("match",      "red_player",    "TEXT"),
-("match",      "blue_rank",     "INTEGER"),
-("match",      "red_rank",      "INTEGER"),
 ("match_hero", "stat_sword",    "INTEGER"),
 ("match_hero", "stat_heart",    "INTEGER"),
 ("match_hero", "stat_shield",   "INTEGER"),
@@ -754,8 +754,12 @@ New columns, to be added in **both** `schema.sql` and `ADD_COLUMNS`:
 ("match_hero", "identified_by", "TEXT"),
 ```
 
-Player identity is recorded because player skill is a real confound - without it, a strong
-player's hero picks look like strong heroes. `identified_by` is `image` or `longpress_ocr`.
+`identified_by` is `image` or `longpress_ocr`. Player identity is recorded because player
+skill is a real confound - without it, a strong player's hero picks look like strong heroes.
+
+Redundant `ADD_COLUMNS` entries are harmless (`migrate.py:76` skips columns that already
+exist), but listing columns that already exist would mislead the next reader into thinking
+they were added here.
 
 Note that `ADD_COLUMNS` entries must be additive and nullable: SQLite cannot add a
 `NOT NULL` column without a default to a populated table, and existing v2 rows have no

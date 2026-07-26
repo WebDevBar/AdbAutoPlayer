@@ -239,3 +239,177 @@ the top panel and the left side - and the left side LOST while its tab was blue.
 
 Running tally across all frames with known winners: 7 frames, 4 right-wins and 2 left-wins
 plus this one, across compete and spectate, all read correctly.
+
+---
+
+## match-007
+
+![match-007](match-007.png)
+
+```
+id: 007
+screenshot: match-007.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: GAME
+winning_heroes: Kordan, Berial, Alsa
+losing_player: Pharagh
+losing_heroes: Thador, Igor, Viperian
+```
+
+---
+
+## match-008
+
+![match-008](match-008.png)
+
+```
+id: 008
+screenshot: match-008.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: GAME
+winning_heroes: Kafra, Florabelle, Hugin
+losing_player: None
+losing_heroes: Natsu, Nazrik, Gerda
+```
+
+---
+
+## match-009
+
+![match-009](match-009.png)
+
+```
+id: 009
+screenshot: match-009.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: GAME
+winning_heroes: Kafra, Alsa, Galahad
+losing_player: NalC
+losing_heroes: Lily May, Hugin, Parisa
+```
+
+---
+
+## match-010
+
+![match-010](match-010.png)
+
+```
+id: 010
+screenshot: match-010.png
+mode: spectate
+theme: Converging Paths
+winning_side: right
+winning_player: TeTed
+winning_heroes: Temesia, Pang, Parisa
+losing_player: GAME
+losing_heroes: Cassadee, Cecia, Kordan
+```
+
+---
+
+## match-011
+
+![match-011](match-011.png)
+
+```
+id: 011
+screenshot: match-011.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: GAME
+winning_heroes: Hodgkin, Silvina, Florabelle
+losing_player: VampWolf
+losing_heroes: Evie, Carolina, Zandrok
+```
+
+---
+
+## match-012
+
+![match-012](match-012.png)
+
+```
+id: 012
+screenshot: match-012.png
+mode: spectate
+theme: Converging Paths
+winning_side: right
+winning_player: None
+winning_heroes: Dunlingr, Harak, Evie
+losing_player: GAME
+losing_heroes: Phraesto, Florabelle, Pippa
+```
+
+---
+
+## match-013
+
+![match-013](match-013.png)
+
+```
+id: 013
+screenshot: match-013.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: GAME
+winning_heroes: Lenya, Parisa, Callan
+losing_player: Baboonlol
+losing_heroes: Rowan, Thoran, Vala
+```
+
+---
+
+## match-014
+
+![match-014](match-014.png)
+
+```
+id: 014
+screenshot: match-014.png
+mode: spectate
+theme: Converging Paths
+winning_side: left
+winning_player: Aussie
+winning_heroes: Sonja, Dionel, Cassadee
+losing_player: GameRetro
+losing_heroes: Kafra, Kordan, Solise
+```
+
+---
+
+## match-015
+
+![match-015](match-015.png)
+
+```
+id: 015
+screenshot: match-015.png
+mode: spectate
+theme: Converging Paths
+winning_side: right
+winning_player: Astrophel
+winning_heroes: Perseus, Lyca, Nerion
+losing_player: GAME
+losing_heroes: Cecia, Lorsan, Silvina
+```
+
+---
+
+## Batch note (007-015)
+
+Nine matches captured while iterating on the mode. All 54 heroes identified by image match
+at 0.81-0.95, none below the accept rule.
+
+`winning_player` / `losing_player` read as `GAME` wherever the account badge overlaps the
+name - that is the left slot when GameRetro is playing. It reads correctly when the same
+account sits on the right (match-014: `Aussie` vs `GameRetro`). Names are not used for
+anything load-bearing yet, so this is recorded rather than corrected.

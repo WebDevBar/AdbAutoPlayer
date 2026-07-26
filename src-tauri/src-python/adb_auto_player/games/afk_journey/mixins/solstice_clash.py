@@ -7,14 +7,34 @@ prematch screens for Modes B and C.
 
 import logging
 from abc import ABC
+from datetime import UTC, datetime
+from pathlib import Path
 from time import sleep
 
+import cv2
+import numpy as np
+
 from adb_auto_player.decorators import register_command
+from adb_auto_player.exceptions import GameTimeoutError
 from adb_auto_player.games.afk_journey.base import AFKJourneyBase
 from adb_auto_player.games.afk_journey.gui_category import AFKJCategory
+from adb_auto_player.models import ConfidenceValue
 from adb_auto_player.models.decorators import GUIMetadata
 from adb_auto_player.models.geometry import Point
 from adb_auto_player.ocr import RapidOCRBackend
+
+from ..services.solstice.config import SolsticeConfig
+from ..services.solstice.icons import IconLibrary
+from ..services.solstice.naming import resolve_hero_name
+from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
+from ..services.solstice.summary import SummaryHero, read_summary
+# NOTE: tuning imports (learn_if_improved, train_from_frame) are added in TASK 9, which
+# is where those functions are defined. Importing them here would leave this module
+# unimportable at the end of Task 8 and fail its green-suite gate.
+
+SOLSTICE_DB = Path("/mnt/docs/adbautoplayer/data/solstice_clash/heroes.sqlite")
+SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
+TRAINING_ROOT = Path("/mnt/vault/solstice/training")
 
 # Measured on device 2026-07-26. The far branch (teleport plus auto-path) took ~12s, so
 # 30s gives roughly 2.5x headroom on the only far position we have sampled.
@@ -31,6 +51,16 @@ RESULT_POLL_DELAY = 2.0
 # from this exact region; Tesseract on the same crop garbled it ("Converoino Pathe"),
 # so RapidOCR is used here rather than the TesseractBackend default seen elsewhere.
 _THEME_NAME_REGION = (1195, 1280, 10, 540)  # y0, y1, x0, x1
+
+# User-tested: short presses can fail to open the popup, over-long ones do no harm. The
+# cost is asymmetric, so bias long rather than tuning for the minimum that worked once.
+LONGPRESS_SECONDS = 3.0
+LONGPRESS_ATTEMPTS = 3
+# Wait before grabbing the draft frame so more pick slots have filled.
+TRAINING_LATE_DELAY = 8.0
+# The prematch screen appears once the draft countdown expires. The draft ran ~25s
+# in the observed match, so this covers a full draft plus the transition.
+PREMATCH_WAIT_TIMEOUT = 90.0
 
 
 class SolsticeClashMixin(AFKJourneyBase, ABC):
@@ -51,6 +81,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self.start_up(device_streaming=False)
         self.navigate_to_world()
         logging.info("Solstice Clash collection starting")
+        self._collect_forever()
 
     def _open_spectate(self) -> tuple[bool, str | None]:
         """Navigate from the overworld to a live spectated match.
@@ -104,3 +135,246 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         crop = screenshot[y0:y1, x0:x1]
         text = RapidOCRBackend().extract_text(crop).strip()
         return text or None
+
+    def _run_one_match(self) -> bool:
+        """Spectate one match and record it. Returns True if a match was recorded."""
+        # _open_spectate reads the theme while it is ON the event screen and returns it.
+        # The theme cannot be read before that call (we are on the overworld) and cannot
+        # be read after it (the summary screen does not show it).
+        opened, theme = self._open_spectate()
+        if not opened:
+            return False
+
+        # Optional training material. If we entered mid-match there is no draft left to
+        # capture - that is normal, not an error, and must never block recording.
+        # The draft screen is up NOW (or we entered mid-match and it is not).
+        draft_frame = self._capture_training_frame(
+            "event/solstice_clash/draft_anchor", late=True, wait_timeout=0.0
+        )
+        # The prematch screen only appears AFTER the draft ends, so it must be WAITED
+        # for, not probed. Probing immediately after the draft capture would return None
+        # on exactly the matches where training data is available.
+        prematch_frame = self._capture_training_frame(
+            "event/solstice_clash/prematch_anchor",
+            late=False,
+            wait_timeout=PREMATCH_WAIT_TIMEOUT if draft_frame is not None else 0.0,
+        )
+
+        self.wait_for_template(
+            template="event/solstice_clash/result_back",
+            delay=RESULT_POLL_DELAY,
+            timeout=MATCH_TIMEOUT,
+            timeout_message="no result screen - abandoning this match",
+        )
+        chart = self.wait_for_template(template="event/solstice_clash/result_chart")
+        self.tap(chart)
+        sleep(2)
+
+        self._record_summary(draft_frame, prematch_frame, theme)
+
+        back = self.wait_for_template(template="event/solstice_clash/summary_back")
+        self.tap(back)
+        sleep(1)
+        green_back = self.wait_for_template(template="event/solstice_clash/result_back")
+        self.tap(green_back)
+        sleep(3)
+        return True
+
+    def _collect_forever(
+        self, max_restarts: int = 3, max_matches: int | None = None
+    ) -> None:
+        """Loop until the restart budget is exhausted.
+
+        Recovery has to be bounded or an unattended run spends the night retrying. The
+        counter resets on every recorded match, so one bad match cannot accumulate toward
+        the limit across an otherwise healthy night. Three CONSECUTIVE failures means
+        something structural changed - a moved button, the event ending, a wedged device -
+        and continuing would produce only noise.
+        """
+        consecutive_failures = 0
+        recorded = 0
+        while consecutive_failures < max_restarts:
+            if max_matches is not None and recorded >= max_matches:
+                logging.info(f"recorded {recorded} match(es), stopping as requested")
+                return
+            try:
+                if self._run_one_match():
+                    consecutive_failures = 0
+                    recorded += 1
+                    continue
+                consecutive_failures += 1
+                logging.warning(
+                    f"no match recorded ({consecutive_failures}/{max_restarts})"
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad match must not end the run
+                consecutive_failures += 1
+                logging.warning(
+                    f"match failed ({consecutive_failures}/{max_restarts}): {exc}"
+                )
+            self.navigate_to_world()
+
+        raise GameTimeoutError(
+            f"stopping: {max_restarts} consecutive cycles recorded no match"
+        )
+
+    def _record_summary(self, draft_frame, prematch_frame, theme: str | None) -> None:
+        """Read the summary, record the match, and audit every identification.
+
+        `theme` is read during navigation (the summary screen does NOT show it) and
+        passed in, so a match cannot be recorded against the wrong balance epoch.
+        """
+        frame = self.get_screenshot()
+        read = read_summary(frame, self._solstice_cfg, self._solstice_library, self._ocr)
+
+        match_id = self._store.record_match(
+            MatchRecord(
+                source="spectate_summary",
+                captured_at=datetime.now(UTC).isoformat(timespec="seconds"),
+                theme=theme,
+                outcome=read.winner,
+                outcome_source="observed",
+                blue_player=read.blue_player,
+                red_player=read.red_player,
+            )
+        )
+
+        slots: list[HeroSlot] = []
+        for hero in read.heroes:
+            confirmed = self._confirm_by_longpress(hero)
+            slots.append(
+                HeroSlot(
+                    side=hero.side,
+                    slot=hero.slot,
+                    hero_slug=confirmed or hero.slug,
+                    art_ref=hero.art_ref,
+                    status="identified" if (confirmed or hero.slug) else "unknown",
+                    score=hero.score,
+                    margin=hero.margin,
+                    cell_type="summary_hero",
+                    stat_sword=hero.stats.sword,
+                    stat_heart=hero.stats.heart,
+                    stat_shield=hero.stats.shield,
+                    identified_by="longpress_ocr" if confirmed else "image",
+                )
+            )
+            self._store.record_audit(
+                AuditRow(
+                    screen_slug="solstice_summary",
+                    side=hero.side,
+                    slot=hero.slot,
+                    image_slug=hero.slug,
+                    image_art_ref=hero.art_ref,
+                    image_score=hero.score,
+                    image_margin=hero.margin,
+                    ocr_slug=confirmed,
+                    frame_path=None if confirmed == hero.slug else self._archive(frame),
+                    match_id=match_id,
+                )
+            )
+        self._store.record_heroes(match_id, slots)
+
+    # --- lazily built, because IconLibrary decoding takes seconds and the GUI imports
+    # --- this module at startup.
+    @property
+    def _solstice_cfg(self) -> SolsticeConfig:
+        if getattr(self, "_cfg_cache", None) is None:
+            self._cfg_cache = SolsticeConfig.load(SOLSTICE_DB)
+        return self._cfg_cache
+
+    @property
+    def _solstice_library(self) -> IconLibrary:
+        if getattr(self, "_lib_cache", None) is None:
+            self._lib_cache = IconLibrary.build(self._solstice_cfg, SOLSTICE_ICON_DIR)
+        return self._lib_cache
+
+    @property
+    def _ocr(self) -> RapidOCRBackend:
+        if getattr(self, "_ocr_cache", None) is None:
+            self._ocr_cache = RapidOCRBackend()
+        return self._ocr_cache
+
+    @property
+    def _store(self) -> MatchStore:
+        if getattr(self, "_store_cache", None) is None:
+            self._store_cache = MatchStore(SOLSTICE_DB)
+        return self._store_cache
+
+    def _archive(self, frame: np.ndarray, kind: str = "frame") -> str:
+        """Save a frame to the vault and return its path.
+
+        Never /tmp - that is a 16GB tmpfs this project has already filled once. Never
+        rmtree the directory either: training frames accumulate across runs by design.
+        """
+        day = datetime.now(UTC).strftime("%Y-%m-%d")
+        directory = TRAINING_ROOT / day
+        directory.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%H%M%S_%f")
+        path = directory / f"{kind}_{stamp}.png"
+        cv2.imwrite(str(path), frame)
+        return str(path)
+
+    def _capture_training_frame(
+        self, anchor: str, late: bool, wait_timeout: float = 0.0
+    ) -> np.ndarray | None:
+        """Grab one draft or prematch frame.
+
+        Returns None when the screen never appears, which is NORMAL - we may have entered
+        mid-match. This is optional training material and must never prevent the outcome
+        from being recorded.
+
+        `wait_timeout=0` probes for a screen that should be up right now. A positive value
+        WAITS for one that has not happened yet, which is the prematch case: it only
+        exists after the draft ends.
+
+        `late=True` delays before capturing so more pick slots have filled - the training
+        targets are the pick slots, so an early frame with an empty strip is worthless.
+        """
+        if wait_timeout <= 0:
+            if self.game_find_template_match(template=anchor) is None:
+                return None
+        else:
+            try:
+                self.wait_for_template(
+                    template=anchor,
+                    delay=1.0,
+                    timeout=wait_timeout,
+                    timeout_message=f"{anchor} never appeared - skipping training capture",
+                )
+            except GameTimeoutError:
+                # Not an error: the match may have been entered late, or the transition
+                # may have been missed. Recording the outcome does not depend on this.
+                return None
+
+        if late:
+            sleep(TRAINING_LATE_DELAY)
+        frame = self.get_screenshot()
+        return frame
+
+    def _confirm_by_longpress(self, hero: SummaryHero) -> str | None:
+        """Long-press a summary card and OCR the hero name from the popup.
+
+        Returns the confirmed slug, or None if no popup could be read.
+        """
+        cell = next(
+            c
+            for c in self._solstice_cfg.cells("summary_hero")
+            if c.side == hero.side and c.slot == hero.slot
+        )
+        point = Point((cell.x0 + cell.x1) // 2, (cell.y0 + cell.y1) // 2)
+
+        for _ in range(LONGPRESS_ATTEMPTS):
+            self.hold(point, duration=LONGPRESS_SECONDS)
+            sleep(1.0)
+            frame = self.get_screenshot()
+            # The popup renders downward from blue cards and upward from red ones, so its
+            # position is not fixed - it is detected by CONTENT, not geometry.
+            blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
+            slug = resolve_hero_name([b.text for b in blocks], self._solstice_cfg)
+            # Dismiss on EVERY path, including failure. A popup left open covers the
+            # screen, so the next long-press and the navigation that follows would act on
+            # the wrong UI state - and that failure would look like a matching problem.
+            self.tap(Point(540, 1750))
+            sleep(0.5)
+            if slug is not None:
+                return slug
+        return None

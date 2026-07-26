@@ -50,10 +50,11 @@ NPC_DIALOG_TIMEOUT = 30.0
 # countdown plus the fight. A match runs about a minute at 2x speed and ults stretch it,
 # so 4 minutes is a comfortable ceiling without being the 10 minutes we started with.
 MATCH_TIMEOUT = 240.0
-# Poll every 20 seconds for either the result screen or the overworld. Both WAIT for
-# input once reached, so nothing is missed by checking less often - and at 2 seconds this
-# was taking about 90 screenshots per match for no benefit.
-RESULT_POLL_DELAY = 10.0
+# Poll every 5 seconds for either the result screen or the overworld. Both WAIT for input
+# once reached, so the only cost of a longer interval is idle time on a screen that is
+# already finished - measured at up to a full interval. 5s keeps that barely visible while
+# still being about 48 checks per match rather than the 90 the original 2s interval used.
+RESULT_POLL_DELAY = 5.0
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
 # native capture). Cropped tight to the theme name line only - "Current Theme" (the

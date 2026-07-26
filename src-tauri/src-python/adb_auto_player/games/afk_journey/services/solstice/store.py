@@ -81,6 +81,16 @@ class OddsSample:
     spectators: int | None = None
 
 
+# Valid values. The schema documents these in comments only, so the store enforces them:
+# without this a Phase 2 caller could persist source='comptee' or side='blu' silently.
+_SOURCES = frozenset({"compete", "spectate"})
+_SIDES = frozenset({"blue", "red"})
+_HERO_STATUSES = frozenset({"identified", "unknown"})
+_POOL_STATUSES = frozenset({"identified", "unknown", "banned"})
+_OUTCOMES = frozenset({"blue", "red", "draw"})
+POOL_SIZE = 20  # the draft grid is always 5x4
+
+
 class MatchStore:
     _HERO_COLS = (
         "side",
@@ -138,6 +148,11 @@ class MatchStore:
         con.execute("PRAGMA foreign_keys = ON")
         return con
 
+    @staticmethod
+    def _check(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError(message)
+
     def record_match(self, rec: MatchRecord) -> int:
         """Insert, or return the existing id if this natural_key was already seen.
 
@@ -145,6 +160,11 @@ class MatchStore:
         match on consecutive polls. An unkeyed observation always inserts, because
         mid-draft there is nothing stable to dedupe on yet.
         """
+        self._check(rec.source in _SOURCES, f"invalid source: {rec.source!r}")
+        self._check(
+            rec.outcome is None or rec.outcome in _OUTCOMES,
+            f"invalid outcome: {rec.outcome!r}",
+        )
         cols = ",".join(self._MATCH_COLS)
         placeholders = ",".join("?" * len(self._MATCH_COLS))
         with self._connect() as con:
@@ -182,6 +202,16 @@ class MatchStore:
             )
 
     def record_heroes(self, match_id: int, slots: list[HeroSlot]) -> None:
+        for slot in slots:
+            self._check(slot.side in _SIDES, f"invalid side: {slot.side!r}")
+            self._check(
+                slot.status in _HERO_STATUSES, f"invalid status: {slot.status!r}"
+            )
+            self._check(
+                (slot.hero_slug is None) == (slot.status == "unknown"),
+                f"slot {slot.side}{slot.slot}: status {slot.status!r} disagrees with "
+                f"hero_slug {slot.hero_slug!r}",
+            )
         cols = ",".join(self._HERO_COLS)
         placeholders = ",".join("?" * (len(self._HERO_COLS) + 1))
         updates = ",".join(f"{c}=excluded.{c}" for c in self._HERO_COLS[2:])
@@ -207,6 +237,18 @@ class MatchStore:
         Never skip banned slots - "available but banned" is a distinct fact from
         "this slot was not read".
         """
+        for slot in slots:
+            self._check(
+                1 <= slot.slot <= POOL_SIZE, f"pool slot out of range: {slot.slot}"
+            )
+            self._check(
+                slot.status in _POOL_STATUSES, f"invalid pool status: {slot.status!r}"
+            )
+            self._check(
+                bool(slot.banned) == (slot.status == "banned"),
+                f"pool slot {slot.slot}: banned={slot.banned} disagrees with "
+                f"status {slot.status!r}",
+            )
         cols = ",".join(self._POOL_COLS)
         placeholders = ",".join("?" * (len(self._POOL_COLS) + 1))
         updates = ",".join(f"{c}=excluded.{c}" for c in self._POOL_COLS[1:])
@@ -216,6 +258,20 @@ class MatchStore:
                 f"ON CONFLICT(match_id,slot) DO UPDATE SET {updates}",
                 [(match_id, *(getattr(s, c) for c in self._POOL_COLS)) for s in slots],
             )
+
+    def pool_is_complete(self, match_id: int) -> bool:
+        """Were all 20 grid slots recorded?
+
+        A partial pool is silently wrong: it would under-constrain later identification
+        and make "available but not picked" incomplete. Phase 2 should check this before
+        using a pool as a candidate constraint.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT COUNT(DISTINCT slot) FROM match_pool WHERE match_id=?",
+                (match_id,),
+            ).fetchone()
+        return int(rows[0]) == POOL_SIZE
 
     def pool_for(self, match_id: int) -> list[PoolSlot]:
         cols = ",".join(self._POOL_COLS)

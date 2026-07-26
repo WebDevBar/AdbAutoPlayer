@@ -53,6 +53,8 @@ _PLATE_MIN_DELTA = 25
 # the fixture frame, versus 0.117-0.380 on the other eighteen. Do not relax this -
 # a failure means a missing glyph variant, not a bad threshold.
 BAN_MATCH_THRESHOLD = 0.60
+# Three variants are required: the red/blue pair alone missed one hero's overlay.
+MIN_BAN_GLYPHS = 3
 
 
 @dataclass(frozen=True)
@@ -163,12 +165,30 @@ def identify_with_pool(
     The result records WHICH tier answered, so a bad pool read is distinguishable from a
     legitimate hero outside the pool.
     """
+    # An EMPTY pool is not a constraint - it means the pool read failed. Accepting it
+    # would silently mark every pick as a pool miss and hide the real failure.
+    if pool is not None and len(pool) == 0:
+        raise ValueError(
+            "empty pool passed to identify_with_pool - a failed pool read must be "
+            "handled by the caller, not silently downgraded to a full-library search"
+        )
     if pool:
         first = identify_cell(cell_gray, cell_type, library, cfg, candidates=pool)
         if first.status == "identified":
             return replace(first, candidate_scope="pool", pool_miss=0)
     fallback = identify_cell(cell_gray, cell_type, library, cfg)
     return replace(fallback, candidate_scope="full_library", pool_miss=1 if pool else 0)
+
+
+def _require_anchor(anchor_dir: Path, name: str) -> np.ndarray:
+    """Load an anchor template, raising if it is missing or unreadable."""
+    img = cv2.imread(str(anchor_dir / name), cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise FileNotFoundError(
+            f"screen anchor missing or unreadable: {anchor_dir / name}. "
+            f"Classification cannot run without it."
+        )
+    return img
 
 
 def _anchor_score(gray: np.ndarray, anchor: np.ndarray, at: tuple[int, int]) -> float:
@@ -205,19 +225,17 @@ def classify_screen(frame: np.ndarray, anchor_dir: Path) -> str:
         cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == _COLOUR_NDIM else frame
     )
 
-    draft = cv2.imread(str(anchor_dir / "draft_selecting.png"), cv2.IMREAD_GRAYSCALE)
-    if (
-        draft is not None
-        and _anchor_score(gray, draft, _DRAFT_ANCHOR_AT) >= _DRAFT_ANCHOR_MIN
-    ):
+    # A missing or unreadable anchor is a BROKEN INSTALL, not a non-match. Returning
+    # "unknown" would leave a device loop spinning forever with no clear error.
+    draft = _require_anchor(anchor_dir, "draft_selecting.png")
+    if _anchor_score(gray, draft, _DRAFT_ANCHOR_AT) >= _DRAFT_ANCHOR_MIN:
         return "draft"
 
-    prematch = cv2.imread(str(anchor_dir / "prematch_locked.png"), cv2.IMREAD_GRAYSCALE)
-    if prematch is not None:
-        score = _anchor_score(gray, prematch, _PREMATCH_ANCHOR_AT)
-        # BOTH signals required - either alone is too weak to trust.
-        if score >= _PREMATCH_ANCHOR_MIN and _has_team_plates(frame):
-            return "prematch_locked"
+    prematch = _require_anchor(anchor_dir, "prematch_locked.png")
+    score = _anchor_score(gray, prematch, _PREMATCH_ANCHOR_AT)
+    # BOTH signals required - either alone is too weak to trust.
+    if score >= _PREMATCH_ANCHOR_MIN and _has_team_plates(frame):
+        return "prematch_locked"
     return "unknown"
 
 
@@ -228,14 +246,21 @@ def load_ban_glyphs(anchor_dir: Path) -> list[np.ndarray]:
     hero's overlay (0.279 / 0.241, under the 0.60 threshold), so a banned card leaked
     into results as a phantom hero.
     """
-    return [
+    paths = sorted(anchor_dir.glob("ban_glyph_*.png"))
+    glyphs = [
         img
-        for img in (
-            cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
-            for p in sorted(anchor_dir.glob("ban_glyph_*.png"))
-        )
+        for img in (cv2.imread(str(q), cv2.IMREAD_GRAYSCALE) for q in paths)
         if img is not None
     ]
+    if len(glyphs) < MIN_BAN_GLYPHS:
+        # Returning an empty list would mean nothing is ever detected as banned, and
+        # every banned card would leak in as a phantom hero.
+        raise FileNotFoundError(
+            f"expected at least {MIN_BAN_GLYPHS} ban glyph templates in {anchor_dir}, "
+            f"found {len(glyphs)} readable of {len(paths)}. Banned cards would be "
+            f"misread as heroes."
+        )
+    return glyphs
 
 
 def is_banned(

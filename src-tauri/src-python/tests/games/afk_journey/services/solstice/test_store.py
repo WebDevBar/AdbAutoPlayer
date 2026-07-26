@@ -231,3 +231,54 @@ def test_build_hero_db_does_not_touch_match_data(tmp_db):
     assert len(store.heroes_for(mid)) == 1
     assert len(store.pool_for(mid)) == 1
     assert len(store.odds_for(mid)) == 1
+
+
+def test_rejects_invalid_enum_values(tmp_db):
+    """The schema documents these in comments only, so the store must enforce them."""
+    store = MatchStore(tmp_db)
+    with pytest.raises(ValueError, match="invalid source"):
+        store.record_match(MatchRecord(source="comptee", captured_at="x"))
+    with pytest.raises(ValueError, match="invalid outcome"):
+        store.record_match(
+            MatchRecord(source="compete", captured_at="x", outcome="purple")
+        )
+    mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
+    with pytest.raises(ValueError, match="invalid side"):
+        store.record_heroes(mid, [HeroSlot("blu", 1, "sonja", "x", "identified")])
+    with pytest.raises(ValueError, match="invalid status"):
+        store.record_heroes(mid, [HeroSlot("blue", 1, "sonja", "x", "maybe")])
+
+
+def test_rejects_status_that_disagrees_with_the_data(tmp_db):
+    """status='unknown' with a hero_slug set is contradictory and must not persist."""
+    store = MatchStore(tmp_db)
+    mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
+    with pytest.raises(ValueError, match="disagrees"):
+        store.record_heroes(mid, [HeroSlot("blue", 1, "sonja", "x", "unknown")])
+    with pytest.raises(ValueError, match="disagrees"):
+        store.record_heroes(mid, [HeroSlot("blue", 2, None, None, "identified")])
+    with pytest.raises(ValueError, match="disagrees"):
+        store.record_pool(mid, [PoolSlot(1, None, None, "banned", 0)])
+
+
+def test_rejects_out_of_range_pool_slots(tmp_db):
+    store = MatchStore(tmp_db)
+    mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
+    with pytest.raises(ValueError, match="out of range"):
+        store.record_pool(mid, [PoolSlot(21, "sonja", "x", "identified")])
+    with pytest.raises(ValueError, match="out of range"):
+        store.record_pool(mid, [PoolSlot(0, "sonja", "x", "identified")])
+
+
+def test_pool_is_complete_detects_a_partial_pool(tmp_db):
+    """A partial pool under-constrains identification and must be detectable."""
+    store = MatchStore(tmp_db)
+    mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
+    store.record_pool(
+        mid, [PoolSlot(i, "sonja", "x", "identified") for i in range(1, 5)]
+    )
+    assert store.pool_is_complete(mid) is False
+    store.record_pool(
+        mid, [PoolSlot(i, "sonja", "x", "identified") for i in range(5, 21)]
+    )
+    assert store.pool_is_complete(mid) is True

@@ -4,6 +4,7 @@ Ground truth was confirmed by the user, not inferred. The score floors asserted 
 MEASURED baselines - if one fails, something regressed; do not lower the threshold.
 """
 
+import shutil
 from pathlib import Path
 
 import cv2
@@ -261,3 +262,50 @@ def test_identify_with_pool_reports_which_tier_answered(
     assert miss.slug == "sonja"
     assert miss.candidate_scope == "full_library"
     assert miss.pool_miss == 1
+
+
+def test_missing_anchor_fails_loudly(tmp_path, frames, read_frame):
+    """A broken install must raise, not classify everything as 'unknown'.
+
+    Silently returning 'unknown' would leave a device loop spinning forever with no
+    indication of the real problem.
+    """
+    empty = tmp_path / "no_anchors"
+    empty.mkdir()
+    with pytest.raises(FileNotFoundError, match="anchor missing"):
+        vision.classify_screen(read_frame(frames["draft_selecting"]), empty)
+
+
+def test_missing_ban_glyphs_fails_loudly(tmp_path):
+    """No glyphs would mean nothing is ever detected as banned - phantom heroes."""
+    empty = tmp_path / "no_glyphs"
+    empty.mkdir()
+    with pytest.raises(FileNotFoundError, match="ban glyph"):
+        vision.load_ban_glyphs(empty)
+
+
+def test_too_few_ban_glyphs_fails_loudly(tmp_path, anchor_dir):
+    """Three variants are required; the red/blue pair alone missed a real ban."""
+    partial = tmp_path / "two_glyphs"
+    partial.mkdir()
+    for name in ("ban_glyph_red.png", "ban_glyph_blue.png"):
+        shutil.copy(anchor_dir / name, partial / name)
+    with pytest.raises(FileNotFoundError, match="at least 3"):
+        vision.load_ban_glyphs(partial)
+
+
+def test_empty_pool_is_rejected(db_path, frames, library, read_frame, slot_of):
+    """An empty pool means the pool READ failed - it is not a constraint.
+
+    Accepting it would silently mark every pick as a pool miss and hide the failure.
+    """
+    cfg = SolsticeConfig.load(db_path)
+    frame = read_frame(frames["draft_selecting"])
+    cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)
+    gray = vision.extract_cell(frame, cell)
+    with pytest.raises(ValueError, match="empty pool"):
+        vision.identify_with_pool(gray, "draft_card", library, cfg, set())
+    # None still means "no pool available", which is a legitimate full-library search
+    res = vision.identify_with_pool(gray, "draft_card", library, cfg, None)
+    assert res.slug == "sonja"
+    assert res.pool_miss == 0

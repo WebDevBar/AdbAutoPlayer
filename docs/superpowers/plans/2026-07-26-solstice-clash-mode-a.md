@@ -1570,6 +1570,8 @@ Every source frame is already on disk. Crop tightly around each control - a temp
 | `result_back.png` | `/mnt/vault/solstice/live/navflow/raw/` (result screen) | the green Back button |
 | `result_chart.png` | same | the chart/details icon |
 | `summary_back.png` | `/mnt/vault/solstice/summary/summary_01.png` | the back arrow, bottom left |
+| `draft_anchor.png` | `TST/data/spectate_draft.png` | stable chrome on the SPECTATE draft screen, e.g. the "Current Theme:" plate. Phase 1's `draft_selecting.png` is a COMPETE anchor and scored only 0.450 on a spectate frame - it will not work |
+| `prematch_anchor.png` | `TST/data/spectate_prematch.png` | stable chrome on the prematch screen, e.g. the "Last chance!" banner |
 
 Verify each cut by matching it back against its source frame at >= 0.95 confidence before moving on. A template that cannot find itself will never find anything.
 
@@ -1714,7 +1716,7 @@ print(sorted(Path(p).name for p in glob.glob(
     'adb_auto_player/games/afk_journey/templates/event/solstice_clash/*.png')))"
 ```
 
-Expected: imports cleanly, and all seven new templates are listed.
+Expected: imports cleanly, and all nine new templates are listed. `draft_anchor` and `prematch_anchor` are required by Task 8 - `game_find_template_match` raises `FileNotFoundError` on a missing template, so a missing anchor would fail the cycle before anything is recorded.
 
 - [ ] **Step 5: Run the full suite**
 
@@ -2036,7 +2038,9 @@ from ..services.solstice.icons import IconLibrary
 from ..services.solstice.naming import resolve_hero_name
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
-from ..services.solstice.tuning import learn_if_improved, train_from_frame
+# NOTE: tuning imports (learn_if_improved, train_from_frame) are added in TASK 9, which
+# is where those functions are defined. Importing them here would leave this module
+# unimportable at the end of Task 8 and fail its green-suite gate.
 
 SOLSTICE_DB = Path("/mnt/docs/adbautoplayer/data/solstice_clash/heroes.sqlite")
 SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
@@ -2249,7 +2253,7 @@ Then call it from `_record_summary` in the mixin, right after the audit row is w
                 logging.info(f"tuned {confirmed} on the summary screen")
 ```
 
-Import BOTH `learn_if_improved` and `train_from_frame` from `..services.solstice.tuning` - Step 5's call site uses the latter and would otherwise raise `NameError` on the first captured training frame.
+Import `learn_if_improved`, `train_from_frame` and `confirmed_sides` from `..services.solstice.tuning` - Step 5's call site uses the latter and would otherwise raise `NameError` on the first captured training frame.
 
 - [ ] **Step 4: Seed the two spectate screens' cell geometry**
 
@@ -2295,6 +2299,22 @@ This is the training half of Mode A, and without it the draft and prematch frame
 archived and never used. Add to `SVC/tuning.py`:
 
 ```python
+def confirmed_sides(slots) -> dict[str, set[str]]:
+    """Which heroes per side are OCR-CONFIRMED, for use as cross-screen ground truth.
+
+    Deliberately not "which heroes were recorded": HeroSlot.hero_slug is
+    `confirmed or hero.slug`, so it is populated even when the long-press failed. Seeding
+    the confirmation set from it would launder an unconfirmed image guess into ground
+    truth and let it authorise learning on the draft and prematch screens - the exact
+    self-confirmation this design exists to prevent.
+    """
+    confirmed: dict[str, set[str]] = {"blue": set(), "red": set()}
+    for slot in slots:
+        if slot.hero_slug and slot.identified_by == "longpress_ocr":
+            confirmed.setdefault(slot.side, set()).add(slot.hero_slug)
+    return confirmed
+
+
 def train_from_frame(
     *,
     store,
@@ -2378,15 +2398,8 @@ Add `import cv2` and `from .store import AuditRow` to `tuning.py`.
 Then call it from `_record_summary` in the mixin, after the summary rows are written:
 
 ```python
-        # ONLY long-press-OCR-confirmed identities may seed this set. Building it from
-        # `slots` would launder image-only fallbacks (HeroSlot.hero_slug is
-        # `confirmed or hero.slug`) into ground truth, and cross-screen training would
-        # then confirm draft reads against an unconfirmed summary guess - manufacturing
-        # exactly the self-confirmation this design exists to prevent.
-        confirmed_by_side: dict[str, set[str]] = {"blue": set(), "red": set()}
-        for slot in slots:
-            if slot.hero_slug and slot.identified_by == "longpress_ocr":
-                confirmed_by_side[slot.side].add(slot.hero_slug)
+        # Only long-press-OCR-confirmed identities may seed this - see confirmed_sides().
+        confirmed_by_side = confirmed_sides(slots)
 
         for frame_img, screen_slug, cell_type in (
             (draft_frame, "spectate_draft_picks", "draft_pick"),
@@ -2433,33 +2446,50 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
     assert agreed == 0
 
 
-def test_only_ocr_confirmed_slots_seed_the_confirmation_set(tmp_db):
+def test_only_ocr_confirmed_slots_seed_the_confirmation_set():
     """An image-only summary read must NEVER become cross-screen ground truth.
 
     HeroSlot.hero_slug is `confirmed or hero.slug`, so it is populated even when the
-    long-press failed. Building the confirmation set from hero_slug alone would let an
-    unconfirmed guess authorise learning on the draft and prematch screens.
+    long-press failed. Calls the PRODUCTION helper - an inline reimplementation of the
+    rule would pass even if the mixin built the set wrongly, which is the only thing
+    worth testing here.
     """
     from adb_auto_player.games.afk_journey.services.solstice.store import HeroSlot
+    from adb_auto_player.games.afk_journey.services.solstice.tuning import confirmed_sides
 
-    slots = [
+    confirmed = confirmed_sides([
         HeroSlot(side="blue", slot=1, hero_slug="atalanta", art_ref="Atalanta",
                  status="identified", identified_by="longpress_ocr"),
         HeroSlot(side="blue", slot=2, hero_slug="igor", art_ref="Igor",
                  status="identified", identified_by="image"),
-    ]
-
-    confirmed: dict[str, set[str]] = {"blue": set(), "red": set()}
-    for slot in slots:
-        if slot.hero_slug and slot.identified_by == "longpress_ocr":
-            confirmed[slot.side].add(slot.hero_slug)
+        HeroSlot(side="red", slot=1, hero_slug=None, art_ref=None,
+                 status="unknown", identified_by=None),
+    ])
 
     assert confirmed["blue"] == {"atalanta"}, "image-only reads must be excluded"
+    assert confirmed["red"] == set()
 ```
 
-- [ ] **Step 7: Run the suite**
+- [ ] **Step 7: Apply the migration, then run the suite**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
+The Step 4 seeds only reach the database when `migrate.py` runs, and `cfg` loads the
+shipped `heroes.sqlite`. Without this, `cfg.cells("prematch_pick")` is empty and
+`train_from_frame` writes 0 rows instead of 6.
+
+```bash
+cd /mnt/docs/adbautoplayer
+/mnt/docs/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
+/mnt/docs/adbautoplayer/.venv/bin/python -c "
+import sqlite3
+c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
+for t in ('draft_pick','prematch_pick','summary_hero'):
+    print(t, c.execute(
+        'select count(*) from cell_registry where cell_type=?', (t,)).fetchone()[0])"
+```
+
+Expected: `draft_pick 6`, `prematch_pick 6`, `summary_hero 6`.
+
+Then run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
 
 Expected: green.
 

@@ -2260,7 +2260,13 @@ Then call it from `_record_summary` in the mixin, right after the audit row is w
                 logging.info(f"tuned {confirmed} on the summary screen")
 ```
 
-Import `learn_if_improved`, `train_from_frame` and `confirmed_sides` from `..services.solstice.tuning` - Step 5's call site uses the latter and would otherwise raise `NameError` on the first captured training frame.
+Import ONLY `learn_if_improved` here:
+
+```python
+from ..services.solstice.tuning import learn_if_improved
+```
+
+`train_from_frame` and `confirmed_sides` do not exist yet - they are added in Step 5. Importing them now would make the mixin unimportable with `ImportError` until that step lands, and every step is meant to leave the tree working.
 
 - [ ] **Step 4: Seed the two spectate screens' cell geometry**
 
@@ -2402,7 +2408,17 @@ def train_from_frame(
 
 Add `import cv2` and `from .store import AuditRow` to `tuning.py`.
 
-Then call it from `_record_summary` in the mixin, after the summary rows are written:
+Now extend the mixin's import to pick up the two new functions:
+
+```python
+from ..services.solstice.tuning import (
+    confirmed_sides,
+    learn_if_improved,
+    train_from_frame,
+)
+```
+
+Then call them from `_record_summary`, after the summary rows are written:
 
 ```python
         # Only long-press-OCR-confirmed identities may seed this - see confirmed_sides().

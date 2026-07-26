@@ -53,7 +53,7 @@ MATCH_TIMEOUT = 240.0
 # Poll every 20 seconds for either the result screen or the overworld. Both WAIT for
 # input once reached, so nothing is missed by checking less often - and at 2 seconds this
 # was taking about 90 screenshots per match for no benefit.
-RESULT_POLL_DELAY = 20.0
+RESULT_POLL_DELAY = 10.0
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
 # native capture). Cropped tight to the theme name line only - "Current Theme" (the

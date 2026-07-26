@@ -68,6 +68,12 @@ def test_tunables_present(db_path):
     assert cfg.scale_chain("draft_card") == (1.19, 1.10, 1.30)
 
 
+def test_scale_chain_is_per_cell_type(cfg):
+    assert cfg.scale_chain("draft_card") != cfg.scale_chain("summary_hero")
+    # an unregistered cell type falls back rather than raising
+    assert cfg.scale_chain("no_such_cell_type") == cfg.scale_chain("locked_pick")
+
+
 def test_hero_rows_and_aliases(db_path):
     cfg = SolsticeConfig.load(db_path)
     heroes = cfg.heroes()

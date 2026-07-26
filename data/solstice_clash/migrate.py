@@ -56,6 +56,8 @@ DEFAULT_CONFIG = [
     ("accept_margin", "0.10", "minimum margin over runner-up; this catches the real errors"),
     ("scale_chain", "1.01,0.95,1.08", "locked_pick / draft_locked_pick scale fallback chain"),
     ("scale_draft_card", "1.19,1.10,1.30", "draft_card scale fallback chain"),
+    ("scale_summary_hero", "0.48,0.47,0.49,0.46,0.50",
+     "measured: all six summary cards peak at 0.47-0.48"),
 ]
 
 # Screens Mode A reads. crop_* are the screen-level defaults a per-hero transform may
@@ -68,6 +70,23 @@ DEFAULT_SCREENS = [
      "1080x1920", None, None, None),
     ("spectate_prematch", "Spectate prematch: six locked cards, three per side",
      "1080x1920", None, None, None),
+]
+
+# Measured on summary_01.png at 1080x1920. Card centres: x=90, ally y=476/566/656,
+# enemy y=1123/1215/1307. The brief's original bounds (centre +-52, matching the full
+# card art+frame) never scored above ~0.35 against the plain hero icon at ANY scale -
+# the icon has no card frame, crown or badge, so a crop that includes them cannot
+# correlate with it regardless of scale. Re-measured by sweeping crop half-width x
+# scale against summary_01's six known heroes: half=20 (this file) peaks at 0.86-0.93
+# with a scale of 0.48, comfortably inside the accept_score/accept_margin gates.
+# Bounds below are centre +-20, tight enough to exclude the frame entirely.
+DEFAULT_SUMMARY_CELLS = [
+    ("solstice_summary", "summary_blue_1", "summary_hero", 70, 456, 110, 496, "blue", 1),
+    ("solstice_summary", "summary_blue_2", "summary_hero", 70, 546, 110, 586, "blue", 2),
+    ("solstice_summary", "summary_blue_3", "summary_hero", 70, 636, 110, 676, "blue", 3),
+    ("solstice_summary", "summary_red_1", "summary_hero", 70, 1103, 110, 1143, "red", 1),
+    ("solstice_summary", "summary_red_2", "summary_hero", 70, 1195, 110, 1235, "red", 2),
+    ("solstice_summary", "summary_red_3", "summary_hero", 70, 1287, 110, 1327, "red", 3),
 ]
 
 
@@ -108,6 +127,14 @@ def main() -> None:
             "(slug,description,base_resolution,crop_half_w,crop_top,crop_bottom)"
             " VALUES(?,?,?,?,?,?)",
             (slug, description, base_resolution, half_w, top, bottom),
+        )
+
+    for screen, name, cell_type, x0, y0, x1, y1, side, slot in DEFAULT_SUMMARY_CELLS:
+        con.execute(
+            "INSERT OR IGNORE INTO cell_registry"
+            "(screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
+            " VALUES(?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
+            (screen, name, cell_type, x0, y0, x1, y1, side, slot),
         )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")

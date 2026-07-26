@@ -84,3 +84,15 @@ def ocr_backend():
     from adb_auto_player.ocr import RapidOCRBackend
 
     return RapidOCRBackend()
+
+
+@pytest.fixture(scope="session")
+def library(cfg):
+    from pathlib import Path
+
+    from adb_auto_player.games.afk_journey.services.solstice.icons import IconLibrary
+
+    icon_dir = Path("/mnt/vault/solstice/gamefiles/ui/icon")
+    if not icon_dir.is_dir():
+        pytest.skip(f"icon library not available at {icon_dir}")
+    return IconLibrary.build(cfg, icon_dir)

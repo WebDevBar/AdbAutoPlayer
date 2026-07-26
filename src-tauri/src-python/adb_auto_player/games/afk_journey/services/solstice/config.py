@@ -103,8 +103,14 @@ class SolsticeConfig:
 
         Fix the SCALE and let matchTemplate find the offset; fixing the offset
         instead dropped one hero from 0.978 to 0.408.
+
+        Looks for a per-cell-type key first, falling back to the shared chain. Cards
+        differ enormously between screens - a summary card is ~104px against a draft
+        card's ~200px - so one global chain cannot serve both.
         """
-        key = "scale_draft_card" if cell_type == "draft_card" else "scale_chain"
+        key = f"scale_{cell_type}"
+        if key not in self._tunables:
+            key = "scale_chain"
         return tuple(float(x) for x in self._tunables[key].split(","))
 
     def heroes(self) -> dict[str, HeroRow]:

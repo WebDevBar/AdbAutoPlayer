@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "schema.sql")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Columns added after a table's original CREATE. schema.sql has them in the CREATE for
 # fresh databases; these entries upgrade databases that predate them.

@@ -138,3 +138,80 @@ CREATE INDEX IF NOT EXISTS idx_skill_hero     ON hero_skill(hero_slug);
 CREATE INDEX IF NOT EXISTS idx_roster_status  ON solstice_roster(status);
 CREATE INDEX IF NOT EXISTS idx_cell_type      ON cell_registry(cell_type);
 CREATE INDEX IF NOT EXISTS idx_transform_cell ON art_transform(cell_type);
+
+-- ------------------------------------------------- match data (locally earned)
+-- build_hero_db.py must NEVER touch these tables.
+
+CREATE TABLE IF NOT EXISTS match(
+  id             INTEGER PRIMARY KEY,
+  -- NULLABLE on purpose. A match observed mid-draft has no stable key yet (unknown
+  -- heroes, no outcome). Rows with a NULL key are local-only and excluded from any
+  -- future sync; the key is set once enough stable facts exist. SQLite permits many
+  -- NULLs in a UNIQUE column, which is exactly what we want.
+  natural_key    TEXT UNIQUE,
+  source         TEXT NOT NULL,          -- 'compete' | 'spectate'
+  captured_at    TEXT NOT NULL,
+  theme          TEXT,                   -- readable on the draft screen
+  balance_epoch  TEXT,                   -- hash of roster adjustments at capture time
+  blue_player    TEXT, blue_rating INTEGER, blue_rank INTEGER,
+  red_player     TEXT, red_rating  INTEGER, red_rank  INTEGER,
+  outcome        TEXT,                   -- 'blue' | 'red' | 'draw' | NULL
+  outcome_source TEXT
+);
+
+CREATE TABLE IF NOT EXISTS match_hero(
+  id            INTEGER PRIMARY KEY,
+  match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+  side          TEXT NOT NULL,           -- 'blue' | 'red'
+  slot          INTEGER NOT NULL,
+  hero_slug     TEXT REFERENCES hero(slug),
+  art_ref       TEXT,
+  status        TEXT NOT NULL,           -- 'identified' | 'unknown'
+  score         REAL,
+  margin        REAL,
+  -- Provenance. Without it a bad pool read and a legitimate out-of-pool recovery are
+  -- indistinguishable forever, and a failed identification cannot be relabelled by hand.
+  cell_type       TEXT,
+  cell_name       TEXT,
+  candidate_scope TEXT,                  -- 'pool' | 'full_library'
+  pool_miss       INTEGER,               -- 1 = pool tier failed, full library used
+  runner_up_slug  TEXT,
+  runner_up_score REAL,
+  crop_path       TEXT,                  -- saved cell crop, for relabelling
+  frame_path      TEXT,                  -- source frame, for re-measuring geometry
+  UNIQUE(match_id, side, slot)
+);
+
+-- The 20 heroes on offer and which were banned. "Available but not picked" is a real
+-- signal, and a pick absent from the pool is a detected error. Computing this and
+-- discarding it would be the most expensive omission to retrofit.
+CREATE TABLE IF NOT EXISTS match_pool(
+  id            INTEGER PRIMARY KEY,
+  match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+  slot          INTEGER NOT NULL,        -- 1..20, row-major in the 5x4 grid
+  hero_slug     TEXT REFERENCES hero(slug),
+  art_ref       TEXT,
+  status        TEXT NOT NULL,           -- 'identified' | 'unknown' | 'banned'
+  banned        INTEGER NOT NULL DEFAULT 0,
+  score         REAL,
+  margin        REAL,
+  runner_up_slug  TEXT,
+  runner_up_score REAL,
+  crop_path       TEXT,
+  frame_path      TEXT,
+  UNIQUE(match_id, slot)
+);
+
+CREATE TABLE IF NOT EXISTS match_odds(
+  id          INTEGER PRIMARY KEY,
+  match_id    INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+  sampled_at  TEXT NOT NULL,
+  blue_pool   INTEGER, red_pool INTEGER,
+  blue_odds   REAL,    red_odds REAL,
+  spectators  INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id);
+CREATE INDEX IF NOT EXISTS idx_match_pool_match ON match_pool(match_id);
+CREATE INDEX IF NOT EXISTS idx_match_odds_match ON match_odds(match_id);
+CREATE INDEX IF NOT EXISTS idx_match_outcome    ON match(outcome);

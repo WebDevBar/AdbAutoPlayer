@@ -41,6 +41,9 @@ required-version = ">=0.9.11"
 
 [tool.pytest.ini_options]
 testpaths = ["src-python/tests"]
+markers = [
+    "network: test hits an external service (deselect with -m 'not network')",
+]
 
 [tool.setuptools]
 include-package-data = false

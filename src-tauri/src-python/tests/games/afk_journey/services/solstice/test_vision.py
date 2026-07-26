@@ -7,6 +7,7 @@ MEASURED baselines - if one fails, something regressed; do not lower the thresho
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pytest
 from adb_auto_player.games.afk_journey.services.solstice import vision
 from adb_auto_player.games.afk_journey.services.solstice.config import SolsticeConfig
@@ -174,3 +175,89 @@ def test_pool_constraint_does_not_change_the_answer(
     )
     assert narrowed.slug == full.slug == "sonja"
     assert narrowed.margin >= full.margin
+
+
+def test_classifies_the_three_fixture_screens(frames, anchor_dir, read_frame):
+    assert vision.classify_screen(
+        read_frame(frames["draft_selecting"]), anchor_dir
+    ) == ("draft")
+    assert vision.classify_screen(
+        read_frame(frames["prematch_locked"]), anchor_dir
+    ) == ("prematch_locked")
+
+
+def test_spectate_is_not_mistaken_for_draft(frames, anchor_dir, read_frame):
+    """Spectate must never classify as draft.
+
+    The two do NOT share geometry, and reading draft cells off a spectate frame
+    would silently produce nonsense.
+    """
+    assert vision.classify_screen(read_frame(frames["spectate"]), anchor_dir) != "draft"
+
+
+def test_each_anchor_fires_only_on_its_own_screen(frames, anchor_dir, read_frame):
+    for name in ("draft_selecting", "spectate"):
+        got = vision.classify_screen(read_frame(frames[name]), anchor_dir)
+        assert got != "prematch_locked", f"{name} misclassified as prematch_locked"
+
+
+def test_unknown_for_an_unrelated_image(anchor_dir):
+    """A frame with neither anchor must be unknown, not defaulted to a real screen."""
+    blank = np.zeros((1920, 1080, 3), dtype=np.uint8)
+    assert vision.classify_screen(blank, anchor_dir) == "unknown"
+
+
+def test_ban_detection_finds_exactly_the_two_banned_cells(
+    db_path, frames, anchor_dir, read_frame, slot_of
+):
+    """Three glyph variants are required.
+
+    The red/blue pair alone missed one hero's overlay (0.279 / 0.241), letting a banned
+    card through as a phantom hero.
+    """
+    cfg = SolsticeConfig.load(db_path)
+    frame = read_frame(frames["draft_selecting"])
+    glyphs = vision.load_ban_glyphs(anchor_dir)
+    assert len(glyphs) >= 3, f"expected >= 3 glyph variants, found {len(glyphs)}"
+    banned = {
+        slot_of(c)
+        for c in cfg.cells("draft_card")
+        if vision.is_banned(vision.extract_cell(frame, c), glyphs)
+    }
+    assert banned == BANNED_SLOTS, f"expected {BANNED_SLOTS}, got {banned}"
+
+
+def test_identify_pool_reads_the_whole_grid(
+    db_path, frames, anchor_dir, library, read_frame
+):
+    cfg = SolsticeConfig.load(db_path)
+    pool = vision.identify_pool(
+        read_frame(frames["draft_selecting"]), cfg, library, anchor_dir
+    )
+    assert pool.banned_slots == BANNED_SLOTS
+    assert pool.slugs == set(GRID_TRUTH.values())
+    assert all(pool.per_slot[s].status == "identified" for s in GRID_TRUTH)
+    assert set(pool.per_slot) & BANNED_SLOTS == set(), "banned slots must not be read"
+
+
+def test_identify_with_pool_reports_which_tier_answered(
+    db_path, frames, library, read_frame, slot_of
+):
+    """A pool hit and a full-library fallback must be distinguishable afterwards."""
+    cfg = SolsticeConfig.load(db_path)
+    frame = read_frame(frames["draft_selecting"])
+    cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)  # Sonja
+    gray = vision.extract_cell(frame, cell)
+
+    hit = vision.identify_with_pool(gray, "draft_card", library, cfg, {"sonja", "lyca"})
+    assert hit.slug == "sonja"
+    assert hit.candidate_scope == "pool"
+    assert hit.pool_miss == 0
+
+    # a pool that cannot contain the answer must fall back AND say so
+    miss = vision.identify_with_pool(
+        gray, "draft_card", library, cfg, {"berial", "tilaya"}
+    )
+    assert miss.slug == "sonja"
+    assert miss.candidate_scope == "full_library"
+    assert miss.pool_miss == 1

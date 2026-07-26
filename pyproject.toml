@@ -27,6 +27,9 @@ adb-auto-player = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["src-tauri/src-python/tests"]
+markers = [
+    "network: test hits an external service (deselect with -m 'not network')",
+]
 
 
 [tool.pyright]

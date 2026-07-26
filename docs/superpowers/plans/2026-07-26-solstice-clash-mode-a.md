@@ -772,7 +772,7 @@ def test_empty_input_resolves_to_nothing(cfg):
 def test_reads_the_name_from_a_real_longpress_frame(cfg, ocr_backend, frames):
     from adb_auto_player.models import ConfidenceValue
 
-    frame = cv2.imread(str(frames / "longpress_ally1.png"))
+    frame = cv2.imread(str(frames["longpress_ally1"]))
     blocks = ocr_backend.detect_text_blocks(frame, ConfidenceValue(0.5))
     assert resolve_hero_name([b.text for b in blocks], cfg) == "atalanta"
 ```
@@ -928,14 +928,46 @@ applied with:
         )
 ```
 
-Also add a scale chain for the new cell type to `DEFAULT_CONFIG`, since summary cards are much smaller than draft cards:
+Summary cards are ~104px, far smaller than draft cards, so they need their own scale chain. But `SolsticeConfig.scale_chain` currently hardcodes which key it reads (`config.py:101`):
 
 ```python
-    ("scales_summary_hero", "0.30,0.90,0.02",
+key = "scale_draft_card" if cell_type == "draft_card" else "scale_chain"
+```
+
+A `scale_summary_hero` key would therefore be seeded and then never read - the summary tests would run against the draft-sized chain and fail. Generalise the lookup first, which also stops the next cell type needing another edit here:
+
+```python
+    def scale_chain(self, cell_type: str) -> tuple[float, ...]:
+        """Scales to try, in order.
+
+        Fix the SCALE and let matchTemplate find the offset; fixing the offset
+        instead dropped one hero from 0.978 to 0.408.
+
+        Looks for a per-cell-type key first, falling back to the shared chain. Cards
+        differ enormously between screens - a summary card is ~104px against a draft
+        card's ~200px - so one global chain cannot serve both.
+        """
+        key = f"scale_{cell_type}"
+        if key not in self._tunables:
+            key = "scale_chain"
+        return tuple(float(x) for x in self._tunables[key].split(","))
+```
+
+`scale_draft_card` already follows that naming, so existing behaviour is preserved exactly. Then seed the new chain in `DEFAULT_CONFIG`:
+
+```python
+    ("scale_summary_hero", "0.30,0.90,0.02",
      "summary cards are ~104px; measured optima sit near 0.5"),
 ```
 
-Check how `SolsticeConfig.scale_chain` derives its key before adding this - match the existing key naming exactly rather than assuming.
+Add a test to `TST/test_config.py` proving both paths:
+
+```python
+def test_scale_chain_is_per_cell_type(cfg):
+    assert cfg.scale_chain("draft_card") != cfg.scale_chain("summary_hero")
+    # an unregistered cell type falls back rather than raising
+    assert cfg.scale_chain("no_such_cell_type") == cfg.scale_chain("locked_pick")
+```
 
 - [ ] **Step 2: Write the failing test**
 
@@ -978,7 +1010,7 @@ def test_parse_stat_number(text, expected):
 
 
 def test_identifies_all_six_heroes(cfg, library, ocr_backend, frames):
-    frame = cv2.imread(str(frames / "summary_01.png"))
+    frame = cv2.imread(str(frames["summary_01"]))
     read = read_summary(frame, cfg, library, ocr_backend)
 
     blue = [h.slug for h in read.heroes if h.side == "blue"]
@@ -988,7 +1020,7 @@ def test_identifies_all_six_heroes(cfg, library, ocr_backend, frames):
 
 
 def test_every_identification_clears_the_accept_rule(cfg, library, ocr_backend, frames):
-    frame = cv2.imread(str(frames / "summary_01.png"))
+    frame = cv2.imread(str(frames["summary_01"]))
     read = read_summary(frame, cfg, library, ocr_backend)
     for hero in read.heroes:
         assert hero.score >= 0.70, f"{hero.slug} scored {hero.score}"
@@ -997,13 +1029,13 @@ def test_every_identification_clears_the_accept_rule(cfg, library, ocr_backend, 
 
 def test_winner_comes_from_the_header_not_the_panel_labels(cfg, library, ocr_backend, frames):
     """summary_02's result banner independently said BLUE LOSES."""
-    frame = cv2.imread(str(frames / "summary_02.png"))
+    frame = cv2.imread(str(frames["summary_02"]))
     read = read_summary(frame, cfg, library, ocr_backend)
     assert read.winner == "red"
 
 
 def test_stats_are_read_for_every_hero(cfg, library, ocr_backend, frames):
-    frame = cv2.imread(str(frames / "summary_01.png"))
+    frame = cv2.imread(str(frames["summary_01"]))
     read = read_summary(frame, cfg, library, ocr_backend)
     first = next(h for h in read.heroes if h.side == "blue" and h.slot == 1)
     assert first.stats.sword == 699_000
@@ -1255,7 +1287,7 @@ SOLISE_CENTRE = (90, 1307)
 
 
 def test_tuning_improves_the_weakest_card(cfg, library, frames):
-    frame = cv2.imread(str(frames / "summary_01.png"))
+    frame = cv2.imread(str(frames["summary_01"]))
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     result = tune_cell(gray, SOLISE_CENTRE, "solise", library, cfg)
@@ -1268,7 +1300,7 @@ def test_tuning_improves_the_weakest_card(cfg, library, frames):
 def test_tuning_returns_none_when_the_truth_never_wins(cfg, library, frames):
     """If the named hero is not what is on screen, tuning must refuse rather than
     force the wrong answer to score better."""
-    frame = cv2.imread(str(frames / "summary_01.png"))
+    frame = cv2.imread(str(frames["summary_01"]))
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     assert tune_cell(gray, SOLISE_CENTRE, "thoran", library, cfg) is None
@@ -1426,14 +1458,14 @@ never be tuned into looking correct."
 ### Task 7: Templates and the navigation chain
 
 **Files:**
-- Create: `AFKJ/templates/event/solstice_clash/{event_screen,fortune_picks,spectate_live,result_back,result_chart,summary_back,teleport_confirm}.png`
+- Create: `AFKJ/templates/event/solstice_clash/{event_screen,fortune_picks,spectate_live,result_back,result_chart,summary_back,draft_anchor,prematch_anchor}.png`
 - Create: `AFKJ/mixins/solstice_clash.py`
 - Modify: `AFKJ/popup_message_handler.py` (register the teleport dialog)
 - Test: manual, on device
 
 **Interfaces:**
 - Consumes: Tasks 1-6.
-- Produces: `SolsticeClashMixin` with `_open_spectate() -> bool` and the registered GUI command `SolsticeClashCollect`.
+- Produces: `SolsticeClashMixin` with `_open_spectate() -> tuple[bool, str | None]` (opened, theme) and the registered GUI command `SolsticeClashCollect`.
 
 - [ ] **Step 1: Cut the templates from captured frames**
 
@@ -1447,7 +1479,6 @@ Every source frame is already on disk. Crop tightly around each control - a temp
 | `result_back.png` | `/mnt/vault/solstice/live/navflow/raw/` (result screen) | the green Back button |
 | `result_chart.png` | same | the chart/details icon |
 | `summary_back.png` | `/mnt/vault/solstice/summary/summary_01.png` | the back arrow, bottom left |
-| `teleport_confirm.png` | `/mnt/vault/solstice/summary/teleport_dialog.png` | the green check |
 
 Verify each cut by matching it back against its source frame at >= 0.95 confidence before moving on. A template that cannot find itself will never find anything.
 
@@ -1458,13 +1489,31 @@ In `AFKJ/popup_message_handler.py`, add to `misc_messages`:
 ```python
     PopupMessage(
         # Appears when the character is not near the event NPC. Confirming auto-paths there.
+        # The default confirm_button_template ("navigation/confirm.png") is correct here:
+        # measured 0.996 against the captured dialog at (799, 1223), which is the green
+        # check. navigation/x.png likewise matches the X at 0.999. This dialog uses the
+        # STANDARD buttons, so no new template is needed and the handler's preprocessing
+        # (which only proceeds after finding navigation/confirm.png or
+        # continue_top_right_corner.png - popup_message_handler.py:321) will find it.
         text="Teleport to the Waystone closest to the target",
-        confirm_button_template="event/solstice_clash/teleport_confirm.png",
         # MUST stay False. When True the handler taps the "Don't remind for 7 days"
         # checkbox, which permanently changes the user's game settings.
         has_dont_remind_me=False,
     ),
 ```
+
+Because the dialog uses the standard confirm button, **no `teleport_confirm.png` template is required** - drop it from the Step 1 template list. Verify the match before relying on it:
+
+```bash
+cd /mnt/docs/adbautoplayer/src-tauri/src-python
+/mnt/docs/adbautoplayer/.venv/bin/python -c "
+import cv2
+t=cv2.imread('adb_auto_player/games/afk_journey/templates/navigation/confirm.png')
+f=cv2.imread('/mnt/vault/solstice/summary/teleport_dialog.png')
+print(cv2.matchTemplate(f,t,cv2.TM_CCOEFF_NORMED).max())"
+```
+
+Expected: >= 0.99.
 
 - [ ] **Step 3: Write the mixin's navigation half**
 
@@ -1516,11 +1565,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self.navigate_to_world()
         logging.info("Solstice Clash collection starting")
 
-    def _open_spectate(self) -> bool:
+    def _open_spectate(self) -> tuple[bool, str | None]:
         """Navigate from the overworld to a live spectated match.
 
         Returns:
-            True when a match is being spectated, False when none was available.
+            (opened, theme). `theme` is read from the event screen on the way through -
+            the only screen in the whole flow that shows it - and is None if unreadable.
         """
         self._navigate_menu_chain(
             [
@@ -1530,6 +1580,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ]
         )
         self.wait_for_template(template="event/solstice_clash/fortune_picks")
+        # Read the theme HERE, while the event screen is up. It shows "Current Theme:
+        # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
+        theme = self._read_current_theme()
         self.tap(Point(121, 1606))  # Fortune Picks
 
         # Three branches converge here: adjacent to the NPC (immediate), a short walk
@@ -1544,7 +1597,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         )
         self.tap(result)
         sleep(3)
-        return True
+        return True, theme
 ```
 
 - [ ] **Step 4: Verify the mixin registers and the templates resolve**
@@ -1601,7 +1654,11 @@ Add to `SolsticeClashMixin`:
 ```python
     def _run_one_match(self) -> bool:
         """Spectate one match and record it. Returns True if a match was recorded."""
-        if not self._open_spectate():
+        # _open_spectate reads the theme while it is ON the event screen and returns it.
+        # The theme cannot be read before that call (we are on the overworld) and cannot
+        # be read after it (the summary screen does not show it).
+        opened, theme = self._open_spectate()
+        if not opened:
             return False
 
         # Optional training material. If we entered mid-match there is no draft left to
@@ -1623,7 +1680,7 @@ Add to `SolsticeClashMixin`:
         self.tap(chart)
         sleep(2)
 
-        self._record_summary(draft_frame, prematch_frame)
+        self._record_summary(draft_frame, prematch_frame, theme)
 
         back = self.wait_for_template(template="event/solstice_clash/summary_back")
         self.tap(back)
@@ -1673,8 +1730,12 @@ Import `GameTimeoutError` from `adb_auto_player.exceptions`. Call `self._collect
 - [ ] **Step 3: Add summary recording**
 
 ```python
-    def _record_summary(self, draft_frame, prematch_frame) -> None:
-        """Read the summary, record the match, and audit every identification."""
+    def _record_summary(self, draft_frame, prematch_frame, theme: str | None) -> None:
+        """Read the summary, record the match, and audit every identification.
+
+        `theme` is read during navigation (the summary screen does NOT show it) and
+        passed in, so a match cannot be recorded against the wrong balance epoch.
+        """
         frame = self.get_screenshot()
         read = read_summary(frame, self._solstice_cfg, self._solstice_library, self._ocr)
 
@@ -1682,7 +1743,7 @@ Import `GameTimeoutError` from `adb_auto_player.exceptions`. Call `self._collect
             MatchRecord(
                 source="spectate_summary",
                 captured_at=datetime.now(UTC).isoformat(timespec="seconds"),
-                theme=self._current_theme,
+                    theme=theme,
                 outcome=read.winner,
                 outcome_source="observed",
                 blue_player=read.blue_player,
@@ -1862,14 +1923,11 @@ TRAINING_LATE_DELAY = 8.0
 THEME_BAND = (820, 1000)
 ```
 
-Verify `self.hold` exists with that signature before using it:
-
-```bash
-cd /mnt/docs/adbautoplayer/src-tauri/src-python
-grep -rn "def hold" adb_auto_player/game/ adb_auto_player/device/ | grep -v __pycache__
-```
-
-If it does not exist, use the input-device long-press the codebase already provides rather than shelling out to `adb shell input swipe`.
+`self.hold` is confirmed to exist: `game/_input_mixin.py:211`, signature
+`hold(coordinates: Coordinates, duration: float = 3.0, blocking: bool = True, log: bool = True)`.
+Its **default duration is already 3.0s**, which is exactly the value user testing settled
+on, so `LONGPRESS_SECONDS = 3.0` matches the framework default rather than fighting it.
+Do NOT shell out to `adb shell input swipe`.
 
 - [ ] **Step 5: Run the suite**
 

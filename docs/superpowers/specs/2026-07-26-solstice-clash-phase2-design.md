@@ -156,12 +156,35 @@ event screen during navigation and attached to every match collected in that ses
 Recording matches without a theme would silently mix balance epochs, which is the exact
 failure the epoch field exists to prevent.
 
-**`Ally` / `Enemy` to blue/red mapping is UNVERIFIED.** The two roster panels are labelled
-Ally and Enemy, which are spectator-relative labels, while the header names the two
-players and the result banner is phrased in terms of "BLUE". Whether Ally always
-corresponds to the blue (left) side in spectate has not been confirmed across matches.
-Getting this backwards would invert every recorded outcome, so it must be verified against
-at least two matches with known winners before any bulk collection runs.
+**`Ally` / `Enemy` to blue/red mapping - evidenced, needs one more confirmation.** The two
+roster panels are labelled Ally and Enemy, which are spectator-relative labels, while the
+result banner is phrased in terms of "BLUE". Measured mean channel values on the captured
+summary:
+
+| region | B | R | reads as |
+|---|---|---|---|
+| banner left half | 158.6 | 106.9 | blue |
+| banner right half | 94.5 | 192.0 | orange |
+| Ally tab | 167.7 | 121.7 | blue |
+| Enemy tab | 95.1 | 184.6 | orange |
+
+So **`Ally` = blue = left player** in this frame. But the words themselves are
+spectator-relative and arbitrary in spectate - there is no "ally" when watching two other
+players - so **the label text is never parsed.** Side is derived per-frame from the tab
+colour (blue channel dominant = blue side), which is the actual signal and stays correct
+even if the game swaps the panels or relabels them.
+
+That is one match's evidence. Because getting this backwards would invert every recorded
+outcome, it must be re-confirmed on a second match with a known winner before any bulk
+collection runs.
+
+**This is not merely defensive.** In compete mode - which Modes B and C and any future
+ranked collection will use - `Ally` means *the player's own side*, and the game assigns
+that side at random. A run where the player is placed on red would have `Ally` = red. Code
+that keyed off the label would therefore work correctly in spectate and silently invert
+every outcome in compete, which is the worst possible failure: undetectable in testing,
+and it corrupts the training target rather than crashing. Colour derivation is correct in
+both modes and is the only acceptable implementation.
 
 ### The three stat bars - semantics UNVERIFIED
 
@@ -323,6 +346,33 @@ nine to fourteen cards in the draft grid are never confirmed by anything, so dra
 accuracy on unpicked heroes remains unmeasured by this mode. That gap is real and is not
 closed here.
 
+### 5.5 What Modes B and C inherit
+
+Mode A exists partly to make the later modes possible, so the component boundaries are
+drawn around what they will need - not around what Mode A alone would find convenient.
+
+Modes B and C read **comps from the prematch locked screen** and the **winner from the
+post-match result banner**. Neither opens the summary: Mode C in particular has to know the
+comps *before* the match resolves, and the summary does not exist yet at that point.
+
+That gives three reusable pieces, each usable independently of Mode A's loop:
+
+| piece | used by | notes |
+|---|---|---|
+| prematch comp reader | A (audit), B, C | the one Mode A validates and tunes |
+| result-banner winner reader | A (cross-check), B, C | reads `... WINS!` / `... LOSES!` |
+| summary parser | A only | ground truth source; not on B/C's path |
+
+So the prematch reader is the component that actually matters long-term, and it is exactly
+the one with no OCR fallback available at runtime. Mode A's whole training job is to get
+its per-hero transforms measured and tuned **before** B and C depend on it.
+
+**Modes B and C still record outcomes.** They write the same `match` / `match_hero` rows,
+sourced from prematch + banner instead of the summary. The `source` column distinguishes
+them, so a later analysis can weight or exclude records by how their identities were
+established. Mode A's records are the only ones with OCR-confirmed identities; that
+distinction must survive into the data.
+
 ## 6. Data model
 
 ### New tables
@@ -382,10 +432,30 @@ CREATE TABLE IF NOT EXISTS hero_screen_transform(
     -- CHECK, 'self' is accepted and the "cannot be written with confirmed_by='self'" test
     -- in section 9 would be asserting something the schema does not actually prevent.
     confirmed_by  TEXT NOT NULL CHECK(confirmed_by IN ('longpress_ocr')),
-    audit_id      INTEGER REFERENCES identification_audit(id),  -- the confirming evidence
+    -- NOT NULL: a nullable audit_id would let a row claim 'longpress_ocr' with no
+    -- confirming evidence at all, which is precisely what 5.3 forbids.
+    audit_id      INTEGER NOT NULL REFERENCES identification_audit(id),
     verified_at   TEXT NOT NULL,
     UNIQUE(screen_id, hero_slug, art_ref)
 );
+
+-- NOT NULL only proves an audit row EXISTS. It cannot prove that the row agrees, has an
+-- OCR answer, names this same hero, or came from this same screen - SQLite CHECK cannot
+-- reference another table. A trigger can, so the remaining conditions are enforced here
+-- rather than left to the calling code to remember.
+CREATE TRIGGER IF NOT EXISTS hero_screen_transform_requires_confirmation
+BEFORE INSERT ON hero_screen_transform
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'transform requires an agreeing OCR-confirmed audit row for the same hero and screen')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM identification_audit a
+        WHERE a.id        = NEW.audit_id
+          AND a.agreed    = 1
+          AND a.ocr_slug  = NEW.hero_slug
+          AND a.screen_id = NEW.screen_id
+    );
+END;
 
 ```
 
@@ -398,12 +468,39 @@ code path that writes it. A row that cannot name its confirming evidence is a bu
 
 ### Extensions to existing tables
 
-- `match`: add `theme`, `blue_player`, `red_player`, `blue_rank`, `red_rank`.
-  Player identity is recorded because player skill is a real confound - without it,
-  a strong player's hero picks look like strong heroes.
-- `match_hero`: add `stat_sword`, `stat_heart`, `stat_shield`, `power`,
-  `identified_by` (`image` | `longpress_ocr`).
-- `MatchStore._SOURCES`: add `spectate_summary`.
+`CREATE TABLE IF NOT EXISTS` does **not** add columns to a table that already exists. The
+repo handles this with an explicit `ADD_COLUMNS` list in `migrate.py:26-42`, applied to
+databases that predate a column; `schema.sql` carries the same columns in the `CREATE` for
+fresh databases. Both places must be updated or Phase 2 will fail with `no such column` on
+the existing v2 database.
+
+New columns, to be added in **both** `schema.sql` and `ADD_COLUMNS`:
+
+```python
+("match",      "theme",         "TEXT"),
+("match",      "blue_player",   "TEXT"),
+("match",      "red_player",    "TEXT"),
+("match",      "blue_rank",     "INTEGER"),
+("match",      "red_rank",      "INTEGER"),
+("match_hero", "stat_sword",    "INTEGER"),
+("match_hero", "stat_heart",    "INTEGER"),
+("match_hero", "stat_shield",   "INTEGER"),
+("match_hero", "power",         "INTEGER"),
+("match_hero", "identified_by", "TEXT"),
+```
+
+Player identity is recorded because player skill is a real confound - without it, a strong
+player's hero picks look like strong heroes. `identified_by` is `image` or `longpress_ocr`.
+
+Note that `ADD_COLUMNS` entries must be additive and nullable: SQLite cannot add a
+`NOT NULL` column without a default to a populated table, and existing v2 rows have no
+values for any of these.
+- `MatchStore._SOURCES`: add `spectate_summary`. The existing set is
+  `{compete, spectate}`; Phase 2 records are `spectate_summary` so that OCR-confirmed
+  identities remain distinguishable from the prematch-derived records Modes B and C will
+  write later (section 5.5). The set is a validation whitelist, so every new mode must add
+  its own value - a mode writing an unregistered source raises rather than silently
+  persisting an unknown provenance.
 
 ### The POOL_SIZE bug
 
@@ -497,7 +594,17 @@ should be an existing call, not a reimplementation.
   stat numbers; the accept rule rejects a deliberately degraded card.
 - **Unit**: the tuning search improves margin on a card and never returns parameters
   that reduce it.
-- **Unit**: `hero_screen_transform` rows cannot be written with `confirmed_by = 'self'`.
+- **Unit**: the confirmation gate rejects every unconfirmed path. Verified against SQLite
+  before this spec was finalised - all six cases behave as specified:
+
+  | insert | expected |
+  |---|---|
+  | agreeing audit, same hero and screen | accepted |
+  | audit with `agreed = 0` | rejected by trigger |
+  | audit from a different `screen_id` | rejected by trigger |
+  | audit naming a different hero | rejected by trigger |
+  | `confirmed_by = 'self'` | rejected by CHECK |
+  | `audit_id` NULL | rejected by NOT NULL |
 - **Migration**: v2 -> v3 is idempotent and non-destructive; existing rows survive.
 
 Existing Phase 1 tests (46) must stay green.

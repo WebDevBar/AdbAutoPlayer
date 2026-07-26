@@ -27,6 +27,17 @@ def test_empty_input_resolves_to_nothing(cfg):
     assert resolve_hero_name([], cfg) is None
 
 
+def test_two_distinct_hero_names_resolve_to_nothing(cfg):
+    """Two different real heroes named in the same read is genuine ambiguity.
+
+    This is the guard the whole module exists for: len(hits) != 1 must return None even
+    when every individual match is a clean, exact hit. Picking a wrong single hero here
+    would be recorded as ground truth, so a tie between two real heroes must not resolve
+    to either one of them.
+    """
+    assert resolve_hero_name(["Atalanta", "Leymar"], cfg) is None
+
+
 def test_reads_the_name_from_a_real_longpress_frame(cfg, ocr_backend, frames):
     from adb_auto_player.models import ConfidenceValue
 

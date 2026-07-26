@@ -34,6 +34,10 @@ _HEADER_RIGHT = (610, 1020)
 # at the far left and far right of the banner and are full-colour portraits: sampling from
 # x40-160 reads orange regardless of who won. The sash boundary sits near x540. These
 # windows avoid both, and the sash is a solid fill so a modest patch is plenty.
+# The roster panel tabs. Orange = that panel's trio won, blue = they lost.
+_TOP_TAB = (355, 400)
+_BOTTOM_TAB = (1000, 1050)
+_TAB_X = (40, 200)
 _PROBE_BAND = (205, 245)
 _PROBE_LEFT = (200, 500)
 _PROBE_RIGHT = (580, 880)
@@ -112,6 +116,36 @@ def parse_stat_number(text: str) -> int | None:
     return int(value)
 
 
+def _winner_by_panel_tint(frame: np.ndarray) -> str | None:
+    """Which of the two hero panels won, from the panel tab's tint.
+
+    Orange means that panel's three heroes WON, blue means they lost. This is the
+    strongest signal available and the simplest: it ignores left and right entirely, which
+    is all we actually need - the question is which trio beat which trio.
+
+    It is also the cleanest region on the screen. The tab is a small solid fill with no
+    player name, no avatar and no watermark anywhere near it, unlike the banner.
+
+    The panel labels themselves ("Ally" / "Enemy") are NEVER read: in spectate they mean
+    whichever side you bet on and they flip between matches. Only the tint is used.
+
+    Returns None when neither tab is clearly tinted, so the caller can fall back.
+    """
+    top = np.median(
+        frame[_TOP_TAB[0] : _TOP_TAB[1], _TAB_X[0] : _TAB_X[1]].reshape(-1, 3), axis=0
+    )
+    bottom = np.median(
+        frame[_BOTTOM_TAB[0] : _BOTTOM_TAB[1], _TAB_X[0] : _TAB_X[1]].reshape(-1, 3),
+        axis=0,
+    )
+    top_orange = float(top[2] - top[0])
+    bottom_orange = float(bottom[2] - bottom[0])
+    if abs(top_orange - bottom_orange) < _WINNER_COLOUR_MIN_DELTA:
+        return None
+    # The top panel is the first three heroes, which the cell registry labels "blue".
+    return "blue" if top_orange > bottom_orange else "red"
+
+
 def _winner_by_colour(frame: np.ndarray) -> str | None:
     """Which header half is orange. The winning side is tinted orange, the loser blue.
 
@@ -155,6 +189,10 @@ def _read_winner(frame: np.ndarray, ocr: OCRBackend) -> str | None:
     # the player names, and the OCR path then produced the WRONG side. The winning half is
     # tinted orange and the losing half blue, which is a strong signal and was correct on
     # all four frames with independently known winners.
+    winner = _winner_by_panel_tint(frame)
+    if winner is not None:
+        return winner
+
     winner = _winner_by_colour(frame)
     if winner is not None:
         return winner

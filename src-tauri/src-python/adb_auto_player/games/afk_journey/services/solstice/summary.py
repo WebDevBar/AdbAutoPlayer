@@ -34,6 +34,7 @@ _HEADER_RIGHT = (610, 1020)
 # at the far left and far right of the banner and are full-colour portraits: sampling from
 # x40-160 reads orange regardless of who won. The sash boundary sits near x540. These
 # windows avoid both, and the sash is a solid fill so a modest patch is plenty.
+_PROBE_BAND = (205, 245)
 _PROBE_LEFT = (200, 500)
 _PROBE_RIGHT = (580, 880)
 
@@ -117,7 +118,11 @@ def _winner_by_colour(frame: np.ndarray) -> str | None:
     Returns None when neither half is clearly tinted, so the caller can fall back to OCR
     rather than guessing from a weak difference.
     """
-    band = frame[_HEADER_BAND[0] : _HEADER_BAND[1]]
+    # TOP strip only. Player names are vertically CENTRED in the banner, so a long name
+    # bleeds sideways through the middle rows but never reaches the top edge. Combined
+    # with the x windows below this keeps the probe clear of names, avatars and the sash
+    # boundary at once.
+    band = frame[_PROBE_BAND[0] : _PROBE_BAND[1]]
     # MEDIAN, not mean. The "Victory" / "Defeat" watermark is a lighter shade painted over
     # the sash, and it sits in the middle of each half - exactly where these probes are. A
     # mean is dragged by those lighter pixels; the median ignores them because they are a

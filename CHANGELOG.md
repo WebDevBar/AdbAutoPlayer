@@ -4,17 +4,21 @@
 
 ### Added
 
-- **AFK Journey — Solstice Clash**: hero + event database built from the AFK Journey
-  Fandom wiki API (`data/solstice_clash/`). 153 heroes, 732 skills, 173 skins across
-  122 heroes, and the full event roster (95 usable + 24 banned) with per-hero stat
-  adjustments parsed into integer columns. Regenerate with
-  `python3 data/solstice_clash/build_hero_db.py`.
-- **AFK Journey — Solstice Clash**: hero identification from wiki combat icons.
-  `File:Hero <Name>.png` are the datamined in-game icons; the in-game 96px circular
-  roster icon is a fixed crop (scale 0.68, offset 13,35, circular mask r=44).
-  Verified 20/20 on hand-labelled icons and 8/8 against a 124-hero candidate set.
-- **Docs**: `docs/solstice-clash/README.md` — project index covering the wiki API,
-  screen geometry, database schema, failed approaches, and open items.
+- **AFK Journey - Solstice Clash Phase 1**: the vision and storage layer that turns a
+  1080x1920 screenshot into identified heroes and database rows.
+  - `config.py` - cell geometry, scale chains and accept thresholds read from
+    `heroes.sqlite`; no hardcoded geometry or tunables in the package.
+  - `icons.py` - decodes the game's own hero art. Files named `*.png` are an `AST`
+    header wrapping LZ4-block-compressed ASTC 6x6; dimensions come from the header and
+    the decode needs a vertical flip (Unity origin is bottom-left). Gamma 1/1.8 applied
+    at library-build time.
+  - `vision.py` - template-anchored screen classification, cell extraction, hero
+    identification with the `score >= 0.70 AND margin >= 0.10` rule, ban-glyph detection,
+    and pool capture with a two-tier candidate strategy.
+  - `store.py` + schema v2 - `match`, `match_hero`, `match_pool`, `match_odds`.
+  - Measured: 18/18 draft cells and 6/6 locked picks correct, all above their score
+    floors; ban detection finds exactly the two banned slots.
+  - Adds `lz4` and `texture2ddecoder`; registers the `network` pytest marker.
 
 ## [12.9.20] - 2026-07-03
 

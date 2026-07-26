@@ -1,3 +1,8 @@
+> **COMPLETED 2026-07-26.** All seven tasks implemented, 39 tests, full pre-commit
+> gate green, 582 tests pass repo-wide with no regressions. See
+> `docs/solstice-clash/README.md` section 15 for what was delivered and what
+> measurement changed along the way.
+
 # Solstice Clash Phase 1 Implementation Plan (revised)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -111,7 +116,7 @@ them to act on a different copy, pass the path explicitly - **both take it as `a
   - `.heroes() -> dict[str, HeroRow]` keyed by slug, `HeroRow(slug, name, faction, external_id, game_icon, wiki_icon)`
   - `.resolve_alias(name: str) -> str | None` (slug or None)
 
-- [ ] **Step 1: Copy three fixture frames into the test data directory**
+- [x] **Step 1: Copy three fixture frames into the test data directory**
 
 These are raw `adb exec-out screencap` frames at 1080x1920. They already exist:
 
@@ -135,7 +140,7 @@ Sinbad/Nerion/Parisa/Thador/Lily May, Granny Dahnie/Lyca/Cryonaia/Sonja/Tilaya, 
 Berial (r1c0) and Tilaya (r3c4) banned, and Rowan/Lily May/Reinier already picked so their grid
 cells render **skinned**.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `tests/games/afk_journey/services/solstice/conftest.py`:
 
@@ -217,7 +222,7 @@ def test_hero_rows_and_aliases(db_path):
     assert cfg.resolve_alias("nobody at all") is None
 ```
 
-- [ ] **Step 3: Run it and watch it fail**
+- [x] **Step 3: Run it and watch it fail**
 
 ```bash
 cd /mnt/docs/adbautoplayer
@@ -226,7 +231,7 @@ uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/
 
 Expected: FAIL, `ModuleNotFoundError: ... solstice.config`.
 
-- [ ] **Step 4: Implement `config.py`**
+- [x] **Step 4: Implement `config.py`**
 
 ```python
 """Geometry and tunables, loaded from heroes.sqlite. No hardcoded constants.
@@ -328,7 +333,7 @@ class SolsticeConfig:
         return None
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_config.py -q
@@ -336,7 +341,7 @@ uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/
 
 Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/ \
@@ -361,7 +366,7 @@ git commit -m "feat(solstice): config service reading geometry and tunables from
   - `.entries() -> list[IconEntry]` where `IconEntry(slug, art_ref, art_kind, gray)`
   - `.for_slugs(slugs: set[str]) -> list[IconEntry]` (the pool-constrained subset)
 
-- [ ] **Step 0: Register the `network` marker**
+- [x] **Step 0: Register the `network` marker**
 
 `test_build_hero_db_does_not_touch_match_tables` is marked `@pytest.mark.network`. Neither
 `pyproject.toml` registers markers today, so the mark warns now and would ERROR under
@@ -385,7 +390,7 @@ uv run --group dev pytest --markers | grep network
 
 Expected: the marker is listed.
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 ```bash
 cd /mnt/docs/adbautoplayer/src-tauri
@@ -398,7 +403,7 @@ Expected: `ok`. **Both must be added explicitly** - neither is currently a repo 
 `texture2ddecoder` at module level, so a missing dependency fails at test *collection*, before
 the `skipif` for the icon directory can take effect.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `tests/games/afk_journey/services/solstice/test_icons.py`:
 
@@ -465,7 +470,7 @@ def test_gamma_brightens(db_path):
     assert entry.gray[opaque].mean() > raw_gray[opaque].mean()
 ```
 
-- [ ] **Step 3: Run it, expect failure**
+- [x] **Step 3: Run it, expect failure**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_icons.py -q
@@ -473,7 +478,7 @@ uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/
 
 Expected: FAIL, no module `solstice.icons`.
 
-- [ ] **Step 4: Implement `icons.py`**
+- [x] **Step 4: Implement `icons.py`**
 
 Format reference, verified on all 1,123 files (see `data/solstice_clash/extract_game_icons.py`):
 
@@ -582,7 +587,7 @@ class IconLibrary:
         return [e for e in self._entries if e.slug in slugs]
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_icons.py -q
@@ -592,7 +597,7 @@ Expected: PASS, 5 tests. If `test_library_covers_every_usable_roster_hero` fails
 `external_id` is missing - check `SELECT name FROM hero WHERE external_id IS NULL`, do NOT relax
 the test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/icons.py \
@@ -628,7 +633,7 @@ Accept only when `score >= accept_score AND margin >= accept_margin`. The margin
 actually catches errors: every wrong match observed had a collapsed margin (0.01-0.04) while
 plenty of correct ones scored 0.70-0.80.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import cv2
@@ -754,7 +759,7 @@ def test_pool_constraint_narrows_candidates(db_path, frames, library):
     assert narrowed.margin >= full.margin
 ```
 
-- [ ] **Step 2: Run it, expect failure**
+- [x] **Step 2: Run it, expect failure**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_vision.py -q
@@ -762,7 +767,7 @@ uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/
 
 Expected: FAIL, no module `solstice.vision`.
 
-- [ ] **Step 3: Implement `vision.py`**
+- [x] **Step 3: Implement `vision.py`**
 
 ```python
 """Cell extraction and hero identification."""
@@ -853,7 +858,7 @@ def identify_cell(cell_gray: np.ndarray, cell_type: str, library: IconLibrary,
     )
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_vision.py -q
@@ -863,7 +868,7 @@ Expected: PASS, 5 tests. If `test_identifies_every_unbanned_draft_cell` fails, d
 0.90 assertion - it is a measured baseline (18/18 at median 0.9550). Check the gamma value and
 the scale chain first.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/vision.py \
@@ -887,7 +892,7 @@ git commit -m "feat(solstice): cell extraction and hero identification with the 
 Brightness heuristics were tried and scored 1/5. Use template anchors. The draft anchor is a
 static UI region that scored **0.999** on draft screens and **0.763** on spectate frames.
 
-- [ ] **Step 1: Cut the draft anchor**
+- [x] **Step 1: Cut the draft anchor**
 
 ```bash
 cd /mnt/docs/adbautoplayer
@@ -932,7 +937,7 @@ Expected: each anchor scores >= 0.99 on its own screen and clearly under 0.90 on
 If a non-matching screen scores above 0.90, choose a different region - do NOT lower the
 threshold.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 ANCHORS = (Path(__file__).resolve().parents[5] / "adb_auto_player" / "games" /
@@ -963,9 +968,9 @@ def test_spectate_is_not_mistaken_for_draft(db_path, frames):
         cv2.imread(str(frames["spectate"])), cfg, ANCHORS) != "draft"
 ```
 
-- [ ] **Step 3: Run it, expect failure** (`AttributeError: classify_screen`)
+- [x] **Step 3: Run it, expect failure** (`AttributeError: classify_screen`)
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 ```python
 # Anchors, not brightness. Brightness/colour classification was tried and scored 1/5
@@ -1005,9 +1010,9 @@ def classify_screen(frame: np.ndarray, cfg: SolsticeConfig, anchor_dir) -> str:
     return "unknown"
 ```
 
-- [ ] **Step 5: Run the tests.** Expected: PASS, 7 tests total in the file.
+- [x] **Step 5: Run the tests.** Expected: PASS, 7 tests total in the file.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src-tauri/src-python/adb_auto_player/games/afk_journey/
@@ -1038,7 +1043,7 @@ poll catches it comfortably.
 Tier 1: match locked picks against the pool. Tier 2: on failure, fall back to the full library -
 this covers grid cells that came back `unknown`. Still nothing: `unknown`.
 
-- [ ] **Step 1: Cut the third ban glyph**
+- [x] **Step 1: Cut the third ban glyph**
 
 The committed red/blue pair misses Tilaya's overlay (scored 0.279/0.241, under the 0.60
 threshold), so a banned card leaks into results as a phantom hero.
@@ -1058,7 +1063,7 @@ print("ban_glyph_red_v2", gray.shape)
 PY
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 def test_ban_detection_finds_exactly_the_two_banned_cells(db_path, frames):
@@ -1098,9 +1103,9 @@ def test_identify_pool_reads_the_whole_grid(db_path, frames, library):
     assert all(pool.per_slot[s].status == "identified" for s in GRID_TRUTH)
 ```
 
-- [ ] **Step 3: Run it, expect failure**
+- [x] **Step 3: Run it, expect failure**
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 ```python
 def load_ban_glyphs(anchor_dir) -> list[np.ndarray]:
@@ -1164,11 +1169,11 @@ def identify_with_pool(cell_gray: np.ndarray, cell_type: str, library: IconLibra
     return replace(fallback, candidate_scope="full_library", pool_miss=1 if pool else 0)
 ```
 
-- [ ] **Step 5: Run the tests.** Expected: PASS. If `test_ban_detection...` returns extra
+- [x] **Step 5: Run the tests.** Expected: PASS. If `test_ban_detection...` returns extra
 slots, the glyph threshold is too low - print per-cell scores before changing it; measured
 separation was 1.00 for bans versus 0.35 for other cards.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src-tauri/src-python/adb_auto_player/games/afk_journey/
@@ -1193,7 +1198,7 @@ git commit -m "feat(solstice): pool capture, third ban glyph, two-tier candidate
 Match tables are **locally earned** - `build_hero_db.py` must never touch them. Add them to
 `schema.sql` under the locally-earned section so that stays obvious.
 
-- [ ] **Step 1: Extend the schema**
+- [x] **Step 1: Extend the schema**
 
 Append to `schema.sql`:
 
@@ -1297,7 +1302,7 @@ Expected: `match tables: ['match', 'match_hero', 'match_odds', 'match_pool']` an
 `build_hero_db.py` must NOT be given a path to these tables - they are locally earned and it
 already only touches `hero_skill` and `solstice_roster`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 import shutil
@@ -1431,9 +1436,9 @@ def test_build_hero_db_does_not_touch_match_tables(tmp_db):
     assert len(store.odds_for(mid)) == 1
 ```
 
-- [ ] **Step 3: Run it, expect failure**
+- [x] **Step 3: Run it, expect failure**
 
-- [ ] **Step 4: Implement `store.py`**
+- [x] **Step 4: Implement `store.py`**
 
 ```python
 """Match recording. These tables are LOCALLY EARNED - build_hero_db.py never touches them."""
@@ -1626,9 +1631,9 @@ class MatchStore:
 Note `heroes_for` returns `HeroSlot(*r)` and the SELECT column order matches the dataclass
 field order exactly - if you reorder either, reorder both.
 
-- [ ] **Step 5: Run the tests.** Expected: PASS, 5 tests.
+- [x] **Step 5: Run the tests.** Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src-tauri/src-python/ data/solstice_clash/
@@ -1639,7 +1644,7 @@ git commit -m "feat(solstice): match/match_hero/match_odds store (schema v2)"
 
 ## Task 7: Regression, lint, docs
 
-- [ ] **Step 0: Lint**
+- [x] **Step 0: Lint**
 
 ```bash
 cd /mnt/docs/adbautoplayer
@@ -1650,7 +1655,7 @@ uv run --group dev ruff check \
 
 Expected: no findings. `E402` (import not at top) and `F401` (unused import) are the likely ones.
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 ```bash
 uv run --group dev pytest src-tauri/src-python/tests -q
@@ -1659,7 +1664,7 @@ uv run --group dev pytest src-tauri/src-python/tests -q
 Expected: no new failures versus `main`. If the icon-dependent tests skip, that is correct on a
 machine without the extracted icons - but they MUST run and pass on the dev machine.
 
-- [ ] **Step 2: Verify the database refresh is still non-destructive**
+- [x] **Step 2: Verify the database refresh is still non-destructive**
 
 ```bash
 cd data/solstice_clash
@@ -1677,12 +1682,12 @@ for t in ("hero","hero_alias","hero_skin","hero_skill","solstice_roster",
 PY
 ```
 
-- [ ] **Step 3: Update the docs**
+- [x] **Step 3: Update the docs**
 
 Add a "Phase 1 delivered" section to `docs/solstice-clash/README.md` listing the four services
 and their entry points, and update `CHANGELOG.md`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ---
 

@@ -40,7 +40,7 @@ is the structural tool - running the wrong one could change process credentials.
 | **sd** | Simpler, saner regex replace than `sed` (no escaping maze). Still line/regex-level, so it does not fix the structural gap. |
 | **difftastic** | Syntax-aware diff - shows what actually changed structurally rather than line noise. Useful for verifying my own edits. |
 | **watchexec / entr** | Re-run tests on file change; useful during a TDD loop. |
-| **shellcheck** | Would have caught the `pkill -f grab.py` self-kill and the unprivileged-glob-under-sudo bug, both of which cost real time this session. |
+| **shellcheck** | Catches unquoted vars (SC2086) and `rm -rf $VAR/$VAR` (SC2115). **Verified: it does NOT catch the `pkill` self-match or the sudo-glob bug** - I wrongly claimed it would. |
 
 ## The most promising change, independent of any install
 
@@ -112,7 +112,7 @@ That is exactly the failure that left 45 stale `hero_skin.wiki_icon` rows this s
 | diffing | `difftastic` | syntax-aware diff | `sudo dnf install difftastic` |
 | diffing | `git-delta` | better pager for ordinary diffs | `sudo dnf install git-delta` |
 | quality | `basedpyright` / `mypy` | static type checking | `uv add --dev basedpyright` |
-| quality | `shellcheck` | would have caught this session's `pkill -f` self-kill and the unprivileged-glob-under-sudo bug | `sudo dnf install ShellCheck` |
+| quality | `shellcheck` | general shell linting; verified it does NOT catch this session's two bugs | `sudo dnf install ShellCheck` |
 
 `ruff` and `pytest-cov` are already project dependencies.
 

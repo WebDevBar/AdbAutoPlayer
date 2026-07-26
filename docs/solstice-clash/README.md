@@ -550,3 +550,49 @@ the tables that are safe to rebuild, and restores.
     # then diff every table count and every icon column against /tmp/before.sqlite
 
 That diff is what caught three separate data-loss paths. Run it after any builder change.
+
+---
+
+## 15. Phase 1 delivered (2026-07-26)
+
+All seven plan tasks complete. 39 tests, full pre-commit gate green (ruff check, ruff
+format, isort, ty type check), 582 tests pass repo-wide with no regressions.
+
+    src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/
+      config.py   SolsticeConfig.load(db) -> cells(), tunable_float(), scale_chain(),
+                  heroes(), resolve_alias()
+      icons.py    decode_ast(path), IconLibrary.build(cfg, icon_dir) -> entries(), for_slugs()
+      vision.py   classify_screen(), extract_cell(), identify_cell(),
+                  identify_with_pool(), load_ban_glyphs(), is_banned(), identify_pool()
+      store.py    MatchStore -> record_match/heroes/pool/odds, set_natural_key, set_outcome
+
+### Verified end to end on real frames
+
+| Surface | Result |
+|---|---|
+| draft_card, 18 labelled cells | 18/18 correct, every one above the 0.9055 floor |
+| locked_pick, 6 labelled cells | 6/6 correct, every one above the 0.9249 floor |
+| skinned cells (Rowan, Lily May, Igor, Galahad) | resolve to the HERO, via the skin art |
+| banned cells | return `unknown`, never guessed |
+| ban detection | exactly slots 6 and 20, at 0.709 and 1.000 |
+| screen classifier | draft 1.000 own / 0.432 / 0.450; prematch 1.000 own / 0.553 / 0.490 |
+| DB refresh | non-destructive, verified against a snapshot including match tables |
+
+### Things measurement changed my mind about
+
+- **The first prematch anchor was rejected.** It scored 0.896 on the DRAFT screen against
+  a 0.90 threshold - not separation. Re-cut at y=1000 x=360, and prematch now requires
+  BOTH the anchor and the team-plate colour split.
+- **The orientation test asserted the wrong thing.** I assumed a portrait means more opaque
+  pixels in the TOP half; measured, the body fills the bottom (172.4 vs 50.5).
+- **`ty` caught three real optionality bugs** the tests would have hit later: `Cell.slot` is
+  `Optional[int]` used as a sort key and in arithmetic, and `cv2.imread` returns
+  `ndarray | None`. Shared checked fixtures now handle both.
+- **The `network` marker needed registering in BOTH pyproject.toml files** - pytest picks
+  rootdir by invocation path.
+
+### What Phase 1 does NOT do
+
+No device automation, no mode, no odds parsing, no prediction model, no spectate geometry.
+It converts a screenshot into rows in a database. The loop that gets screenshots at the
+right moments is Phase 2.

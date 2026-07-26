@@ -72,11 +72,64 @@ self.start_up()            # opens the H264 stream
 self.navigate_to_world()   # gets to a known-good screen no matter where we started
 ```
 
-`navigate_to_world()` (`navigation.py:38-73`) is not a convenience wrapper - it retries up
-to 40 times, **restarts the game** if it is not running or after 20 failed attempts, and
-raises `GameNotRunningOrFrozenError` rather than spinning forever. For an unattended
-overnight run that is exactly the recovery behaviour needed, and it already exists.
-`SunlitShowdownMixin` uses the same two calls (`sunlit_showdown.py:29-30`).
+`navigate_to_world()` (`navigation.py:38-73`) is not a convenience wrapper. It handles
+exactly the "we could be anywhere" problem, and it must not be reimplemented:
+
+- **Homestead** - a genuinely different world - is handled explicitly via
+  `navigation/homestead/{homestead_enter, homestead_invaded, world}.png` and
+  `_handle_homestead_world` (`navigation.py:120-128`).
+- **The game entry / notice screen**, quick-purchase popups, guide overlays, login claim
+  prompts, battle exits, Arcane Labyrinth screens and the Resonating Hall all have
+  templates in `_get_overview_navigation_templates()` (`navigation.py:82-102`).
+- **Any unrecognised screen** - being deep inside some *other* event, for instance - falls
+  through to `handle_popup_messages()` and otherwise **presses back**, then loops
+  (`navigation.py:110-119`). Repeated backing out is what eventually surfaces a known
+  anchor, so no per-event knowledge is needed.
+- It retries up to 40 times, **restarts the game** if it is not running or after 20 failed
+  attempts, and raises `GameNotRunningOrFrozenError` rather than spinning forever.
+
+That covers homestead, foreign event screens, blocking popups and a dead game - the four
+ways an unattended start actually goes wrong. `SunlitShowdownMixin` uses the same two calls
+(`sunlit_showdown.py:29-30`).
+
+**Returning IS the completion signal.** `_navigate_to_overview` loops until
+`_handle_overview_navigation` confirms arrival, then returns the `Overview` reached
+(`navigation.py:59-79`); failure raises rather than returning early. So the caller does not
+need to poll for "are we there yet" - if the call returns, the transition finished,
+including any loading screen. `navigate_to_current_overview()` is also available to read
+which overview we are in *without* forcing a move.
+
+**Tested on device, not assumed.** Two starting states, same unmodified
+`navigate_to_world()` call:
+
+| start state | matched template | confidence | elapsed |
+|---|---|---|---|
+| Settings screen | `arcane_labyrinth/back_arrow.png` | 99.5% | ~2s |
+| Homestead | `navigation/homestead/world.png` at (1011,1594) | 99.0% | ~6s |
+
+The Settings case is the important one: it matches none of the overview templates, so it
+exercised the press-back fall-through and still recovered. The Homestead case confirms the
+6-second figure includes the full world reload - the call did not return early into a
+loading screen. Homestead is effectively a separate world with its own load, and it is
+handled by an existing template rather than anything we need to write.
+
+### Reset policy
+
+Recovery cannot be unbounded, or an unattended run can spend the night quietly retrying.
+
+| level | trigger | action |
+|---|---|---|
+| step | an expected screen does not appear within its timeout | retry the step |
+| cycle | the expected screen still absent after **60 seconds** | abandon the match, `navigate_to_world()`, restart the loop from step 1 |
+| mode | **3 consecutive** cycle-level restarts with no successful match | stop the mode and raise |
+
+The counter resets on any successfully recorded match, so a single bad match cannot
+accumulate toward the limit across an otherwise healthy night. Three consecutive failures
+means something structural has changed - a game update moved a button, the event ended, the
+device is wedged - and continuing would produce nothing but noise. Stopping with a clear
+error is the correct outcome; silently looping is not.
+
+The restart limit is a setting, defaulting to 3.
 
 **This step runs once, at mode start - not per match.** After a match completes, the exit
 path already lands on the overworld, which *is* a known-good state, so the loop re-enters
@@ -109,11 +162,14 @@ known-good state - so the loop restarts at step 1 without re-running `navigate_t
     The teleport popup reads *"Teleport to the Waystone closest to the target?"* with an X
     and a green check; tap the **green check**.
 
-    **Poll every 1 second, with a 10-second timeout, in every branch.** The middle branch
-    is the one that makes a fixed sleep wrong: there is no popup to detect and no signal
-    that anything is happening, so code that assumed the dialog appears immediately would
-    silently fall through. Polling costs nothing and resolves the fast cases in ~4s rather
-    than waiting out a worst-case sleep.
+    **Poll every 1 second, with a 30-second timeout, in every branch.** The middle branch
+    is what makes a fixed sleep wrong: there is no popup to detect and no signal that
+    anything is happening, so code assuming an immediate dialog would silently fall
+    through. Polling resolves the fast cases in ~4s regardless of the ceiling.
+
+    The timeout is 30s, not 10s: the far branch was *measured* at ~12s, so a 10s limit
+    would fail a verified-good path. The measured worst case gets roughly 2.5x headroom
+    because travel time depends on distance and we have sampled exactly one far position.
 
     Captured frames: `summary/teleport_dialog.png` (the popup at native 1080x1920),
     plus full recordings at `live/teleflow/raw/` and `live/walkflow/raw/`.
@@ -130,9 +186,12 @@ known-good state - so the loop restarts at step 1 without re-running `navigate_t
     is out of scope for a collector - if the user wants the reminder suppressed, that is
     their call to make in-game.
 4. **Spectate Live**
-4a. **If the match is still in its draft phase**, capture one draft frame (full grid, before
-    picks resolve) and one prematch-locked frame for cross-screen training (section 5.4).
-    If we entered mid-match, skip this - it is optional material, never a precondition.
+4a. **If the match is still in its draft phase**, capture one draft frame **late in the
+    draft, when as many pick slots as possible are filled** (up to five), plus one
+    prematch-locked frame, for cross-screen training (section 5.4). The training targets
+    are the pick slots, so an early frame with an empty strip is worthless - capture as
+    late as possible before the screen changes. If we entered mid-match, skip this
+    entirely: it is optional material, never a precondition.
 5. Wait for the match to end, **polling every 2 seconds** for the result screen. The end
    state is identified by three co-occurring signals: the **Back** button, the
    **chart/details** icon to its left, and the **"... WINS!" / "... LOSES!"** banner text.
@@ -140,6 +199,23 @@ known-good state - so the loop restarts at step 1 without re-running `navigate_t
    A 2-second interval is deliberate. Combat runs for minutes and the result screen waits
    for input, so there is nothing to miss - polling faster would burn CPU decoding frames
    for no gain, and this is a mode meant to run for hours.
+
+   **The timeout must be passed explicitly.** `wait_for_template(timeout=None)` falls back
+   to `self.template_timeout`, which comes from settings and defaults to **10 seconds**
+   (configurable max 60s) - far shorter than a match. Called with the default it would
+   raise `GameTimeoutError` on every normal match. The call is therefore:
+
+   ```python
+   self.wait_for_template(
+       "event/solstice_clash/result_back.png",
+       delay=2.0,
+       timeout=MATCH_TIMEOUT_SECONDS,   # minutes, not the 10s default
+       timeout_message="no result screen - abandoning this match",
+   )
+   ```
+
+   `MATCH_TIMEOUT_SECONDS` is a setting. On timeout the mode abandons the match and goes
+   to the cycle-level reset (section 3, reset policy) rather than propagating the error.
 6. Tap the chart/details icon -> match summary
 7. Identify heroes, read screen data, record
 8. Tap the **back arrow** (bottom left of the summary) -> returns to the result screen

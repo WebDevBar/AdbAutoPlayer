@@ -15,8 +15,8 @@ mode that cannot run.
 **P1. The spectate draft screen must be proven readable.** This mode's entire input is the set
 of locked picks read from the spectate draft screen. Mode A registered `spectate_draft_picks`
 cell geometry but **never validated its accuracy on that screen** - cross-screen training was
-cut from Mode A's scope. Until that is measured, nothing in section 12 can be trusted to have
-correct inputs.
+cut from Mode A's scope. Until that is measured, nothing the mode computes or displays can be
+trusted to have correct inputs.
 
 Order of work: capture draft-screen frames as fixtures, measure identification accuracy
 against the same accept rule Mode A uses (`score >= 0.70 and margin >= 0.10`), and only then
@@ -365,7 +365,7 @@ The exact pass condition that opens the display gate is stated in section 7 and 
 restated here, so there is one definition of it.
 
 **The gate is decided by this refit procedure on historical matches, not by live predictions.**
-Section 12's logged live predictions are a monitoring surface: they confirm after the fact
+Section 13's logged live predictions are a monitoring surface: they confirm after the fact
 that live behaviour matches the refit estimate, and they are the input to any later
 recalibration. They are not what first opens the gate, because before the gate opens no
 prediction is shown and the mode would otherwise never bootstrap.

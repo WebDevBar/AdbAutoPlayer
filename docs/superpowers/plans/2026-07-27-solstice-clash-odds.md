@@ -1172,7 +1172,15 @@ def _slots(left, right, status="identified"):
     return out
 
 
-def _seed(store, outcome, left=("a", "b", "c"), right=("d", "e", "f"), status="identified"):
+# REAL hero slugs from the shipped database. `match_hero.hero_slug` is
+# `REFERENCES hero(slug)` and MatchStore._connect() runs `PRAGMA foreign_keys = ON`,
+# so invented slugs like "a"/"b" raise IntegrityError before any assertion runs.
+# Verified present 2026-07-27: SELECT slug FROM hero ORDER BY slug LIMIT 8.
+LEFT_SLUGS = ("aliceth", "alna", "alsa")
+RIGHT_SLUGS = ("antandra", "arden", "atalanta")
+
+
+def _seed(store, outcome, left=LEFT_SLUGS, right=RIGHT_SLUGS, status="identified"):
     match_id = store.record_match(
         MatchRecord(
             source="spectate",
@@ -1213,14 +1221,14 @@ def test_training_matches_skips_an_unidentified_slot(fresh_db):
     """A missing hero would make a 3v3 look like a 2v3 and corrupt the fit."""
     store = MatchStore(fresh_db)
     before = len(store.training_matches())
-    _seed(store, "left", left=("a", "b", None))
+    _seed(store, "left", left=("aliceth", "alna", None))
     assert len(store.training_matches()) == before
 
 
 def test_training_matches_skips_a_short_side(fresh_db):
     store = MatchStore(fresh_db)
     before = len(store.training_matches())
-    _seed(store, "left", left=("a", "b"))
+    _seed(store, "left", left=("aliceth", "alna"))
     assert len(store.training_matches()) == before
 
 
@@ -1250,7 +1258,7 @@ def test_prediction_is_recorded_even_when_the_gate_is_shut(fresh_db):
     fit_id = store.record_fit(
         "2026-07-27T00:00:00Z", "converging-paths", 20, _result(False), "{}"
     )
-    draft = DraftState(("a", "b"), ("c",), "Alice", "Bob", 3)
+    draft = DraftState(("aliceth", "alna"), ("antandra",), "Alice", "Bob", 3)
     row_id = store.record_prediction(
         fit_id, "2026-07-27T00:05:00Z", draft, _prediction(), gate_open=False
     )
@@ -1462,7 +1470,15 @@ def test_the_mixin_has_no_bet_confirming_tap():
         assert forbidden not in source
 ```
 
-And the implementation of `format_odds_line`, appended to `odds.py`:
+**Write only the test file in this step.** `format_odds_line` does not exist yet - it is
+written in Step 3. Adding it here would make Step 2 pass and defeat the red-green cycle.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd src-tauri/src-python && uv run pytest tests/games/afk_journey/mixins/test_solstice_odds.py -v`
+Expected: FAIL, `ImportError: cannot import name 'format_odds_line'`
+
+- [ ] **Step 3: Implement `format_odds_line`, appended to `odds.py`**
 
 ```python
 def format_odds_line(
@@ -1485,25 +1501,21 @@ def format_odds_line(
 The `gate_open` import is deliberately function-local: `validate.py` imports from
 `odds.py`, so a module-level import here would be a circular import.
 
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `cd src-tauri/src-python && uv run pytest tests/games/afk_journey/mixins/test_solstice_odds.py -v`
-Expected: FAIL
-
-- [ ] **Step 3: Implement**
+- [ ] **Step 4: Wire it into the mixin**
 
 On each draft poll: read locked picks, build `DraftState` with `n_unknown = 6 - n_locked`,
-call `predict`, call `gate_open`, `record_prediction` unconditionally, and log either the
-full line or `not enough data`. Never emit a bare percentage.
+call `predict`, call `format_odds_line`, `record_prediction` unconditionally (gate open or
+not), and log the returned line. Never emit a bare percentage, and never tap a bet control.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 5: Run test to verify it passes**
 
 Run: `cd src-tauri/src-python && uv run pytest tests/games/afk_journey/ -v`
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/solstice_clash.py \
+        src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/odds.py \
         src-tauri/src-python/tests/games/afk_journey/mixins/test_solstice_odds.py
 git commit -m "feat(solstice): live odds during the spectate draft"
 ```

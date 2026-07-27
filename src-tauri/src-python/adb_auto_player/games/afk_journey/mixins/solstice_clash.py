@@ -9,7 +9,6 @@ import itertools
 import logging
 from abc import ABC
 from datetime import UTC, datetime
-from pathlib import Path
 import time as time_module
 from time import sleep
 
@@ -28,6 +27,13 @@ from adb_auto_player.models.geometry import Point
 from adb_auto_player.ocr import RapidOCRBackend
 
 from ..services.solstice.config import SolsticeConfig
+from ..services.solstice.draftlog import (
+    PickRead,
+    better,
+    format_final,
+    format_pick,
+    newly_locked,
+)
 from ..services.solstice.details_screen import (
     SOLSTICE_CLASH_TITLE,
     details_signals,
@@ -40,6 +46,12 @@ from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import CELL_TYPE, SummaryHero, read_summary
+from ..services.solstice.vision import (
+    classify_screen,
+    extract_cell,
+    identify_pool,
+    identify_with_pool,
+)
 from ..services.solstice.sync import SyncClient
 from ..services.solstice.tuning import (
     confirmed_sides,
@@ -76,6 +88,14 @@ MAX_CONSECUTIVE_DRAWS = 4
 # Every one of these is read from the MODULE at use, never captured into a
 # default argument, so a test can patch it.
 POLL_SECONDS = 2.0
+# Mode C watches a draft that lasts ~25s and resolves six picks in it, so 2s would miss
+# picks outright and report them late in a batch. 0.4s is the smallest interval that
+# still leaves the identification work (12 cells against <= 20 pool candidates) a wide
+# margin per poll; the loop logs its measured cost so this can be tuned on evidence.
+DRAFT_POLL_SECONDS = 0.4
+# The two competing geometries for the same six positions. Both are read every poll and
+# the stronger answer wins - see services/solstice/draftlog.py.
+DRAFT_CELL_TYPES = ("draft_locked_pick", "draft_pick")
 # ~5 minutes. A heartbeat, not an on-stop summary: the GUI stop button is
 # SIGTERM (__main__.py:352) and Python does not run finally blocks on SIGTERM,
 # so anything deferred to exit never runs in the only way a user actually stops
@@ -257,7 +277,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
             try:
                 frame = self.get_screenshot()
-            except Exception as exc:  # noqa: BLE001 - see MAX_CONSECUTIVE_...
+            except Exception as exc:
                 screenshot_failures += 1
                 logging.debug(f"[SC-45] screenshot failed: {exc}")
                 if screenshot_failures >= MAX_CONSECUTIVE_SCREENSHOT_FAILURES:
@@ -296,10 +316,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # guard working, not rot.
             if signals.template != signals.labels:
                 disagreements += 1
-                if (
-                    disagreements >= MAX_SIGNAL_DISAGREEMENT
-                    and not warned_disagreement
-                ):
+                if disagreements >= MAX_SIGNAL_DISAGREEMENT and not warned_disagreement:
                     warned_disagreement = True
                     logging.warning(
                         f"[SC-46] the Replay template and the Ally/Enemy labels "
@@ -328,7 +345,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     if sync.enabled:
                         sync.push()
                         sync.pull()
-                except Exception as exc:  # noqa: BLE001 - sync never costs a match
+                except Exception as exc:
                     logging.warning(f"[SC-30] sync failed, continuing: {exc}")
             else:
                 skipped += 1
@@ -359,8 +376,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             delay=DETAILS_POLL_DELAY,
             timeout=DETAILS_TIMEOUT,
             timeout_message=(
-                "[SC-44] details screen never appeared after tapping the chart "
-                "button"
+                "[SC-44] details screen never appeared after tapping the chart button"
             ),
         )
 
@@ -376,7 +392,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             read = read_summary(
                 frame, self._solstice_cfg, self._solstice_library, self._ocr
             )
-        except Exception as exc:  # noqa: BLE001 - one bad read must not end a session
+        except Exception as exc:
             logging.warning(
                 f"[SC-47] read_summary raised on a confirmed details "
                 f"screen, skipping this poll: {exc!r}"
@@ -688,12 +704,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # Seed the local pool before collecting. Wrapped like every other
         # sync call: a dead endpoint must never stop a collection run.
         sync = SyncClient(self._store)
-        logging.info(
-            f"[SC-35] sync {'enabled' if sync.enabled else 'disabled'}"
-        )
+        logging.info(f"[SC-35] sync {'enabled' if sync.enabled else 'disabled'}")
         try:
             sync.pull()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logging.warning(f"[SC-30] initial pull failed: {exc}")
         while consecutive_failures < max_restarts:
             self._match_recorded_this_cycle = False
@@ -727,7 +741,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         f"[SC-20] no match recorded "
                         f"({consecutive_failures}/{max_restarts})"
                     )
-            except Exception as exc:  # noqa: BLE001 - one bad match must not end the run
+            except Exception as exc:
                 # A match that was already RECORDED does not count as a failure, however
                 # the cycle ended. _run_one_match writes the match before navigating back,
                 # so an exception in that back-navigation used to burn a failure against a
@@ -736,7 +750,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 if self._match_recorded_this_cycle:
                     recorded += 1
                     consecutive_failures = 0
-                    logging.warning(f"[SC-21] recorded, but the cycle ended badly: {exc}")
+                    logging.warning(
+                        f"[SC-21] recorded, but the cycle ended badly: {exc}"
+                    )
                 else:
                     consecutive_failures += 1
                     logging.warning(
@@ -752,7 +768,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 if sync.enabled:
                     sync.push()
                     sync.pull()
-            except Exception as exc:  # noqa: BLE001 - sync must never cost a match
+            except Exception as exc:
                 logging.warning(f"[SC-30] sync failed, continuing: {exc}")
 
             # Checked out here, NOT inside the try above: a raise in that block is
@@ -776,10 +792,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # this is a no-op; after an INCORRECT one it is the difference between
                 # waiting harmlessly and tapping through someone's match.
                 if self._is_in_overview():
-                    logging.debug("[SC-26] already on the overworld - skipping recovery")
+                    logging.debug(
+                        "[SC-26] already on the overworld - skipping recovery"
+                    )
                 else:
                     self.navigate_to_world()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 consecutive_failures += 1
                 logging.warning(
                     f"[SC-23] recovery failed ({consecutive_failures}/{max_restarts}): {exc}"
@@ -808,7 +826,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         """
         if frame is None:
             frame = self.get_screenshot()
-        read = read_summary(frame, self._solstice_cfg, self._solstice_library, self._ocr)
+        read = read_summary(
+            frame, self._solstice_cfg, self._solstice_library, self._ocr
+        )
 
         captured_at = datetime.now(UTC).isoformat(timespec="seconds")
         # Resolve by DATE first, OCR name only as a fallback. `theme` here is the
@@ -909,10 +929,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # Incomplete matches deliberately keep natural_key NULL and are never
         # pushed. A half-read match with a key could claim identity over the good
         # version of the same match, because the first submission wins.
-        left_slugs = [s_.hero_slug for s_ in slots
-                      if s_.side == "left" and s_.hero_slug]
-        right_slugs = [s_.hero_slug for s_ in slots
-                       if s_.side == "right" and s_.hero_slug]
+        left_slugs = [
+            s_.hero_slug for s_ in slots if s_.side == "left" and s_.hero_slug
+        ]
+        right_slugs = [
+            s_.hero_slug for s_ in slots if s_.side == "right" and s_.hero_slug
+        ]
         if read.winner and is_complete(left_slugs, right_slugs, read.winner):
             self._store.set_natural_key(
                 match_id,
@@ -929,9 +951,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             if frame_img is None:
                 continue  # entered mid-match: normal, never an error
             result = train_from_frame(
-                store=self._store, cfg=self._solstice_cfg,
-                library=self._solstice_library, frame=frame_img,
-                screen_slug=screen_slug, cell_type=cell_type,
+                store=self._store,
+                cfg=self._solstice_cfg,
+                library=self._solstice_library,
+                frame=frame_img,
+                screen_slug=screen_slug,
+                cell_type=cell_type,
                 confirmed_by_side=confirmed_by_side,
                 frame_path="",
                 match_id=match_id,
@@ -943,6 +968,163 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 f"{result.deduced} deduced by elimination, "
                 f"{result.set_consistent} set-consistent"
             )
+
+    @register_command(
+        name="SolsticeClashWatchDraft",
+        gui=GUIMetadata(
+            label="WDB: Watch Draft Picks (Mode C)",
+            category=AFKJCategory.EVENTS_AND_OTHER,
+            tooltip=(
+                "Log each pick as it locks while you spectate a draft, then the "
+                "locked six. Never taps, swipes or navigates."
+            ),
+        ),
+    )
+    def watch_solstice_draft(self, max_polls: int | None = None) -> None:
+        """Phase 1 of Mode C: say what locked, as it locks.
+
+        Predicts nothing and stores nothing. It exists to establish whether the draft
+        screen can be read correctly and quickly enough to predict from at all - the
+        prerequisite the odds design refuses to build on top of unmeasured.
+
+        Never touches the device, for the same reason Mode B does not: the user is
+        watching a live match and a stray tap costs them the round. `get_screenshot()`
+        is the only device call, and `start_up()` is deliberately NOT called because it
+        can resize the display or launch the app underneath a running match.
+
+        Joining mid-draft is normal, not an error: every pick already on screen is
+        reported on the first poll, in draft order.
+        """
+        anchor_dir = self.template_dir / "event" / "solstice_clash" / "anchors"
+        cfg = self._solstice_cfg
+        library = self._solstice_library
+
+        seen: dict[int, str] = {}
+        pool: set[str] | None = None
+        last_reads: list[PickRead] = []
+        drafts = 0
+        failures = 0
+        checked_resolution = False
+        slowest = 0.0
+
+        logging.info(
+            "[SC-50] watching for a draft - spectate normally, this never taps"
+        )
+
+        for poll in itertools.count():
+            if max_polls is not None and poll >= max_polls:
+                break
+            if poll:
+                time_module.sleep(DRAFT_POLL_SECONDS)
+
+            try:
+                frame = self.get_screenshot()
+            except Exception as exc:
+                failures += 1
+                logging.debug(f"[SC-45] screenshot failed: {exc}")
+                if failures >= MAX_CONSECUTIVE_SCREENSHOT_FAILURES:
+                    raise GameActionFailedError(
+                        f"[SC-45] {failures} consecutive screenshot failures - the "
+                        f"device connection is gone. Draft watching has stopped."
+                    ) from exc
+                continue
+            failures = 0
+
+            if not checked_resolution:
+                checked_resolution = True
+                if frame.shape[:2] != (1920, 1080):
+                    raise GameActionFailedError(
+                        f"[SC-42] expected a 1080x1920 screen, got "
+                        f"{frame.shape[1]}x{frame.shape[0]} - this mode cannot resize "
+                        f"the display because you may be spectating a live match"
+                    )
+
+            started = time_module.perf_counter()
+            screen = classify_screen(frame, anchor_dir)
+
+            if screen == "draft":
+                if pool is None:
+                    read = identify_pool(frame, cfg, library, anchor_dir)
+                    # An empty read is a FAILED read, not an empty pool, and passing it
+                    # on would mark every pick a pool miss and hide the real failure.
+                    pool = read.slugs or None
+                    if pool:
+                        logging.info(
+                            f"[SC-51] pool read: {len(pool)} heroes, "
+                            f"{len(read.banned_slots)} banned"
+                        )
+                    else:
+                        logging.warning(
+                            "[SC-52] pool unreadable - identifying against the full "
+                            "library, which is slower and less accurate"
+                        )
+                last_reads = self._read_draft_picks(frame, pool)
+                for pick in newly_locked(seen, last_reads):
+                    logging.info(format_pick(pick))
+
+            elif screen == "prematch_locked":
+                if seen or last_reads:
+                    locked = self._read_draft_picks(
+                        frame, pool, cell_types=("locked_pick",)
+                    )
+                    # Prefer the locked screen's own read, and fall back to the last
+                    # draft read for any slot it could not resolve - a blank there is
+                    # worse than a pick we already logged with its evidence.
+                    merged = {r.slot: r for r in last_reads}
+                    for read in locked:
+                        merged[read.slot] = better(merged.get(read.slot), read)
+                    logging.info(format_final(list(merged.values())))
+                    drafts += 1
+                # Reset for the next match, whether or not this one was readable.
+                seen, pool, last_reads = {}, None, []
+
+            elapsed = time_module.perf_counter() - started
+            slowest = max(slowest, elapsed)
+            if poll and poll % HEARTBEAT_POLLS == 0:
+                logging.info(
+                    f"[SC-53] {poll} polls, {drafts} drafts seen, slowest read "
+                    f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}"
+                    f"ms interval"
+                )
+                slowest = 0.0
+
+    def _read_draft_picks(
+        self,
+        frame,
+        pool: set[str] | None,
+        cell_types: tuple[str, ...] = DRAFT_CELL_TYPES,
+    ) -> list[PickRead]:
+        """Read the six pick cells, taking the stronger answer per slot.
+
+        Two geometries are registered for the same positions and only one can be right;
+        reading both and recording which answered turns that into a measurement instead
+        of a choice made in advance. See services/solstice/draftlog.py.
+        """
+        cfg = self._solstice_cfg
+        library = self._solstice_library
+        heroes = cfg.heroes()
+        best: dict[int, PickRead] = {}
+
+        for cell_type in cell_types:
+            for cell in cfg.cells(cell_type):
+                if cell.slot is None or cell.side is None:
+                    continue
+                identification = identify_with_pool(
+                    extract_cell(frame, cell), cell_type, library, cfg, pool
+                )
+                hero = heroes.get(identification.slug) if identification.slug else None
+                read = PickRead(
+                    slot=cell.slot,
+                    side=cell.side,
+                    cell_type=cell_type,
+                    slug=identification.slug,
+                    name=hero.name if hero else identification.slug,
+                    score=identification.score,
+                    margin=identification.margin,
+                )
+                best[cell.slot] = better(best.get(cell.slot), read)
+
+        return list(best.values())
 
     # --- lazily built, because IconLibrary decoding takes seconds and the GUI imports
     # --- this module at startup.
@@ -995,7 +1177,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 ey=CHAT_DRAG_TO_Y,
                 duration=CHAT_DRAG_SECONDS,
             )
-        except Exception as exc:  # noqa: BLE001 - cosmetic step, never fatal
+        except Exception as exc:
             logging.debug(f"could not move the chat widget: {exc}")
 
     def _capture_training_frame(
@@ -1087,12 +1269,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # return None despite being plainly on screen.
                 blocks = self._ocr.detect_text_blocks(frame, ConfidenceValue(0.5))
                 fresh = [
-                    b.text.strip()
-                    for b in blocks
-                    if b.text.strip() not in baseline
+                    b.text.strip() for b in blocks if b.text.strip() not in baseline
                 ]
                 slug = resolve_hero_name_strict(fresh, self._solstice_cfg)
-            except Exception as exc:  # noqa: BLE001 - one unreadable card must not end the match
+            except Exception as exc:
                 logging.warning(f"[SC-08] long-press confirm failed: {exc}")
             finally:
                 # Dismiss on EVERY path, including failure - even if hold or

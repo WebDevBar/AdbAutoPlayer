@@ -4,6 +4,25 @@
 
 ### Added
 
+- **AFK Journey - Solstice Clash Mode C, phase 1 (`WDB: Watch Draft Picks`)**: logs each
+  pick as it locks while you spectate, in draft order, then the locked six. It predicts
+  nothing and stores nothing - it exists to establish whether the draft screen can be read
+  correctly and fast enough to predict from, which the odds design refuses to build on
+  unmeasured. Never taps, swipes or navigates: `get_screenshot()` is the only device call,
+  and `start_up()` is deliberately not called, because it can resize the display or launch
+  the app underneath a live match.
+  - Reads the 20-card pool once per draft and identifies picks against it, so each cell is
+    matched against at most 20 candidates instead of ~121 - faster, and a pick outside the
+    pool becomes a detected error rather than a silent wrong answer.
+  - Two cell geometries are registered for the same six positions, a day apart and about
+    20px apart, and only one can be right: the collected audit rows pass the accept rule on
+    39% of `draft_pick` reads against 100% on the prematch and summary screens. Phase 1
+    reads BOTH and logs which one answered, with score and margin, so the winner is decided
+    by collected evidence rather than by which registration looked more careful.
+  - Joining mid-draft reports every pick already on screen, in order, on the first poll.
+  - Polls at 0.4s and logs its own slowest read against that interval, because being right
+    about a pick after the betting closes is worth nothing.
+
 - **AFK Journey - Solstice Clash Mode B (passive collection)**: records match data from
   the post-match details screen while YOU play competitive matches. Never taps, swipes,
   holds or navigates - `get_screenshot()` is the only device call, because the user is in

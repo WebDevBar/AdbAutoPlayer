@@ -158,7 +158,7 @@ def _scrub_seeded_copy(target: Path) -> None:
         con = sqlite3.connect(target)
         con.execute("PRAGMA foreign_keys = ON")
         for table in _PER_MACHINE_TABLES:
-            con.execute(f"DELETE FROM {table}")  # noqa: S608 - fixed literals
+            con.execute(f"DELETE FROM {table}")
         con.commit()
         con.close()
     except sqlite3.Error:

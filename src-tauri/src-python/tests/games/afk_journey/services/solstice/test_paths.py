@@ -27,8 +27,7 @@ def test_no_developer_path_is_hardcoded():
         # came back `unknown` - silently.
         "/mnt/vault",
     )
-    for f in (src / "mixins/solstice_clash.py",
-              src / "services/solstice/paths.py"):
+    for f in (src / "mixins/solstice_clash.py", src / "services/solstice/paths.py"):
         text = f.read_text()
         for path in banned:
             assert path not in text, f"{f} hardcodes {path}"
@@ -58,9 +57,9 @@ def test_first_run_seeds_from_the_bundled_database(tmp_path, monkeypatch):
 
     import sqlite3
 
-    assert sqlite3.connect(target).execute(
-        "SELECT COUNT(*) FROM hero"
-    ).fetchone()[0] > 0
+    assert (
+        sqlite3.connect(target).execute("SELECT COUNT(*) FROM hero").fetchone()[0] > 0
+    )
 
 
 def test_seeding_does_not_overwrite_existing_data(tmp_path, monkeypatch):
@@ -73,7 +72,8 @@ def test_seeding_does_not_overwrite_existing_data(tmp_path, monkeypatch):
 
 def test_the_bundled_copy_is_not_moved(tmp_path, monkeypatch):
     """Seeding copies. Moving would break the next fresh install and, on a
-    packaged build, try to write into a read-only location."""
+    packaged build, try to write into a read-only location.
+    """
     monkeypatch.setenv("ADB_SOLSTICE_DATA_DIR", str(tmp_path))
     seed = bundled_db()
     solstice_db_path()
@@ -92,26 +92,40 @@ def test_the_committed_seed_carries_no_per_machine_data():
     seed = bundled_db()
     assert seed is not None
     con = sqlite3.connect(seed)
-    for table in ("install", "match", "match_hero", "match_pool", "match_odds",
-                  "identification_audit", "hero_screen_transform"):
+    for table in (
+        "install",
+        "match",
+        "match_hero",
+        "match_pool",
+        "match_odds",
+        "identification_audit",
+        "hero_screen_transform",
+    ):
         n = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         assert n == 0, f"{table} has {n} rows - run data/solstice_clash/strip_seed.py"
 
 
 def test_the_committed_seed_still_carries_the_reference_data():
     """The pooled API serves matches only - no roster, no cell geometry. Strip
-    too much and a fresh install cannot identify a hero at all."""
+    too much and a fresh install cannot identify a hero at all.
+    """
     import sqlite3
 
     con = sqlite3.connect(bundled_db())
-    for table, minimum in (("hero", 100), ("solstice_roster", 100),
-                           ("cell_registry", 20), ("art_transform", 1),
-                           ("theme", 1)):
+    for table, minimum in (
+        ("hero", 100),
+        ("solstice_roster", 100),
+        ("cell_registry", 20),
+        ("art_transform", 1),
+        ("theme", 1),
+    ):
         n = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         assert n >= minimum, f"{table} has only {n}"
 
 
-def test_seeding_scrubs_any_per_machine_rows_that_slipped_through(tmp_path, monkeypatch):
+def test_seeding_scrubs_any_per_machine_rows_that_slipped_through(
+    tmp_path, monkeypatch
+):
     """Belt and braces: even if a polluted bundle shipped, the copy is cleaned."""
     import sqlite3
 

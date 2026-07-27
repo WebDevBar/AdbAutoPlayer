@@ -60,11 +60,56 @@
   keys; no backfill.
 - This fork's commands are labelled `WDB:` and grouped at the end of the menu.
 
+### Removed
+
+- **Screenshot archiving, entirely.** Mode A wrote a full 1080x1920 PNG per hero per
+  match into `/mnt/vault/solstice/training/` - **345 MB in a single day, 72% of it
+  byte-identical duplicates** (measured: 347 files, 97 unique). 407 MB reclaimed.
+
+  Nothing ever read one back. `train_from_frame` takes the frame **in memory**
+  (`frame: np.ndarray`) and `learn_if_improved` takes `gray`; `frame_path` was only a
+  string stored in a column that appears in no production SELECT, and
+  `match_hero.frame_path` was a dead column no production code ever wrote.
+
+  It was also serving a shelved feature: `learn_if_improved` returns `False` when
+  `confirmed_slug is None`, which comes from `confirmed_sides()`, which only counts
+  `identified_by == "longpress_ocr"` - and long-press verification is off. Learning could
+  never fire, so every frame was written for a loop that cannot run.
+
+  The write was buggy twice over. `self._archive(frame)` sat inside `for hero in
+  read.heroes`, writing the same frame six times per match. And the guard
+  `None if confirmed == hero.slug else archive(...)` reads as "archive on disagreement",
+  but with verification off `confirmed` is always `None` - so it fired for every
+  identified hero, while a FAILED identification (`hero.slug is None`, so `None == None`)
+  was the one case guaranteed *not* to get a frame, despite being the only case the
+  schema comment says the frame exists for.
+
+  A screenshot is input: once parsed into rows, the rows are the artifact. Re-derivation
+  was never possible anyway - pooled rows from other contributors carry no frames.
+  704 dangling `identification_audit.frame_path` values were nulled; audit rows and
+  matches untouched.
+
 ### Fixed
 
 - `[SC-41]` was doing three jobs - parser raised, incomplete read, and benign dedupe skip.
   Split into `[SC-41]`/`[SC-47]`/`[SC-48]`, because the first two are opposite in what
   they ask you to do and were indistinguishable in a log.
+
+## [wdb-12.9.24-4] - 2026-07-27
+
+First release of the WebDevBar fork, built on upstream 12.9.24. Windows `.exe`, Linux
+`.rpm` and `.deb` attached via GitHub Actions.
+
+https://github.com/WebDevBar/AdbAutoPlayer/releases/tag/wdb-12.9.24-4
+
+Contains everything under Unreleased above. The bundled sync key is not authentication -
+it ships inside a binary. `ADB_SYNC_ENABLED=false` opts out of sync entirely;
+`ADB_SYNC_KEY` points at your own endpoint.
+
+Note for future rebuilds on the same upstream version: only the Linux RPM config carries
+a release number, so the `.exe` and `.deb` filenames do not change between rebuilds. The
+RPM release field must be bumped or `dnf` sees nothing newer and the install silently
+does nothing.
 
 ## [12.9.24] - 2026-07-23
 

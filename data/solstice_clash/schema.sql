@@ -151,13 +151,59 @@ CREATE TABLE IF NOT EXISTS match(
   natural_key    TEXT UNIQUE,
   source         TEXT NOT NULL,          -- 'compete' | 'spectate'
   captured_at    TEXT NOT NULL,
-  theme          TEXT,                   -- readable on the draft screen
+  -- The RAW OCR read, kept for provenance. It is NOT the source of truth: theme_id
+  -- below is, because a name resolved from the capture time survives a misread.
+  theme          TEXT,
+  event_id       INTEGER REFERENCES event(id) ON DELETE SET NULL,
+  theme_id       INTEGER REFERENCES theme(id) ON DELETE SET NULL,
   balance_epoch  TEXT,                   -- hash of roster adjustments at capture time
   left_player    TEXT, left_rating INTEGER, left_rank INTEGER,
   right_player   TEXT, right_rating INTEGER, right_rank INTEGER,
   outcome        TEXT,                   -- 'left' | 'right' | 'draw' | NULL
   outcome_source TEXT
 );
+
+-- ---------------------------------------------------------------------------
+-- Events and themes
+--
+-- Written so this mode can be lifted wholesale for the NEXT event of this shape,
+-- not just Solstice Clash. An event is the container; a theme is a dated variation
+-- within it (different map, different roster balance). Events without variations
+-- still get exactly one theme row, flagged is_default, so every match resolves the
+-- same way and no caller needs a special case.
+--
+-- Themes carry DATE WINDOWS because that is what makes the assignment trustworthy.
+-- The theme name is read by OCR off the event screen; one bad read used to be
+-- enough to file a match under the wrong balance patch, and match data is only
+-- comparable WITHIN a theme. Resolving by captured_at instead means a match lands
+-- in the right window even if the name was misread or never read at all.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS event(
+  id          INTEGER PRIMARY KEY,
+  slug        TEXT NOT NULL UNIQUE,     -- 'solstice-clash'
+  name        TEXT NOT NULL,            -- 'Solstice Clash'
+  game        TEXT NOT NULL DEFAULT 'afk-journey',
+  notes       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS theme(
+  id          INTEGER PRIMARY KEY,
+  event_id    INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+  slug        TEXT NOT NULL,            -- 'converging-paths'
+  name        TEXT NOT NULL,            -- 'Converging Paths' as shown in game
+  -- Inclusive start, EXCLUSIVE end, both ISO-8601 UTC. NULL end = still open.
+  starts_at   TEXT,
+  ends_at     TEXT,
+  -- Exactly one per event may be the fallback for matches whose capture time
+  -- falls outside every dated window, and the only theme for events with no
+  -- variations at all.
+  is_default  INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0,1)),
+  notes       TEXT,
+  UNIQUE(event_id, slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_theme_event   ON theme(event_id);
+CREATE INDEX IF NOT EXISTS idx_theme_window  ON theme(starts_at, ends_at);
 
 CREATE TABLE IF NOT EXISTS match_hero(
   id            INTEGER PRIMARY KEY,

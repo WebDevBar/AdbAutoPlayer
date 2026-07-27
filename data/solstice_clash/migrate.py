@@ -20,11 +20,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "schema.sql")
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Columns added after a table's original CREATE. schema.sql has them in the CREATE for
 # fresh databases; these entries upgrade databases that predate them.
 ADD_COLUMNS = [
+    # Event/theme normalisation. The old free-text `match.theme` stays for
+    # provenance; these carry the resolved identity.
+    ("match", "event_id", "INTEGER REFERENCES event(id)"),
+    ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),
     ("hero", "wiki_icon", "TEXT"),
@@ -225,6 +229,63 @@ def main() -> None:
     # above cannot update an existing row, so databases carrying the old y0=965 need this.
     con.execute(
         "UPDATE cell_registry SET y0=1005 WHERE cell_type='prematch_pick' AND y0=965"
+    )
+
+    # ---------------------------------------------------------------------
+    # Events and themes.
+    #
+    # Deliberately DATA, not code: a new theme is a row, and adding one must not
+    # need a release. Dates are the authority - `match.theme` is only what OCR
+    # happened to read off the event screen, and a match filed under the wrong
+    # theme is worse than one filed under none, because themes change the roster
+    # balance and data is only comparable within one.
+    # ---------------------------------------------------------------------
+    con.execute(
+        "INSERT OR IGNORE INTO event(slug,name,game) VALUES(?,?,?)",
+        ("solstice-clash", "Solstice Clash", "afk-journey"),
+    )
+    event_id = con.execute(
+        "SELECT id FROM event WHERE slug='solstice-clash'"
+    ).fetchone()[0]
+
+    # starts_at inclusive, ends_at EXCLUSIVE, UTC. Windows left NULL where the
+    # boundary was never observed - an unknown boundary must not masquerade as a
+    # known one. Fill them in as they are confirmed; that is the whole point of
+    # keeping this in a table.
+    themes = [
+        # slug,               name,                starts_at, ends_at,    default
+        ("unknown",           "Unknown / Default", None,      None,       1),
+        ("fierce-duel",       "Fierce Duel",       None,      None,       0),
+        ("converging-paths",  "Converging Paths",  None,      "2026-07-28T00:00:00Z", 0),
+        ("flourishing-wilds", "Flourishing Wilds", None,      None,       0),
+        ("tactical-grounds",  "Tactical Grounds",  None,      None,       0),
+    ]
+    for slug, name, starts, ends, is_default in themes:
+        con.execute(
+            "INSERT OR IGNORE INTO theme"
+            "(event_id,slug,name,starts_at,ends_at,is_default) VALUES(?,?,?,?,?,?)",
+            (event_id, slug, name, starts, ends, is_default),
+        )
+
+    # Backfill matches recorded before the tables existed. Matched on the raw OCR
+    # name, which is all those rows have; from here on theme_id is set at capture.
+    con.execute(
+        "UPDATE match SET event_id=? WHERE event_id IS NULL", (event_id,)
+    )
+    con.execute(
+        "UPDATE match SET theme_id=("
+        "  SELECT t.id FROM theme t"
+        "  WHERE t.event_id=? AND lower(t.name)=lower(match.theme)"
+        ") WHERE theme_id IS NULL AND theme IS NOT NULL",
+        (event_id,),
+    )
+    # Anything still unresolved goes to the event's default rather than staying
+    # NULL, so "which theme is this?" always has an answer.
+    con.execute(
+        "UPDATE match SET theme_id=("
+        "  SELECT id FROM theme WHERE event_id=? AND is_default=1"
+        ") WHERE theme_id IS NULL",
+        (event_id,),
     )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")

@@ -341,6 +341,59 @@ class MatchStore:
             ).fetchall()
         return [OddsSample(*r) for r in rows]
 
+    def resolve_theme(
+        self,
+        captured_at: str,
+        ocr_name: str | None = None,
+        event_slug: str = "solstice-clash",
+    ) -> tuple[int | None, int | None]:
+        """Return (event_id, theme_id) for a capture, by DATE first.
+
+        Resolution order, and the order matters:
+
+        1. The dated window containing `captured_at`. Authoritative, because it
+           cannot be wrong the way a screen read can.
+        2. The OCR name, only if no window covers the capture - useful while the
+           windows for a new theme have not been filled in yet.
+        3. The event's default theme, so the answer is never NULL.
+
+        Themes change roster balance, and match data is only comparable within
+        one. A match filed under the WRONG theme is worse than one filed under a
+        vague default: the first silently corrupts a model, the second is visibly
+        unknown.
+        """
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT id FROM event WHERE slug=?", (event_slug,)
+            ).fetchone()
+            if row is None:
+                return None, None
+            event_id = int(row[0])
+
+            dated = con.execute(
+                "SELECT id FROM theme WHERE event_id=?"
+                " AND (starts_at IS NULL OR starts_at <= ?)"
+                " AND (ends_at   IS NULL OR ends_at   >  ?)"
+                " AND (starts_at IS NOT NULL OR ends_at IS NOT NULL)"
+                " ORDER BY starts_at IS NULL, starts_at DESC LIMIT 1",
+                (event_id, captured_at, captured_at),
+            ).fetchone()
+            if dated is not None:
+                return event_id, int(dated[0])
+
+            if ocr_name:
+                named = con.execute(
+                    "SELECT id FROM theme WHERE event_id=? AND lower(name)=lower(?)",
+                    (event_id, ocr_name),
+                ).fetchone()
+                if named is not None:
+                    return event_id, int(named[0])
+
+            fallback = con.execute(
+                "SELECT id FROM theme WHERE event_id=? AND is_default=1", (event_id,)
+            ).fetchone()
+            return event_id, (int(fallback[0]) if fallback else None)
+
     def _screen_id(self, con: sqlite3.Connection, slug: str) -> int:
         row = con.execute("SELECT id FROM screen WHERE slug=?", (slug,)).fetchone()
         if row is None:

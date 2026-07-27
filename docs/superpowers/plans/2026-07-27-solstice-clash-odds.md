@@ -968,42 +968,67 @@ git commit -m "feat(solstice): out-of-sample validation and the display gate"
 ```python
 """Schema v4: model fits and logged predictions."""
 
+import shutil
 import sqlite3
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
-from tests.games.afk_journey.services.solstice.conftest import fresh_db  # noqa: F401
+# Mirrors the fixture in test_schema_v3.py. The test directories are NOT packages, so
+# helpers cannot be imported across test files - each file defines its own.
+REPO = Path(__file__).resolve().parents[7]
+MIGRATE = REPO / "data" / "solstice_clash" / "migrate.py"
+SHIPPED_DB = REPO / "data" / "solstice_clash" / "heroes.sqlite"
 
 
-def test_version_is_four(fresh_db):
+@pytest.fixture
+def db(tmp_path: Path) -> Path:
+    """A migrated COPY of the shipped database. Never migrate the shipped file itself.
+
+    Copying rather than creating an empty database matters: `match_hero.hero_slug` is
+    `REFERENCES hero(slug)` and the store enables `PRAGMA foreign_keys = ON`, so a
+    schema-only database has an empty `hero` table and every seeded slug would fail the
+    foreign key.
+    """
+    target = tmp_path / "heroes.sqlite"
+    shutil.copy(SHIPPED_DB, target)
+    subprocess.run(
+        [sys.executable, str(MIGRATE), str(target)], check=True, capture_output=True
+    )
+    return target
+
+
+def test_version_is_four(db):
     """Version lives in the schema_version TABLE, not in PRAGMA user_version.
 
     Verified 2026-07-27: migrate.py does `INSERT OR IGNORE INTO schema_version(...)`
     and never touches `PRAGMA user_version`, which is still 0 on the shipped database.
     """
-    con = sqlite3.connect(fresh_db)
+    con = sqlite3.connect(db)
     latest = con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
     assert latest == 4
 
 
-def test_model_fit_and_prediction_tables_exist(fresh_db):
-    con = sqlite3.connect(fresh_db)
+def test_model_fit_and_prediction_tables_exist(db):
+    con = sqlite3.connect(db)
     names = {
         r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
     assert {"model_fit", "model_prediction"} <= names
 
 
-def test_match_odds_still_holds_the_game_pool(fresh_db):
+def test_match_odds_still_holds_the_game_pool(db):
     """Regression: our predictions must not have been merged into the game's pool."""
-    con = sqlite3.connect(fresh_db)
+    con = sqlite3.connect(db)
     cols = {r[1] for r in con.execute("PRAGMA table_info(match_odds)")}
     assert {"left_pool", "right_pool", "spectators"} <= cols
     assert "p_mid" not in cols
 
 
-def test_prediction_rejects_a_probability_outside_zero_to_one(fresh_db):
-    con = sqlite3.connect(fresh_db)
+def test_prediction_rejects_a_probability_outside_zero_to_one(db):
+    con = sqlite3.connect(db)
     con.execute(
         "INSERT INTO model_fit(fitted_at,theme,n_matches,passes_validation) "
         "VALUES('2026-07-27T00:00:00Z','converging-paths',200,1)"
@@ -1015,8 +1040,8 @@ def test_prediction_rejects_a_probability_outside_zero_to_one(fresh_db):
         )
 
 
-def test_prediction_is_logged_even_when_the_gate_is_shut(fresh_db):
-    con = sqlite3.connect(fresh_db)
+def test_prediction_is_logged_even_when_the_gate_is_shut(db):
+    con = sqlite3.connect(db)
     con.execute(
         "INSERT INTO model_fit(fitted_at,theme,n_matches,passes_validation) "
         "VALUES('2026-07-27T00:00:00Z','converging-paths',20,0)"
@@ -1028,7 +1053,10 @@ def test_prediction_is_logged_even_when_the_gate_is_shut(fresh_db):
     assert con.execute("SELECT COUNT(*) FROM model_prediction").fetchone()[0] == 1
 ```
 
-If `conftest.py` has no `fresh_db` fixture, add one that runs `migrate.py` against a `tmp_path` database and yields the path.
+The `db` fixture is defined at the top of the test file itself, copying the pattern
+already used by `test_schema_v3.py`. Do NOT add it to `conftest.py`, and do NOT
+create an empty database - it must be a migrated COPY of the shipped one, or the
+hero foreign key will reject every seeded slug in Task 6.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1138,6 +1166,36 @@ git commit -m "feat(solstice): schema v4 - model fits and logged predictions"
 ```python
 """Reading training data and persisting fits and predictions."""
 
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+# Mirrors the fixture in test_schema_v3.py. The test directories are NOT packages, so
+# helpers cannot be imported across test files - each file defines its own.
+REPO = Path(__file__).resolve().parents[7]
+MIGRATE = REPO / "data" / "solstice_clash" / "migrate.py"
+SHIPPED_DB = REPO / "data" / "solstice_clash" / "heroes.sqlite"
+
+
+@pytest.fixture
+def db(tmp_path: Path) -> Path:
+    """A migrated COPY of the shipped database. Never migrate the shipped file itself.
+
+    Copying rather than creating an empty database matters: `match_hero.hero_slug` is
+    `REFERENCES hero(slug)` and the store enables `PRAGMA foreign_keys = ON`, so a
+    schema-only database has an empty `hero` table and every seeded slug would fail the
+    foreign key.
+    """
+    target = tmp_path / "heroes.sqlite"
+    shutil.copy(SHIPPED_DB, target)
+    subprocess.run(
+        [sys.executable, str(MIGRATE), str(target)], check=True, capture_output=True
+    )
+    return target
+
 from adb_auto_player.games.afk_journey.services.solstice.odds import (
     DraftState,
     Prediction,
@@ -1149,7 +1207,6 @@ from adb_auto_player.games.afk_journey.services.solstice.store import (
 )
 from adb_auto_player.games.afk_journey.services.solstice.validate import ValidationResult
 
-from tests.games.afk_journey.services.solstice.conftest import fresh_db  # noqa: F401
 
 
 def _result(passes=True):
@@ -1196,9 +1253,9 @@ def _seed(store, outcome, left=LEFT_SLUGS, right=RIGHT_SLUGS, status="identified
     return match_id
 
 
-def test_training_matches_keeps_only_decisive_matches(fresh_db):
+def test_training_matches_keeps_only_decisive_matches(db):
     """Draws and unfinished matches carry no usable label."""
-    store = MatchStore(fresh_db)
+    store = MatchStore(db)
     before = len(store.training_matches())
     _seed(store, "left")
     _seed(store, "draw")
@@ -1208,8 +1265,8 @@ def test_training_matches_keeps_only_decisive_matches(fresh_db):
     assert after[-1].left_won is True
 
 
-def test_training_matches_records_the_right_side_winner(fresh_db):
-    store = MatchStore(fresh_db)
+def test_training_matches_records_the_right_side_winner(db):
+    store = MatchStore(db)
     before = len(store.training_matches())
     _seed(store, "right")
     after = store.training_matches()
@@ -1217,35 +1274,35 @@ def test_training_matches_records_the_right_side_winner(fresh_db):
     assert after[-1].left_won is False
 
 
-def test_training_matches_skips_an_unidentified_slot(fresh_db):
+def test_training_matches_skips_an_unidentified_slot(db):
     """A missing hero would make a 3v3 look like a 2v3 and corrupt the fit."""
-    store = MatchStore(fresh_db)
+    store = MatchStore(db)
     before = len(store.training_matches())
     _seed(store, "left", left=("aliceth", "alna", None))
     assert len(store.training_matches()) == before
 
 
-def test_training_matches_skips_a_short_side(fresh_db):
-    store = MatchStore(fresh_db)
+def test_training_matches_skips_a_short_side(db):
+    store = MatchStore(db)
     before = len(store.training_matches())
     _seed(store, "left", left=("aliceth", "alna"))
     assert len(store.training_matches()) == before
 
 
-def test_record_and_read_back_a_fit(fresh_db):
-    store = MatchStore(fresh_db)
+def test_record_and_read_back_a_fit(db):
+    store = MatchStore(db)
     fit_id = store.record_fit(
         "2026-07-27T00:00:00Z", "converging-paths", 200, _result(), "{}"
     )
     assert store.latest_fit("converging-paths") == fit_id
 
 
-def test_latest_fit_is_none_before_any_fit(fresh_db):
-    assert MatchStore(fresh_db).latest_fit("converging-paths") is None
+def test_latest_fit_is_none_before_any_fit(db):
+    assert MatchStore(db).latest_fit("converging-paths") is None
 
 
-def test_latest_fit_returns_the_newest(fresh_db):
-    store = MatchStore(fresh_db)
+def test_latest_fit_returns_the_newest(db):
+    store = MatchStore(db)
     store.record_fit("2026-07-27T00:00:00Z", "converging-paths", 100, _result(), "{}")
     second = store.record_fit(
         "2026-07-27T01:00:00Z", "converging-paths", 200, _result(), "{}"
@@ -1253,8 +1310,8 @@ def test_latest_fit_returns_the_newest(fresh_db):
     assert store.latest_fit("converging-paths") == second
 
 
-def test_prediction_is_recorded_even_when_the_gate_is_shut(fresh_db):
-    store = MatchStore(fresh_db)
+def test_prediction_is_recorded_even_when_the_gate_is_shut(db):
+    store = MatchStore(db)
     fit_id = store.record_fit(
         "2026-07-27T00:00:00Z", "converging-paths", 20, _result(False), "{}"
     )

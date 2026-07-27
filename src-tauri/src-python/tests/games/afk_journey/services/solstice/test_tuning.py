@@ -56,6 +56,9 @@ def test_learn_if_improved_stores_a_better_transform(cfg, library, frames, tmp_d
 
     gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
     audit_id = store.record_audit(AuditRow(
         screen_slug="solstice_summary", side="right", slot=3,
         image_slug="solise", image_art_ref="Solise",
@@ -84,6 +87,9 @@ def test_learn_if_improved_refuses_unconfirmed(cfg, library, frames, tmp_db):
 
     gray = cv2.cvtColor(cv2.imread(str(frames["summary_01"])), cv2.COLOR_BGR2GRAY)
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
 
     stored = learn_if_improved(
         store=store, cfg=cfg, library=library, gray=gray, centre=(90, 1307),
@@ -105,6 +111,9 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
 
     frame = cv2.imread(str(frames["spectate_prematch"]))
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
 
     result = train_from_frame(
         store=store, cfg=cfg, library=library, frame=frame,
@@ -117,7 +126,8 @@ def test_train_from_frame_confirms_by_side_set(cfg, library, frames, tmp_db):
     assert result.written == 6
     assert result.deduced == 0
     assert result.set_consistent == 0
-    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    agreed_after, total_after = store.audit_agreement_rate("spectate_prematch")
+    agreed, total = agreed_after - agreed_before, total_after - total_before
     assert total == 6
     assert agreed == 0, "cross-screen rows must never claim agreement"
 
@@ -148,6 +158,9 @@ def test_train_from_frame_never_confirms_even_when_set_consistent(cfg, library, 
     assert any(by_side.values()), "fixture read nothing - check the seeded cell geometry"
 
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
     result = train_from_frame(
         store=store, cfg=cfg, library=library, frame=frame,
         screen_slug="spectate_prematch", cell_type="prematch_pick",
@@ -156,7 +169,8 @@ def test_train_from_frame_never_confirms_even_when_set_consistent(cfg, library, 
 
     assert result.set_consistent > 0, "a hero in its own side's set must be set-consistent"
     assert result.deduced == 0, "every read was in-set, so nothing is an elimination target"
-    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    agreed_after, total_after = store.audit_agreement_rate("spectate_prematch")
+    agreed, total = agreed_after - agreed_before, total_after - total_before
     assert total == 6
     assert agreed == 0, "set-consistency must never be reported as OCR agreement"
 
@@ -197,6 +211,9 @@ def test_train_from_frame_does_not_confirm_a_swap(cfg, tmp_db):
 
     frame = np.zeros((1920, 1080, 3), dtype=np.uint8)
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
 
     with (
         patch(
@@ -224,7 +241,8 @@ def test_train_from_frame_does_not_confirm_a_swap(cfg, tmp_db):
     # Both reads were in the confirmed set, so there is no odd cell to pin by
     # elimination - the swap is invisible to this frame, by design.
     assert result.deduced == 0
-    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    agreed_after, total_after = store.audit_agreement_rate("spectate_prematch")
+    agreed, total = agreed_after - agreed_before, total_after - total_before
     assert total == 2
     assert agreed == 0, "a swap must never be recorded as agreement"
     assert store.transform_for("spectate_prematch", "heroA") is None
@@ -270,6 +288,9 @@ def test_train_from_frame_deduces_the_odd_cell_by_elimination(cfg, tmp_db):
 
     frame = np.zeros((1920, 1080, 3), dtype=np.uint8)
     store = MatchStore(tmp_db)
+    # Baseline: tmp_db copies the SHIPPED database, which now carries audit rows from
+    # real collection. Absolute counts drift every time a match is recorded.
+    agreed_before, total_before = store.audit_agreement_rate("spectate_prematch")
 
     with (
         patch(
@@ -291,7 +312,8 @@ def test_train_from_frame_deduces_the_odd_cell_by_elimination(cfg, tmp_db):
 
     assert result.written == 3
     assert result.deduced == 1, "exactly one cell (slot 3) should be pinned by elimination"
-    agreed, total = store.audit_agreement_rate("spectate_prematch")
+    agreed_after, total_after = store.audit_agreement_rate("spectate_prematch")
+    agreed, total = agreed_after - agreed_before, total_after - total_before
     assert total == 3
     assert agreed == 0, "a deduction is always a disagreement by construction"
     # No transform may ever be learned from a deduction - learn_if_improved is never

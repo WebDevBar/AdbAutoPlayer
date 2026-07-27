@@ -1052,26 +1052,23 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         saw_draft = False
 
         while time_module.monotonic() < deadline:
+            started = time_module.perf_counter()
+            # Detect and capture with the EXACT call Mode A has always used. Two earlier
+            # attempts failed here: classify_screen's fixed-position anchor matches the
+            # draft you play rather than the one you spectate, and passing an
+            # already-captured frame to game_find_template_match did not match either,
+            # while the framework taking its own screenshot does. The working path is
+            # the specification - do not paraphrase it again.
             try:
-                frame = self.get_screenshot()
+                frame = self._capture_training_frame(
+                    "event/solstice_clash/draft_anchor", late=False, wait_timeout=0.0
+                )
             except Exception as exc:  # noqa: BLE001 - a lost frame is not fatal here
-                logging.debug(f"[SC-45] screenshot failed during the draft: {exc}")
+                logging.debug(f"[SC-45] draft capture failed: {exc}")
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
 
-            started = time_module.perf_counter()
-            # The SPECTATE draft, detected with the template the working capture path
-            # uses. classify_screen's fixed-position anchor is for the draft you play
-            # yourself: measured on the committed fixtures, spectate_draft.png scores
-            # 1.000 on this template and classifies as `unknown`, while the player's own
-            # draft_selecting.png is the reverse. Gating on the anchor is why the first
-            # live run logged nothing at all.
-            on_draft = (
-                self.game_find_template_match(
-                    template="event/solstice_clash/draft_anchor", screenshot=frame
-                )
-                is not None
-            )
+            on_draft = frame is not None
             if not saw_draft and on_draft:
                 logging.info("[SC-54] draft screen")
 

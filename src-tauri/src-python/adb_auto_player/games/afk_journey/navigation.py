@@ -1,4 +1,6 @@
 import logging
+
+import numpy as np
 from abc import ABC
 from enum import StrEnum, auto
 
@@ -272,7 +274,14 @@ class Navigation(PopupMessageHandler, ABC):
         self.sleep_action()
         return
 
-    def _is_in_overview(self) -> bool:
+    def _is_in_overview(self, screenshot: np.ndarray | None = None) -> bool:
+        """True if the top-right corner shows an overworld HUD element.
+
+        Args:
+            screenshot: Reuse an existing frame instead of capturing a new one, so a
+                caller checking several things about the same moment sees one
+                consistent state rather than two captures taken a poll apart.
+        """
         return (
             self.find_any_template(
                 templates=[
@@ -281,6 +290,7 @@ class Navigation(PopupMessageHandler, ABC):
                     "navigation/time_of_day.png",
                 ],
                 crop_regions=CropRegions(left=0.6, bottom=0.6),
+                screenshot=screenshot,
             )
             is not None
         )

@@ -16,7 +16,9 @@ import cv2
 import numpy as np
 
 from adb_auto_player.decorators import register_command
-from adb_auto_player.exceptions import GameTimeoutError
+from adb_auto_player.exceptions import GameActionFailedError, GameTimeoutError
+from adb_auto_player.game._template_mixin import _UndesiredResultError
+from adb_auto_player.models.template_matching import TemplateMatchResult
 from adb_auto_player.games.afk_journey.base import AFKJourneyBase
 from adb_auto_player.games.afk_journey.gui_category import AFKJCategory
 from adb_auto_player.models import ConfidenceValue
@@ -55,6 +57,10 @@ MATCH_TIMEOUT = 240.0
 # already finished - measured at up to a full interval. 5s keeps that barely visible while
 # still being about 48 checks per match rather than the 90 the original 2s interval used.
 RESULT_POLL_DELAY = 5.0
+# Real draws happen, but not many in a row. A long streak means the result screen
+# is being read as the overworld - and since a draw resets the failure counter,
+# nothing else in the loop can ever notice.
+MAX_CONSECUTIVE_DRAWS = 4
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
 # native capture). Cropped tight to the theme name line only - "Current Theme" (the
@@ -132,6 +138,21 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # So every entry must be a tappable control that goes away when tapped. The last
         # entry is therefore the Solstice Clash CARD in the events list - NOT the event
         # screen's title, which stays on screen after arrival and would fail the chain.
+        # Refuse to tap anything unless we are demonstrably on the overworld.
+        # _tap_till_template_disappears SILENTLY SUCCEEDS when its template is never
+        # found (its while loop simply never runs), so mid-battle this whole chain
+        # no-ops without complaint and the failure only surfaces 30s later as SC-01.
+        # Worse, the recovery that follows presses Back - which is what made the game
+        # ask "Exit battle?" during a live match on 2026-07-27.
+        # Raise rather than recover here: _collect_forever already charges this to the
+        # failure budget AND runs navigate_to_world() in its own protected block, so
+        # recovering inline would duplicate that and hide a repeating bad state from
+        # the 3-strike counter.
+        if not self._is_in_overview():
+            raise GameActionFailedError(
+                "[SC-25] not on the overworld - refusing to start the menu chain "
+                "(a battle or another screen may still be up)"
+            )
         self._navigate_menu_chain(
             [
                 "navigation/hamburger_menu",
@@ -214,34 +235,77 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # The clock starts HERE - once the prematch screen has been SEEN. There is no need
         # to wait for it to clear: seeing it is enough to know the fight is about to begin,
         # and waiting for it to disappear was a minute of dead time per match.
-        # Wait for EITHER outcome. A decided match reaches the result screen; a DRAW never
-        # does - the game drops straight back to the overworld with no result and no
-        # summary. Watching only for the result screen would burn the whole timeout on
-        # every draw and then count it as a failure, so a few draws in a row could end an
-        # otherwise healthy run.
-        found = self.wait_for_any_template(
-            [
-                "event/solstice_clash/result_back",
-                "navigation/homestead/homestead_enter",
-            ],
+        # Wait for the result screen. A DRAW never produces one - the game drops back
+        # to the overworld with no result and no summary - so a draw has to be inferred
+        # from ABSENCE, which makes it the default answer whenever result detection has
+        # an off day. That is exactly what went wrong on 2026-07-27: a bare full-frame
+        # match for the small green `homestead_enter` icon out-scored a result screen,
+        # every match was read as a draw, and because a draw resets the failure counter
+        # the run never stopped - it just tapped blindly through live battles instead
+        # (the game asked "Exit battle?").
+        #
+        # So: only RESULT-SCREEN templates decide "the match ended", and the overworld
+        # is confirmed with the framework's own _is_in_overview(), which crops to the
+        # top-right corner and keys on the time-of-day dial. Measured on real frames:
+        # 0.99 on the overworld against 0.51-0.57 on the draft, betting and menu
+        # screens, versus the old icon's 0.99-vs-0.60. Do not hand-roll this again.
+        # Polled through the framework's own _execute_or_timeout - the primitive every
+        # wait_* helper is built on. No wait_* helper fits directly: the result templates
+        # need the FULL frame while _is_in_overview deliberately crops to the top-right
+        # corner, and none of them can express "seen twice in a row". Hand-rolling the
+        # poll instead would re-lose monotonic timing, which matters on an overnight run
+        # where an NTP step would otherwise stretch or shorten this timeout silently.
+        overworld_seen = 0
+
+        def _match_end() -> TemplateMatchResult | None:
+            """Return a result-screen match, None for a confirmed draw, else poll on."""
+            nonlocal overworld_seen
+            frame = self.get_screenshot()
+            hit = self.find_any_template(
+                [
+                    # result_chart FIRST: it is the DETAILS button tapped next, so its
+                    # presence is what the following step depends on anyway. result_back
+                    # is a large flat green button - the low-texture kind that misses on
+                    # a variant screen.
+                    "event/solstice_clash/result_chart",
+                    "event/solstice_clash/result_back",
+                ],
+                screenshot=frame,
+            )
+            if hit is not None:
+                return hit
+            if self._is_in_overview(screenshot=frame):
+                # Confirm twice. A draw parks the game on the overworld until something
+                # taps, so a real draw always survives a re-check; a mid-transition
+                # frame does not. Nothing re-enters a battle by itself, so this can
+                # only filter transients - it can never miss a genuine draw.
+                overworld_seen += 1
+                if overworld_seen >= 2:
+                    return None
+            else:
+                overworld_seen = 0
+            raise _UndesiredResultError()
+
+        found = self._execute_or_timeout(
+            _match_end,
             delay=RESULT_POLL_DELAY,
             timeout=MATCH_TIMEOUT,
-            timeout_message="[SC-03] neither a result screen nor the overworld appeared",
-            # No ordering needed: the result screen and the overworld are mutually
-            # exclusive, so whichever matched IS the answer. Leaving this on made the
-            # wait sleep another full poll interval and re-check after it had already
-            # found the screen - about 6 seconds of pure dead time per match, visible
-            # in the trace as a second identical poll before recording began.
-            ensure_order=False,
+            timeout_message=(
+                "[SC-03] match did not end in time: no result screen appeared and we "
+                "never settled on the overworld"
+            ),
         )
-        if "homestead_enter" in str(found.template):
-            # Draw: nothing to record, and NOT a failure. Returning True keeps the
-            # consecutive-failure counter clear, because the loop behaved correctly.
+        if found is None:
             logging.info(
-                "[SC-10] treating as a draw (overworld matched, no result screen) - "
-                "skipping"
+                "[SC-10] no result screen and the overworld confirmed twice - draw, "
+                "nothing to record"
             )
+            self._draw_this_cycle = True
             return True
+        logging.debug(
+            f"[SC-09] match-end anchor: {found.template} "
+            f"confidence={found.confidence} box={found.box}"
+        )
         chart = self.wait_for_template(
             template="event/solstice_clash/result_chart",
             timeout_message=(
@@ -283,9 +347,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         and continuing would produce only noise.
         """
         consecutive_failures = 0
+        consecutive_draws = 0
         recorded = 0
         while consecutive_failures < max_restarts:
             self._match_recorded_this_cycle = False
+            self._draw_this_cycle = False
             if max_matches is not None and recorded >= max_matches:
                 logging.info(f"recorded {recorded} match(es), stopping as requested")
                 return
@@ -298,11 +364,23 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     # that collected no data.
                     if self._match_recorded_this_cycle:
                         recorded += 1
-                    continue
-                consecutive_failures += 1
-                logging.warning(
-                    f"[SC-20] no match recorded ({consecutive_failures}/{max_restarts})"
-                )
+                        consecutive_draws = 0
+                    elif self._draw_this_cycle:
+                        # A draw is legitimate, but an ENDLESS run of them is not - that
+                        # is what a mis-detection looks like from the loop's point of
+                        # view, and because a draw resets consecutive_failures it can
+                        # never trip the 3-strike stop on its own.
+                        consecutive_draws += 1
+                    # NO `continue` here. Skipping to the next iteration also skipped the
+                    # recovery navigate_to_world() below, which is what left the game
+                    # parked on the result screen and made the NEXT cycle fail in
+                    # navigation instead of here.
+                else:
+                    consecutive_failures += 1
+                    logging.warning(
+                        f"[SC-20] no match recorded "
+                        f"({consecutive_failures}/{max_restarts})"
+                    )
             except Exception as exc:  # noqa: BLE001 - one bad match must not end the run
                 # A match that was already RECORDED does not count as a failure, however
                 # the cycle ended. _run_one_match writes the match before navigating back,
@@ -319,11 +397,30 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         f"[SC-22] match failed ({consecutive_failures}/{max_restarts}): {exc}"
                     )
 
+            # Checked out here, NOT inside the try above: a raise in that block is
+            # caught by its own except and downgraded to a warning, which is precisely
+            # the swallowing this guard exists to prevent.
+            if consecutive_draws >= MAX_CONSECUTIVE_DRAWS:
+                raise GameTimeoutError(
+                    f"[SC-24] {consecutive_draws} draws in a row with nothing recorded - "
+                    "the result screen is almost certainly being mis-read as the "
+                    "overworld. Refusing to keep spectating blind."
+                )
+
             # Recovery runs INSIDE protection. It is invoked in the state most likely to
             # make it raise, and an unguarded failure here would end the run on the first
             # bad cycle instead of the third.
             try:
-                self.navigate_to_world()
+                # Only navigate if we are NOT already where recovery would take us.
+                # navigate_to_world() presses Back when nothing matches, and pressing
+                # Back inside a live battle is what made the game ask "Exit battle?".
+                # After a correctly-detected draw we are already on the overworld, so
+                # this is a no-op; after an INCORRECT one it is the difference between
+                # waiting harmlessly and tapping through someone's match.
+                if self._is_in_overview():
+                    logging.debug("[SC-26] already on the overworld - skipping recovery")
+                else:
+                    self.navigate_to_world()
             except Exception as exc:  # noqa: BLE001
                 consecutive_failures += 1
                 logging.warning(

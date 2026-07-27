@@ -49,6 +49,17 @@ season_talent_messages = [
 
 general_battle_messages = [
     PopupMessage(
+        # Raised when Back is pressed while a battle is still running - e.g. a
+        # navigation recovery that believed it was on the overworld.
+        # DISMISS, never confirm: confirming abandons a live match. Observed
+        # 2026-07-27 during unattended Solstice Clash spectating, where a
+        # mis-read draw sent the loop back into navigation mid-battle.
+        # Dismissing means navigation stays stuck inside the battle and retries
+        # until the match genuinely ends, which is strictly safer than forfeiting.
+        text="Exit battle?",
+        confirm_button_template="navigation/x.png",
+    ),
+    PopupMessage(
         text="Skip this battle?",
     ),
     PopupMessage(

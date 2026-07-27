@@ -96,6 +96,10 @@ DRAFT_POLL_SECONDS = 0.4
 # The two competing geometries for the same six positions. Both are read every poll and
 # the stronger answer wins - see services/solstice/draftlog.py.
 DRAFT_CELL_TYPES = ("draft_locked_pick", "draft_pick")
+# The observed draft ran ~25s. This bounds the watch so a mis-detected screen cannot
+# park the collection loop here all night; the normal exit is the draft screen going
+# away, not this.
+DRAFT_WATCH_TIMEOUT = 60.0
 # ~5 minutes. A heartbeat, not an on-stop summary: the GUI stop button is
 # SIGTERM (__main__.py:352) and Python does not run finally blocks on SIGTERM,
 # so anything deferred to exit never runs in the only way a user actually stops
@@ -565,9 +569,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # the overlay on that cell: about 0.10-0.14 of match score.
         self._move_chat_out_of_the_way()
 
-        draft_frame = self._capture_training_frame(
-            "event/solstice_clash/draft_anchor", late=True, wait_timeout=0.0
-        )
+        # Mode C polls the draft instead of grabbing one frame at the end of it, and
+        # hands back the last frame it saw so everything downstream is unchanged.
+        if getattr(self, "_watch_draft_picks", False):
+            draft_frame = self._watch_draft()
+        else:
+            draft_frame = self._capture_training_frame(
+                "event/solstice_clash/draft_anchor", late=True, wait_timeout=0.0
+            )
         # The prematch screen only appears AFTER the draft ends, so it must be WAITED
         # for, not probed. Probing immediately after the draft capture would return None
         # on exactly the matches where training data is available.
@@ -970,133 +979,104 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
 
     @register_command(
-        name="SolsticeClashWatchDraft",
+        name="SolsticeClashSpectateWatch",
         gui=GUIMetadata(
-            label="WDB: Watch Draft Picks (Mode C)",
+            label="WDB: Spectate + Log Picks (Mode C)",
             category=AFKJCategory.EVENTS_AND_OTHER,
             tooltip=(
-                "Log each pick as it locks while you spectate a draft, then the "
-                "locked six. Never taps, swipes or navigates."
+                "Spectate matches automatically like the collect mode, and log each "
+                "pick as it locks during the draft."
             ),
         ),
     )
-    def watch_solstice_draft(self, max_polls: int | None = None) -> None:
-        """Phase 1 of Mode C: say what locked, as it locks.
+    def spectate_and_log_picks(self, max_matches: int | None = None) -> None:
+        """The collect mode, plus a live log of the draft.
 
-        Predicts nothing and stores nothing. It exists to establish whether the draft
-        screen can be read correctly and quickly enough to predict from at all - the
-        prerequisite the odds design refuses to build on top of unmeasured.
+        Same navigation, same spectating, same recording. The only difference is that
+        the draft is POLLED while it happens, so each pick is reported as it locks
+        instead of a single frame being grabbed at the end of it.
 
-        Never touches the device, for the same reason Mode B does not: the user is
-        watching a live match and a stray tap costs them the round. `get_screenshot()`
-        is the only device call, and `start_up()` is deliberately NOT called because it
-        can resize the display or launch the app underneath a running match.
+        Phase 1 of Mode C: it predicts nothing. It exists to show whether the picks can
+        be read correctly and in time to be worth predicting from.
+        """
+        self.start_up(device_streaming=False)
+        self.navigate_to_world()
+        self._watch_draft_picks = True
+        logging.info("[SC-50] Solstice Clash spectating with live pick logging")
+        self._collect_forever(max_matches=max_matches)
 
-        Joining mid-draft is normal, not an error: every pick already on screen is
-        reported on the first poll, in draft order.
+    def _watch_draft(self) -> np.ndarray | None:
+        """Poll the draft, logging each pick as it locks. Returns the last draft frame.
+
+        Replaces the single late capture for Mode C, and returns a frame the existing
+        training path can still use, so nothing downstream changes.
+
+        Bounded by the draft's own length: it ends when the draft screen goes away, and
+        gives up after DRAFT_WATCH_TIMEOUT so a mis-detected screen cannot park the
+        collection loop here forever.
         """
         anchor_dir = self.template_dir / "event" / "solstice_clash" / "anchors"
-        cfg = self._solstice_cfg
-        library = self._solstice_library
-
         seen: dict[int, str] = {}
         pool: set[str] | None = None
+        last_frame = None
         last_reads: list[PickRead] = []
-        # Which geometry actually answered, counted rather than printed per pick.
-        # This tally is the whole reason both are read - see draftlog.py.
-        geometry_wins: dict[str, int] = {}
-        drafts = 0
-        failures = 0
-        checked_resolution = False
         slowest = 0.0
+        deadline = time_module.monotonic() + DRAFT_WATCH_TIMEOUT
+        saw_draft = False
 
-        logging.info(
-            "[SC-50] watching for a draft - spectate normally, this never taps"
-        )
-
-        for poll in itertools.count():
-            if max_polls is not None and poll >= max_polls:
-                break
-            if poll:
-                time_module.sleep(DRAFT_POLL_SECONDS)
-
+        while time_module.monotonic() < deadline:
             try:
                 frame = self.get_screenshot()
-            except Exception as exc:
-                failures += 1
-                logging.debug(f"[SC-45] screenshot failed: {exc}")
-                if failures >= MAX_CONSECUTIVE_SCREENSHOT_FAILURES:
-                    raise GameActionFailedError(
-                        f"[SC-45] {failures} consecutive screenshot failures - the "
-                        f"device connection is gone. Draft watching has stopped."
-                    ) from exc
+            except Exception as exc:  # noqa: BLE001 - a lost frame is not fatal here
+                logging.debug(f"[SC-45] screenshot failed during the draft: {exc}")
+                time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
-            failures = 0
-
-            if not checked_resolution:
-                checked_resolution = True
-                if frame.shape[:2] != (1920, 1080):
-                    raise GameActionFailedError(
-                        f"[SC-42] expected a 1080x1920 screen, got "
-                        f"{frame.shape[1]}x{frame.shape[0]} - this mode cannot resize "
-                        f"the display because you may be spectating a live match"
-                    )
 
             started = time_module.perf_counter()
-            screen = classify_screen(frame, anchor_dir)
+            if classify_screen(frame, anchor_dir) != "draft":
+                # Gone already means the draft ended (or we joined after it). Either way
+                # there is nothing left to watch.
+                if saw_draft:
+                    break
+                time_module.sleep(DRAFT_POLL_SECONDS)
+                continue
 
-            if screen == "draft":
-                if pool is None:
-                    read = identify_pool(frame, cfg, library, anchor_dir)
-                    # An empty read is a FAILED read, not an empty pool, and passing it
-                    # on would mark every pick a pool miss and hide the real failure.
-                    pool = read.slugs or None
-                    if pool:
-                        logging.info(
-                            f"[SC-51] pool read: {len(pool)} heroes, "
-                            f"{len(read.banned_slots)} banned"
-                        )
-                    else:
-                        logging.warning(
-                            "[SC-52] pool unreadable - identifying against the full "
-                            "library, which is slower and less accurate"
-                        )
-                last_reads = self._read_draft_picks(frame, pool)
-                for pick in newly_locked(seen, last_reads):
-                    logging.info(format_pick(pick))
-                    geometry_wins[pick.cell_type] = (
-                        geometry_wins.get(pick.cell_type, 0) + 1
+            saw_draft = True
+            last_frame = frame
+            if pool is None:
+                read = identify_pool(
+                    frame, self._solstice_cfg, self._solstice_library, anchor_dir
+                )
+                # An empty read is a FAILED read, not an empty pool: passing it on would
+                # mark every pick a pool miss and hide the real failure.
+                pool = read.slugs or None
+                if pool:
+                    logging.info(
+                        f"[SC-51] pool read: {len(pool)} heroes, "
+                        f"{len(read.banned_slots)} banned"
+                    )
+                else:
+                    logging.warning(
+                        "[SC-52] pool unreadable - identifying against the full "
+                        "library, which is slower and less accurate"
                     )
 
-            elif screen == "prematch_locked":
-                if seen or last_reads:
-                    locked = self._read_draft_picks(
-                        frame, pool, cell_types=("locked_pick",)
-                    )
-                    # Prefer the locked screen's own read, and fall back to the last
-                    # draft read for any slot it could not resolve - a blank there is
-                    # worse than a pick we already logged with its evidence.
-                    merged = {r.slot: r for r in last_reads}
-                    for read in locked:
-                        merged[read.slot] = better(merged.get(read.slot), read)
-                    logging.info(format_final(list(merged.values())))
-                    drafts += 1
-                # Reset for the next match, whether or not this one was readable.
-                seen, pool, last_reads = {}, None, []
+            last_reads = self._read_draft_picks(frame, pool)
+            for pick in newly_locked(seen, last_reads):
+                logging.info(format_pick(pick))
 
-            elapsed = time_module.perf_counter() - started
-            slowest = max(slowest, elapsed)
-            if poll and poll % HEARTBEAT_POLLS == 0:
-                tally = (
-                    ", ".join(f"{k} {v}" for k, v in sorted(geometry_wins.items()))
-                    or "no picks read yet"
-                )
-                logging.info(
-                    f"[SC-53] {poll} polls, {drafts} drafts seen, slowest read "
-                    f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}"
-                    f"ms interval; geometry that answered: {tally}"
-                )
-                slowest = 0.0
+            slowest = max(slowest, time_module.perf_counter() - started)
+            time_module.sleep(DRAFT_POLL_SECONDS)
+
+        if saw_draft:
+            # The locked six, as one line, from the last frame that still showed them.
+            logging.info(format_final(last_reads))
+            logging.info(
+                f"[SC-53] draft over: {len(seen)}/6 picks read, slowest read "
+                f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}ms "
+                f"interval"
+            )
+        return last_frame
 
     def _read_draft_picks(
         self,

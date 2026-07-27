@@ -105,7 +105,7 @@ def format_pick(read: PickRead) -> str:
     """
     label = SIDE_LABELS.get(read.side, read.side)
     shown = read.name or read.slug or "?"
-    return f"{label} picked: {shown}   [{read.score:.3f}/{read.margin:.3f}]"
+    return f"{label} picked: {shown} [{read.score:.3f}/{read.margin:.3f}]"
 
 
 def format_final(reads: list[PickRead]) -> str:

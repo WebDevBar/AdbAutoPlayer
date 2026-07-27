@@ -97,9 +97,29 @@
 
 ### Fixed
 
+- **Sync never worked on a fresh install.** Seeding deletes the bundled `install` row so
+  contributors cannot share one identity, and nothing recreated it - a shipped build never
+  runs `migrate.py`, which is where the row was minted. The client therefore sent an empty
+  `X-Instance-Id` and the server answered `400` to every request, so a new contributor's
+  matches were collected correctly and then never left their machine. `[SC-33] sync server
+  error 400` on every cycle was the symptom. The identity is now created on first use in
+  `store.instance_uuid()`, with `INSERT OR IGNORE` plus a re-select so two processes on one
+  database cannot mint two. Existing backlogs upload on the first sync after updating -
+  nothing collected during the outage was lost or marked rejected.
+
 - `[SC-41]` was doing three jobs - parser raised, incomplete read, and benign dedupe skip.
   Split into `[SC-41]`/`[SC-47]`/`[SC-48]`, because the first two are opposite in what
   they ask you to do and were indistinguishable in a log.
+
+## [wdb-12.9.24-7] - 2026-07-27
+
+Fixes sync for every install that was not the developer's own. Windows `.exe`, Linux `.rpm`
+and `.deb` attached via GitHub Actions.
+
+https://github.com/WebDevBar/AdbAutoPlayer/releases/tag/wdb-12.9.24-7
+
+If you were running an earlier build, your collected matches are still on disk and will
+upload by themselves on the first sync after installing this one.
 
 ## [wdb-12.9.24-6] - 2026-07-27
 

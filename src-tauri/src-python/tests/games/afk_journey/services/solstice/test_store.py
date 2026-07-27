@@ -394,3 +394,34 @@ def test_an_unknown_source_is_still_rejected(tmp_db):
         MatchStore(tmp_db).record_match(
             MatchRecord(source="comptee", captured_at="2026-07-25T12:00:00+00:00")
         )
+
+
+def test_instance_uuid_is_created_on_a_fresh_install(tmp_db):
+    """The bug that silently cost a contributor every match they collected.
+
+    Seeding deletes the bundled `install` row, and nothing recreated it - a
+    shipped build never runs `migrate.py`. The client then sent an empty
+    `X-Instance-Id` and the server answered 400 to every sync request.
+    """
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("DELETE FROM install")
+
+    store = MatchStore(tmp_db)
+    first = store.instance_uuid()
+    assert first, "a fresh install must mint an identity, not return nothing"
+    assert store.instance_uuid() == first, "the identity must be stable"
+
+    with sqlite3.connect(tmp_db) as con:
+        rows = con.execute("SELECT COUNT(*) FROM install").fetchone()[0]
+    assert rows == 1, "exactly one install row, whatever the call count"
+
+
+def test_instance_uuid_keeps_an_existing_identity(tmp_db):
+    """Regenerating it would orphan everything this install already pushed."""
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("DELETE FROM install")
+        con.execute(
+            "INSERT INTO install(id,instance_uuid,created_at) VALUES(1,'mine','x')"
+        )
+
+    assert MatchStore(tmp_db).instance_uuid() == "mine"

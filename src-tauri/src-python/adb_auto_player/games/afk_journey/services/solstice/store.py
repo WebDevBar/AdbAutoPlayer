@@ -14,6 +14,7 @@ Two rules that come from real failures:
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -361,10 +362,34 @@ class MatchStore:
     # Pooled sync
     # ------------------------------------------------------------------
 
-    def instance_uuid(self) -> str | None:
+    def instance_uuid(self) -> str:
+        """This install's identity, created on first use.
+
+        Created HERE and not only in `migrate.py`, because a shipped build never
+        runs that script. Seeding deletes the bundled `install` row - correctly,
+        or every contributor would claim one identity - and nothing recreated it,
+        so the client sent an empty `X-Instance-Id` and the server answered 400
+        to every request. A fresh contributor's matches never reached the pool.
+
+        `INSERT OR IGNORE` then re-select, rather than insert-and-return: two
+        processes on the same database must end up with the SAME uuid, not two.
+        """
         with self._connect() as con:
             row = con.execute("SELECT instance_uuid FROM install WHERE id=1").fetchone()
-        return row[0] if row else None
+            if row and row[0]:
+                return str(row[0])
+            con.execute(
+                "INSERT OR IGNORE INTO install(id,instance_uuid,created_at)"
+                " VALUES(1,?,?)",
+                (
+                    str(uuid.uuid4()),
+                    datetime.now(UTC).isoformat(timespec="seconds"),
+                ),
+            )
+            row = con.execute(
+                "SELECT instance_uuid FROM install WHERE id=1"
+            ).fetchone()
+        return str(row[0])
 
     def pull_cursor(self) -> int:
         with self._connect() as con:

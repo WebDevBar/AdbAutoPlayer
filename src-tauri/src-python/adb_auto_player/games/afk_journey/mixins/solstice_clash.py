@@ -37,7 +37,7 @@ from ..services.solstice.details_screen import (
 from ..services.solstice.icons import IconLibrary
 from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
-from ..services.solstice.paths import solstice_db_path
+from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import CELL_TYPE, SummaryHero, read_summary
 from ..services.solstice.sync import SyncClient
@@ -52,7 +52,6 @@ from ..services.solstice.tuning import (
 # Resolved at call time, not import time: the first call seeds the user copy
 # from the bundled one, and doing that during module import would run it on
 # every command in the app rather than only when Solstice Clash is used.
-SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
 
 # Measured on device 2026-07-26. The far branch (teleport plus auto-path) took ~12s, so
 # 30s gives roughly 2.5x headroom on the only far position we have sampled.
@@ -956,7 +955,15 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
     @property
     def _solstice_library(self) -> IconLibrary:
         if getattr(self, "_lib_cache", None) is None:
-            self._lib_cache = IconLibrary.build(self._solstice_cfg, SOLSTICE_ICON_DIR)
+            icon_dir = solstice_icon_dir()
+            if icon_dir is None:
+                raise GameActionFailedError(
+                    "[SC-49] bundled hero art not found - without it every hero "
+                    "reads as unknown and nothing recorded is usable. Set "
+                    "ADB_SOLSTICE_ICON_DIR, or reinstall: the icons ship in "
+                    "data/solstice_clash/icons/."
+                )
+            self._lib_cache = IconLibrary.build(self._solstice_cfg, icon_dir)
         return self._lib_cache
 
     @property

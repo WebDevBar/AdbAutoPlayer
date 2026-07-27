@@ -10,6 +10,7 @@ from pathlib import Path
 from adb_auto_player.games.afk_journey.services.solstice.paths import (
     bundled_db,
     solstice_db_path,
+    solstice_icon_dir,
     user_data_dir,
 )
 
@@ -17,7 +18,15 @@ from adb_auto_player.games.afk_journey.services.solstice.paths import (
 def test_no_developer_path_is_hardcoded():
     """The regression this module exists to prevent."""
     src = Path(__file__).resolve().parents[5] / "adb_auto_player/games/afk_journey"
-    banned = ("/mnt/docs/adbautoplayer", "/home/toshe/Dev", "Dev/webdevbar/adbautoplayer")
+    banned = (
+        "/mnt/docs/adbautoplayer",
+        "/home/toshe/Dev",
+        "Dev/webdevbar/adbautoplayer",
+        # The icon library was built from this vault path, which exists on one
+        # machine. Everywhere else the library was empty and every hero read
+        # came back `unknown` - silently.
+        "/mnt/vault",
+    )
     for f in (src / "mixins/solstice_clash.py",
               src / "services/solstice/paths.py"):
         text = f.read_text()
@@ -123,3 +132,30 @@ def test_seeding_scrubs_any_per_machine_rows_that_slipped_through(tmp_path, monk
 
     rows = sqlite3.connect(target).execute("SELECT COUNT(*) FROM install").fetchone()[0]
     assert rows == 0, "a bundled install identity would be claimed by every contributor"
+
+
+def test_the_hero_icons_are_bundled():
+    """Without these every cell reads `unknown` and every match is worthless.
+
+    The failure is silent at the call site: `identify_cell` cannot tell an empty
+    library from an unreadable frame, so a build with no icons collects matches
+    that hold no heroes, never earn a natural_key, and never sync.
+    """
+    icons = solstice_icon_dir()
+    assert icons is not None, "bundled icon directory not found"
+    found = list((icons / "hero").glob("spui_herohead_*.png"))
+    assert len(found) > 100, f"only {len(found)} hero icons bundled"
+
+
+def test_the_icon_directory_honours_its_override(tmp_path, monkeypatch):
+    """Kept so a developer can point at a fuller extract without editing code."""
+    (tmp_path / "hero").mkdir()
+    monkeypatch.setenv("ADB_SOLSTICE_ICON_DIR", str(tmp_path))
+    assert solstice_icon_dir() == tmp_path
+
+
+def test_a_missing_icon_directory_is_reported_not_guessed(tmp_path, monkeypatch):
+    """An override pointing nowhere must fall through, never return a bad path."""
+    monkeypatch.setenv("ADB_SOLSTICE_ICON_DIR", str(tmp_path / "nope"))
+    resolved = solstice_icon_dir()
+    assert resolved is None or (resolved / "hero").is_dir()

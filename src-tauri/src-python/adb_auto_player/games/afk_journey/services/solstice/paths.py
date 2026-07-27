@@ -22,6 +22,7 @@ from pathlib import Path
 from adb_auto_player.util import RuntimeInfo
 
 _RELATIVE = Path("solstice_clash") / "heroes.sqlite"
+_ICONS_RELATIVE = Path("solstice_clash") / "icons"
 
 
 def user_data_dir() -> Path:
@@ -71,6 +72,41 @@ def bundled_db() -> Path | None:
 
     for candidate in candidates:
         if candidate.is_file():
+            return candidate
+    return None
+
+
+def solstice_icon_dir() -> Path | None:
+    """The bundled hero art, if we can find it.
+
+    Shipped as a resource rather than read from a developer disk. The previous
+    hardcoded vault path existed on exactly one machine, so on every other
+    install the icon library was EMPTY and every hero read came back `unknown` -
+    silently, because an empty library is indistinguishable from a bad frame at
+    the call site. Matches were then recorded with no heroes, never earned a
+    natural_key, and could never sync.
+
+    Same ladder as `bundled_db`: explicit override, packaged resources, then a
+    development checkout.
+    """
+    candidates: list[Path] = []
+
+    override = os.environ.get("ADB_SOLSTICE_ICON_DIR")
+    if override:
+        candidates.append(Path(override).expanduser())
+
+    here = Path(__file__).resolve()
+    for parents_up in (7, 8, 9):
+        if len(here.parents) > parents_up:
+            candidates.append(here.parents[parents_up] / "data" / _ICONS_RELATIVE)
+
+    for parent in here.parents:
+        if (parent / "data" / _ICONS_RELATIVE).is_dir():
+            candidates.append(parent / "data" / _ICONS_RELATIVE)
+            break
+
+    for candidate in candidates:
+        if (candidate / "hero").is_dir():
             return candidate
     return None
 

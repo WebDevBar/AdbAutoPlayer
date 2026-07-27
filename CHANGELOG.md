@@ -97,6 +97,18 @@
 
 ### Fixed
 
+- **Hero identification could only ever work on the developer's machine.** The icon
+  library was built from `/mnt/vault/solstice/gamefiles/ui/icon`, a path on one person's
+  disk, with no fallback and no override, and `hero.game_icon` holds a filename rather
+  than the image. Anywhere else the library was empty, and an empty library is
+  indistinguishable from an unreadable frame at the call site, so every cell returned
+  `unknown` silently. Matches were recorded with no heroes, never earned a `natural_key`,
+  and were therefore never syncable - a contributor could run the mode for hours and
+  produce nothing usable. The 584 hero icons (8.6 MB) now ship in
+  `data/solstice_clash/icons/hero/`, resolved by the same ladder as the bundled database
+  (`ADB_SOLSTICE_ICON_DIR`, packaged resources, dev checkout). A missing directory now
+  raises `[SC-49]` instead of quietly identifying nothing.
+
 - **Sync never worked on a fresh install.** Seeding deletes the bundled `install` row so
   contributors cannot share one identity, and nothing recreated it - a shipped build never
   runs `migrate.py`, which is where the row was minted. The client therefore sent an empty
@@ -113,13 +125,16 @@
 
 ## [wdb-12.9.24-7] - 2026-07-27
 
-Fixes sync for every install that was not the developer's own. Windows `.exe`, Linux `.rpm`
+Fixes both reasons a contributor other than the developer produced nothing: hero art is
+now bundled, and the install identity is created on first use. Windows `.exe`, Linux `.rpm`
 and `.deb` attached via GitHub Actions.
 
 https://github.com/WebDevBar/AdbAutoPlayer/releases/tag/wdb-12.9.24-7
 
-If you were running an earlier build, your collected matches are still on disk and will
-upload by themselves on the first sync after installing this one.
+If you were running an earlier build, matches that DID identify heroes will upload by
+themselves on the first sync after installing this one. Matches recorded with no heroes -
+which is everything collected on a machine without the vault path - cannot be recovered:
+they never earned an identity, and there is nothing in them to pool.
 
 ## [wdb-12.9.24-6] - 2026-07-27
 

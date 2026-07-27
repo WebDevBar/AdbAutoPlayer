@@ -16,9 +16,12 @@ worth keeping is the last built RPM, so it lives on the surviving disk at
 `/mnt/docs/adbautoplayer-rpm/` and the repo-root `AdbAutoPlayer-latest.rpm` symlink points
 there until the next local build overwrites it.
 
-`~/Dev/webdevbar/fedora-setup/SETUP-waydroid-adbautoplayer.md` covers the Waydroid host
-side (storage, SELinux, `suspend=false`, adb auto-connect, the gamescope viewer). The
-build and install of this fork are documented here.
+[`docs/fedora-waydroid.md`](docs/fedora-waydroid.md) covers what this fork needs from the
+machine: the runtime deps, the 1080x1920 requirement, why the viewer must be gamescope and
+not scrcpy, and the adb connection. The Waydroid host install itself - fstab binds,
+SELinux, the service drop-in, the tray companion - stays in
+`~/Dev/webdevbar/fedora-setup/SETUP-waydroid-adbautoplayer.md`. Build, patch set and
+release flow are in this file.
 
 ## Remotes / branches
 

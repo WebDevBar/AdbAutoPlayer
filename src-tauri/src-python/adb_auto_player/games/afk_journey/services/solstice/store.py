@@ -115,7 +115,17 @@ class AuditRow:
 
 # Valid values. The schema documents these in comments only, so the store enforces them:
 # without this a Phase 2 caller could persist source='comptee' or side='blu' silently.
-_SOURCES = frozenset({"compete", "spectate", "spectate_summary"})
+_SOURCES = frozenset(
+    {
+        "compete",
+        "spectate",
+        "spectate_summary",
+        # Mode B: the details screen of a match the USER played, recorded
+        # passively without touching the device. Parallel to spectate_summary -
+        # same screen, same parser, different observer.
+        "compete_summary",
+    }
+)
 _SIDES = frozenset({"left", "right"})
 _HERO_STATUSES = frozenset({"identified", "unknown"})
 _POOL_STATUSES = frozenset({"identified", "unknown", "banned"})

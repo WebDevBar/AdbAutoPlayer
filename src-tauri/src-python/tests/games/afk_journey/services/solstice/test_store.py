@@ -374,3 +374,23 @@ def test_unknown_source_is_rejected(tmp_db):
     store.record_match(MatchRecord(source="spectate_summary", captured_at="2026-07-26"))
     with pytest.raises(ValueError):
         store.record_match(MatchRecord(source="history", captured_at="2026-07-26"))
+
+
+# --- Mode B source ---------------------------------------------------------
+
+
+def test_compete_summary_is_an_allowed_source(tmp_db):
+    """Mode B records the details screen of a match the user played."""
+    store = MatchStore(tmp_db)
+    mid = store.record_match(
+        MatchRecord(source="compete_summary", captured_at="2026-07-25T12:00:00+00:00")
+    )
+    assert mid > 0
+
+
+def test_an_unknown_source_is_still_rejected(tmp_db):
+    """The set is enforced, not decorative - a typo must not persist silently."""
+    with pytest.raises(ValueError):
+        MatchStore(tmp_db).record_match(
+            MatchRecord(source="comptee", captured_at="2026-07-25T12:00:00+00:00")
+        )

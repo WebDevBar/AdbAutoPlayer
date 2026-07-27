@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime
 import os
 import sqlite3
+import uuid
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -229,6 +230,15 @@ def main() -> None:
     # above cannot update an existing row, so databases carrying the old y0=965 need this.
     con.execute(
         "UPDATE cell_registry SET y0=1005 WHERE cell_type='prematch_pick' AND y0=965"
+    )
+
+    # This install's identity - generated once, then never touched again.
+    # uuid4 is right here: it needs to be unique across machines that never talk
+    # to each other, with no coordination and no central issuer.
+    con.execute(
+        "INSERT OR IGNORE INTO install(id,instance_uuid,created_at) VALUES(1,?,?)",
+        (str(uuid.uuid4()), datetime.datetime.now(datetime.UTC).isoformat(
+            timespec="seconds")),
     )
 
     # ---------------------------------------------------------------------

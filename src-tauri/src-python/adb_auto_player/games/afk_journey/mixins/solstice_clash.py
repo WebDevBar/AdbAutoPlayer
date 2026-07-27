@@ -440,11 +440,21 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         frame = self.get_screenshot()
         read = read_summary(frame, self._solstice_cfg, self._solstice_library, self._ocr)
 
+        captured_at = datetime.now(UTC).isoformat(timespec="seconds")
+        # Resolve by DATE first, OCR name only as a fallback. `theme` here is the
+        # raw screen read and is kept for provenance, but it is not what the data
+        # is filed under - a misread name must not be able to file a match against
+        # the wrong balance patch, because matches are only comparable within a
+        # theme.
+        event_id, theme_id = self._store.resolve_theme(captured_at, theme)
+
         match_id = self._store.record_match(
             MatchRecord(
                 source="spectate_summary",
-                captured_at=datetime.now(UTC).isoformat(timespec="seconds"),
+                captured_at=captured_at,
                 theme=theme,
+                event_id=event_id,
+                theme_id=theme_id,
                 outcome=read.winner,
                 outcome_source="observed",
                 left_player=read.left_player,

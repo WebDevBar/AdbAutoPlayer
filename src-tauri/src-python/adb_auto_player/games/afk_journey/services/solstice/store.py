@@ -24,7 +24,9 @@ class MatchRecord:
     source: str  # 'compete' | 'spectate'
     captured_at: str
     natural_key: str | None = None  # NULL until the match has enough stable facts
-    theme: str | None = None
+    theme: str | None = None       # RAW OCR read, provenance only
+    event_id: int | None = None    # resolved - see MatchStore.resolve_theme
+    theme_id: int | None = None    # resolved - the source of truth, not `theme`
     balance_epoch: str | None = None
     left_player: str | None = None
     left_rating: int | None = None
@@ -158,6 +160,8 @@ class MatchStore:
     )
     _MATCH_COLS = (
         "natural_key",
+        "event_id",
+        "theme_id",
         "source",
         "captured_at",
         "theme",

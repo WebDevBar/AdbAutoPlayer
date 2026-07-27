@@ -77,10 +77,29 @@ Contributors are friends, not adversaries - but "not adversarial" is not "always
 contributor running a stale build, a mistuned template, or a modified client can submit wrong
 data, and wrong data is worse than no data.
 
-- **Per-contributor API keys.** One key each, in `X-API-Key`. Individually revocable, so one bad
-  client does not mean rotating everyone.
+Contributor count is open-ended, so identity is **self-registering** rather than hand-issued.
+That splits the job in two, because one credential cannot do both:
+
+- **A shared fork key** (`X-API-Key`), baked into our build, answers *"is this our client?"* It
+  gates the endpoint.
+- **A per-install UUID** (`X-Instance-Id`), generated once on first run and persisted in the
+  local database, answers *"which install is this?"* It carries attribution and revocation.
+
+On first sight of an unknown instance id the server creates a `contributor` row automatically -
+no manual issuance, which is what "unknown number of contributors" requires.
+
+**Be honest about what the shared key is worth:** it ships inside a binary we hand to people, so
+it is extractable by anyone willing to look. It raises the bar past drive-by traffic and nothing
+more. The real protections are that the endpoint is unlisted, the data is low-value, and every
+row is attributable and revocable. Do not let this key's existence create the impression the
+endpoint is authenticated in a meaningful sense - if that is ever needed, it needs per-contributor
+keys issued out of band.
+
 - **Every row records `contributor_id`.** Non-negotiable: without it, bad data cannot be
-  quarantined or removed after the fact, only guessed at.
+  quarantined or removed after the fact, only guessed at. With a self-registering model this
+  matters more, not less, because we no longer vet anyone up front.
+- **Revocation is per install.** Setting `is_active = 0` on one contributor stops that install
+  without touching anyone else or rotating the fork key.
 - **Client identifies its build.** `X-Client-Version` and the local `schema_version`. The server
   rejects a schema it does not know rather than coercing it.
 - **Server validates, does not trust.** Exactly 3 heroes a side, hero slugs must exist in the
@@ -144,9 +163,15 @@ PostgreSQL, mirroring local schema v4 so the two stay comprehensible together:
 - `event`, `theme` (with `starts_at` / `ends_at` windows) - the same shape as local
 - `match` - plus `contributor_id`, `received_at`, `client_version`
 - `match_hero`
-- `contributor` - id, name, `api_key_hash`, `is_active`, `created_at`
+- `contributor` - id, `instance_uuid` UNIQUE, label, `is_active`, `first_seen`, `last_seen`,
+  `matches_submitted`, `last_client_version`
 
-**API keys are stored hashed**, never in plaintext. They are bearer credentials to a database.
+The contributor row doubles as the connection log: `last_seen`, `last_client_version` and
+`matches_submitted` are updated on every authenticated request, so "who is contributing, from
+what build, and when did they last check in" is answerable without a separate audit table.
+
+**The shared fork key is stored hashed** in server config, never in plaintext, and never logged.
+Instance UUIDs are not secrets - they are identifiers - so they are stored as-is.
 
 The server resolves `theme_slug` to its own `theme.id`; it does not trust a client's local
 theme ids, which are per-database autoincrements and mean nothing across machines.

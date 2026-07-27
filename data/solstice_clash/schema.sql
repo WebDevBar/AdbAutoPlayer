@@ -178,6 +178,27 @@ CREATE TABLE IF NOT EXISTS match(
 -- comparable WITHIN a theme. Resolving by captured_at instead means a match lands
 -- in the right window even if the name was misread or never read at all.
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- This install's identity.
+--
+-- One row, generated on first run and never changed. It is what lets a pooled
+-- server attribute rows to an install without anyone issuing credentials by
+-- hand, and what lets ONE misbehaving install be revoked without disturbing
+-- everyone else. It is an identifier, not a secret.
+--
+-- Kept in the database rather than a config file so it survives alongside the
+-- data it identifies: restoring a backup restores the identity too, which is
+-- what makes a re-sync idempotent instead of duplicating the contributor.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS install(
+  id            INTEGER PRIMARY KEY CHECK(id = 1),   -- single row, enforced
+  instance_uuid TEXT NOT NULL UNIQUE,
+  created_at    TEXT NOT NULL,
+  label         TEXT,          -- optional friendly name, set by the operator
+  last_sync_at  TEXT,          -- last successful push
+  sync_cursor   TEXT           -- server cursor for incremental pull
+);
+
 CREATE TABLE IF NOT EXISTS event(
   id          INTEGER PRIMARY KEY,
   slug        TEXT NOT NULL UNIQUE,     -- 'solstice-clash'

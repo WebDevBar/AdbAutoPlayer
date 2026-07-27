@@ -160,7 +160,20 @@ CREATE TABLE IF NOT EXISTS match(
   left_player    TEXT, left_rating INTEGER, left_rank INTEGER,
   right_player   TEXT, right_rating INTEGER, right_rank INTEGER,
   outcome        TEXT,                   -- 'left' | 'right' | 'draw' | NULL
-  outcome_source TEXT
+  outcome_source TEXT,
+  -- Provenance, for pooled sync. 'local' rows are THIS install's own
+  -- observations; 'synced' rows came from the pool. Two rules depend on the
+  -- distinction:
+  --   1. Only 'local' rows with a natural_key are ever PUSHED. Without this a
+  --      client echoes pulled rows straight back and every contributor
+  --      re-uploads everyone else's data forever.
+  --   2. Only 'local' rows may feed the identification learning path. Another
+  --      machine's match scores and crop geometry are evidence about ITS
+  --      screen, not this one.
+  origin             TEXT NOT NULL DEFAULT 'local'
+                     CHECK(origin IN ('local','synced')),
+  contributor_uuid   TEXT,   -- which install observed it; attribution/quarantine
+  remote_received_at TEXT    -- server-side receipt time, for pull cursors
 );
 
 -- ---------------------------------------------------------------------------
@@ -195,8 +208,12 @@ CREATE TABLE IF NOT EXISTS install(
   instance_uuid TEXT NOT NULL UNIQUE,
   created_at    TEXT NOT NULL,
   label         TEXT,          -- optional friendly name, set by the operator
-  last_sync_at  TEXT,          -- last successful push
-  sync_cursor   TEXT           -- server cursor for incremental pull
+  -- Push and pull need SEPARATE high-water marks. A client collects while a
+  -- pull is running, so advancing the pull cursor says nothing about whether
+  -- local rows older than it have been pushed - conflating them silently drops
+  -- collected matches from the pool.
+  last_push_at  TEXT,          -- newest local captured_at successfully pushed
+  pull_cursor   TEXT           -- opaque server cursor for incremental pull
 );
 
 CREATE TABLE IF NOT EXISTS event(

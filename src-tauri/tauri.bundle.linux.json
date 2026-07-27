@@ -5,10 +5,15 @@
       "../data/": "./data/",
       "pyembed/python": "./"
     },
-    "targets": ["rpm"],
+    "targets": [
+      "rpm"
+    ],
     "linux": {
       "rpm": {
-        "depends": ["tesseract"]
+        "depends": [
+          "tesseract"
+        ],
+        "release": "2"
       }
     }
   }

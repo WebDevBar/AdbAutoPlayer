@@ -29,6 +29,9 @@ ADD_COLUMNS = [
     # Event/theme normalisation. The old free-text `match.theme` stays for
     # provenance; these carry the resolved identity.
     ("match", "event_id", "INTEGER REFERENCES event(id)"),
+    ("match", "origin", "TEXT NOT NULL DEFAULT 'local'"),
+    ("match", "contributor_uuid", "TEXT"),
+    ("match", "remote_received_at", "TEXT"),
     ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),
@@ -231,6 +234,23 @@ def main() -> None:
     con.execute(
         "UPDATE cell_registry SET y0=1005 WHERE cell_type='prematch_pick' AND y0=965"
     )
+
+    # The install table shipped briefly with sync state named last_sync_at /
+    # sync_cursor. Push and pull need SEPARATE marks - a client collects while a
+    # pull runs, so a pull cursor says nothing about what has been pushed - and
+    # the old names invited exactly that conflation. Rename in place; ALTER TABLE
+    # RENAME COLUMN is available in the SQLite we ship.
+    if table_exists(con, "install"):
+        install_cols = columns(con, "install")
+        for old_col, new_col in (
+            ("last_sync_at", "last_push_at"),
+            ("sync_cursor", "pull_cursor"),
+        ):
+            if old_col in install_cols and new_col not in install_cols:
+                con.execute(
+                    f"ALTER TABLE install RENAME COLUMN {old_col} TO {new_col}"
+                )
+                renamed.append(f"install.{old_col}->{new_col}")
 
     # This install's identity - generated once, then never touched again.
     # uuid4 is right here: it needs to be unique across machines that never talk

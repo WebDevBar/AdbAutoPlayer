@@ -69,7 +69,27 @@ echo "== 6/6 build the RPM =="
 # Our tauri.bundle.linux.json pins targets: ["rpm"]; templates config adds the bundled templates.
 pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/tauri.bundle.templates.json --verbose
 
+# A stable path so the install command never changes. The real filename carries
+# version AND release (AdbAutoPlayer-12.9.24-2.x86_64.rpm), which is correct for
+# RPM but useless to type - and getting it wrong is how an install silently
+# no-ops against the version already installed.
+STABLE="AdbAutoPlayer-latest.rpm"
+NEWEST="$(ls -1t target/release/bundle/rpm/*.rpm 2>/dev/null | head -1 || true)"
+if [ -n "$NEWEST" ]; then
+  ln -sfn "$(realpath "$NEWEST")" "$STABLE"
+fi
+
 echo
 echo "DONE. RPM(s):"
 ls -1 target/release/bundle/rpm/*.rpm 2>/dev/null || echo "  (no rpm found — check build output above)"
-echo "Install: sudo dnf upgrade <path-above>"
+echo
+echo "  Built: ${NEWEST:-none}"
+echo "  Stable path: $(realpath "$STABLE" 2>/dev/null || echo n/a)"
+echo
+echo "Install:"
+echo "  sudo dnf upgrade $(pwd)/$STABLE"
+echo
+echo "BUMP THE RELEASE for every rebuild of the same upstream version:"
+echo "  src-tauri/tauri.bundle.linux.json -> bundle.linux.rpm.release"
+echo "Without a bump the filename is unchanged, dnf sees nothing newer, and the"
+echo "install silently does nothing - which has already cost one debugging round."

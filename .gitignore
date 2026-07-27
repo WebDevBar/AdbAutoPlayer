@@ -57,3 +57,5 @@ vite.config.ts.timestamp-*
 /src-tauri/src-python/scratch/
 /scratch/
 data/solstice_clash/__pycache__/
+*.rpm
+AdbAutoPlayer-latest.rpm

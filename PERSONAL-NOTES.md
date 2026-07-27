@@ -28,9 +28,31 @@ Fedora/Waydroid patches.
 
 ```bash
 cd /mnt/docs/adbautoplayer
+# BUMP bundle.linux.rpm.release in src-tauri/tauri.bundle.linux.json first
 ./build-rpm.sh
-sudo dnf upgrade ./target/release/bundle/rpm/AdbAutoPlayer-*.rpm
+sudo dnf upgrade /mnt/docs/adbautoplayer/dist/AdbAutoPlayer-latest.rpm
 ```
+
+`dist/AdbAutoPlayer-latest.rpm` is a symlink the build refreshes, so the install
+command never changes even though the real filename carries version and release.
+
+### ⛔ Always bump the RPM release
+
+The fork's `version` tracks the UPSTREAM tag and must not be invented - inventing
+one collides with a future upstream release. Our rebuilds bump the RPM **release**
+instead, which is exactly what that field is for:
+
+```
+src-tauri/tauri.bundle.linux.json -> bundle.linux.rpm.release: "1" -> "2" -> ...
+```
+
+Reset it to `"1"` when rebasing onto a new upstream tag.
+
+**Why this is a hard rule:** on 2026-07-27 a rebuild kept version AND release,
+so the filename was identical, `dnf upgrade` correctly decided there was nothing
+newer, and the old binary kept running. It looked exactly like the code fix had
+failed - the fix was fine, the install never happened. Use `dnf reinstall` only
+to recover from that situation; the cure is bumping the release.
 
 ## Update to a new upstream release X.Y.Z
 

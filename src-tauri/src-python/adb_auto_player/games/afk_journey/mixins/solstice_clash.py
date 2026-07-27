@@ -148,7 +148,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self.wait_for_template(
             template="event/solstice_clash/event_screen",
             timeout=EVENT_SCREEN_TIMEOUT,
-            timeout_message="did not reach the Solstice Clash event page",
+            timeout_message="[SC-01] did not reach the Solstice Clash event page",
         )
         # Read the theme HERE, while the event screen is up. It shows "Current Theme:
         # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
@@ -163,7 +163,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             template="event/solstice_clash/spectate_live",
             delay=1.0,
             timeout=NPC_DIALOG_TIMEOUT,
-            timeout_message="Royal City Show dialog did not appear",
+            timeout_message="[SC-02] Royal City Show dialog did not appear",
         )
         self.tap(result)
         sleep(3)
@@ -226,7 +226,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ],
             delay=RESULT_POLL_DELAY,
             timeout=MATCH_TIMEOUT,
-            timeout_message="neither a result screen nor the overworld appeared",
+            timeout_message="[SC-03] neither a result screen nor the overworld appeared",
             # No ordering needed: the result screen and the overworld are mutually
             # exclusive, so whichever matched IS the answer. Leaving this on made the
             # wait sleep another full poll interval and re-check after it had already
@@ -237,9 +237,18 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         if "homestead_enter" in str(found.template):
             # Draw: nothing to record, and NOT a failure. Returning True keeps the
             # consecutive-failure counter clear, because the loop behaved correctly.
-            logging.info("match ended in a draw - no result screen, skipping")
+            logging.info(
+                "[SC-10] treating as a draw (overworld matched, no result screen) - "
+                "skipping"
+            )
             return True
-        chart = self.wait_for_template(template="event/solstice_clash/result_chart")
+        chart = self.wait_for_template(
+            template="event/solstice_clash/result_chart",
+            timeout_message=(
+                "[SC-04] result screen reached but the DETAILS (chart) button never "
+                "appeared"
+            ),
+        )
         self.tap(chart)
         sleep(2)
 
@@ -248,10 +257,16 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # not a lost match, and must not count against the failure budget.
         self._match_recorded_this_cycle = True
 
-        back = self.wait_for_template(template="event/solstice_clash/summary_back")
+        back = self.wait_for_template(
+            template="event/solstice_clash/summary_back",
+            timeout_message="[SC-05] summary recorded but its Back button never appeared",
+        )
         self.tap(back)
         sleep(1)
-        green_back = self.wait_for_template(template="event/solstice_clash/result_back")
+        green_back = self.wait_for_template(
+            template="event/solstice_clash/result_back",
+            timeout_message="[SC-06] left the summary but the result Back never appeared",
+        )
         self.tap(green_back)
         sleep(3)
         return True
@@ -286,7 +301,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     continue
                 consecutive_failures += 1
                 logging.warning(
-                    f"no match recorded ({consecutive_failures}/{max_restarts})"
+                    f"[SC-20] no match recorded ({consecutive_failures}/{max_restarts})"
                 )
             except Exception as exc:  # noqa: BLE001 - one bad match must not end the run
                 # A match that was already RECORDED does not count as a failure, however
@@ -297,11 +312,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 if self._match_recorded_this_cycle:
                     recorded += 1
                     consecutive_failures = 0
-                    logging.warning(f"recorded, but the cycle ended badly: {exc}")
+                    logging.warning(f"[SC-21] recorded, but the cycle ended badly: {exc}")
                 else:
                     consecutive_failures += 1
                     logging.warning(
-                        f"match failed ({consecutive_failures}/{max_restarts}): {exc}"
+                        f"[SC-22] match failed ({consecutive_failures}/{max_restarts}): {exc}"
                     )
 
             # Recovery runs INSIDE protection. It is invoked in the state most likely to
@@ -312,7 +327,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             except Exception as exc:  # noqa: BLE001
                 consecutive_failures += 1
                 logging.warning(
-                    f"recovery failed ({consecutive_failures}/{max_restarts}): {exc}"
+                    f"[SC-23] recovery failed ({consecutive_failures}/{max_restarts}): {exc}"
                 )
 
         raise GameTimeoutError(
@@ -517,7 +532,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     template=anchor,
                     delay=1.0,
                     timeout=wait_timeout,
-                    timeout_message=f"{anchor} never appeared - skipping training capture",
+                    timeout_message=f"[SC-07] {anchor} never appeared - skipping training capture",
                 )
             except GameTimeoutError:
                 # Not an error: the match may have been entered late, or the transition
@@ -587,7 +602,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 ]
                 slug = resolve_hero_name_strict(fresh, self._solstice_cfg)
             except Exception as exc:  # noqa: BLE001 - one unreadable card must not end the match
-                logging.warning(f"long-press confirm failed: {exc}")
+                logging.warning(f"[SC-08] long-press confirm failed: {exc}")
             finally:
                 # Dismiss on EVERY path, including failure - even if hold or
                 # get_screenshot raised above. A popup left open covers the screen, so

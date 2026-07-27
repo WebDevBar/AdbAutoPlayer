@@ -204,6 +204,15 @@ def run_task(
     logger.setLevel(logging.DEBUG)
     logger.addHandler(queue_handler)
 
+    # The GUI log is a scrollback buffer - an unattended overnight run loses the
+    # detail behind any failure the moment it scrolls away. This writes DEBUG
+    # context to disk, but only around WARNING and worse, so a clean run costs
+    # nothing.
+    from adb_auto_player.log.logging_setup import attach_warning_context_file_logging
+
+    log_file = attach_warning_context_file_logging(logger)
+    logging.debug(f"warning-context debug log: {log_file}")
+
     def summary_callback(msg: str | None):
         # We are catching all exceptions here regardless
         # because we never want the summary to actually stop the process via error

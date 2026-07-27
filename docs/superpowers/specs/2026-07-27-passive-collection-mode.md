@@ -29,6 +29,33 @@ forfeit a match, exit a battle, or spend a resource. So this mode:
 Everything else in this document follows from that. Where a safety measure and a data-quality
 measure conflict, safety wins - a missed match costs one row, a stray tap costs the user a game.
 
+### It must NOT call `start_up()`
+
+Every other mode begins with `self.start_up()`. This one cannot. `start_up()` calls
+`_set_device_resolution()` and, if the game is not detected as running, `start_game()` - it can
+resize the display and launch the app underneath a live ranked match.
+
+Instead, the mode verifies the invariant it depends on and refuses if it does not hold:
+
+```python
+frame = self.get_screenshot()
+if frame.shape[:2] != (1920, 1080):
+    raise GameActionFailedError(
+        "[SC-42] passive collection needs a 1080x1920 display; found "
+        f"{frame.shape[1]}x{frame.shape[0]}. Run any other mode once to set it, "
+        "then start this one."
+    )
+```
+
+Checked once at start, not per poll - the resolution cannot change mid-session without the user
+doing something drastic, and a per-poll check would spend work on an invariant.
+
+**Why the invariant exists:** every Solstice coordinate - the cell registry, the OCR strip, the
+Replay template - was measured on 1080x1920 (`services/solstice/config.py`, and the
+`base_resolution` column on `cell_registry`). Portability is achieved by setting the display to
+that size, which is exactly the action this mode may not take. So it checks instead, and says
+plainly what to do about it.
+
 ## 3. Why this is not just Mode A without navigation
 
 Three differences that change the design.
@@ -101,11 +128,25 @@ column, so a NULL key conflicts with nothing.
 
 Passive mode therefore parses first, computes the key, checks it, and only then inserts.
 
-### The hour-bucket edge
+### Two known limits of the key, stated rather than hidden
 
-A match straddling :59 and :00 gets two different keys and could be recorded twice. Mode A has the
-same edge and accepts it. Layer 1 makes it rarer here, since a single continuous viewing is
-covered by the flag regardless of what the clock does.
+**A match straddling :59 and :00** gets two different keys and could be recorded twice. Mode A has
+the same edge and accepts it. Layer 1 makes it rarer here, since one continuous viewing is covered
+by the flag regardless of the clock.
+
+**Two genuinely different matches with identical comps, identical outcome, in the same UTC hour
+collide** - the second is silently dropped. The key is only outcome, both sorted hero sides, and
+the hour.
+
+This is more likely in compete than in spectate, and the reason is sitting on the screen: the
+details screen has a **Play Again** button. Replaying the same matchup and winning again produces
+an identical key. Estimated cost is still low - it needs the same six heroes on both sides AND the
+same outcome AND the same hour - but it is a real loss, and it is a loss of the user's own match.
+
+It is accepted rather than fixed because the alternative is worse: the pooled server dedupes on
+this exact key, so adding a local-only discriminator would make local and remote disagree about
+what one match is. If it proves to bite in practice, the fix belongs in the shared identity model
+and has to be coordinated with the API, not patched here.
 
 ## 5. The user's flow
 
@@ -225,8 +266,12 @@ is filled in. That is the existing behaviour and needs no special case here.
 
 ## 8. What it records
 
-The same shape as Mode A: one `match` row plus six `match_hero` rows, `source='compete_summary'`
-to distinguish it, `origin='local'`, and `natural_key` set at insert.
+The same shape as Mode A: one `match` row plus six `match_hero` rows, `origin='local'`, and
+`natural_key` set at insert.
+
+`source='compete_summary'`, which **must be added to `_SOURCES`** in `store.py` - the store
+enforces that set deliberately, so an unlisted value fails before insert rather than persisting a
+typo. It parallels the existing `spectate_summary`.
 
 **It does not feed the identification learning path.** `identification_audit` and
 `hero_screen_transform` exist to tune this machine's cell geometry, and that tuning is driven by

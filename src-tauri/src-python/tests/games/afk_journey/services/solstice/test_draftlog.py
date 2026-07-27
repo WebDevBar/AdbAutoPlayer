@@ -79,7 +79,7 @@ def test_better_handles_a_missing_geometry():
 
 def test_the_pick_line_carries_its_evidence():
     line = format_pick(_read(2, "right", "lily-may", score=0.842, margin=0.213))
-    assert line.startswith("Red (right) picked: Lily-May")
+    assert line.startswith("Red picked: Lily-May")
     assert "0.842/0.213" in line
 
 
@@ -94,5 +94,5 @@ def test_the_final_line_groups_by_side_in_draft_order():
             _read(3, "right", "lily-may"),
         ]
     )
-    assert "Blue (left): Lorsan, Thoran, Eironn" in line
-    assert "Red (right): Smokey, Lily-May, Reinier" in line
+    assert "Blue: Lorsan, Thoran, Eironn" in line
+    assert "Red: Smokey, Lily-May, Reinier" in line

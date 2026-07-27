@@ -23,8 +23,10 @@ from dataclasses import dataclass
 
 # Display only. `left`/`right` stay the stored values everywhere else - colour is an
 # observation channel and the sides do not swap, so the label is a convenience for the
-# person reading the log, never a key.
-SIDE_LABELS = {"left": "Blue (left)", "right": "Red (right)"}
+# person reading the log, never a key. The side is no longer spelled out beside the
+# colour, so if this mapping is ever wrong the log will not show it; the slot number in
+# the evidence bracket is what makes a swap recoverable after the fact.
+SIDE_LABELS = {"left": "Blue", "right": "Red"}
 
 # 1 left, 2 right, 3 right, 4 left, 5 left, 6 right - a snake draft. The registry
 # carries this per cell; it is repeated here only so the log can be ordered before any
@@ -98,7 +100,7 @@ def format_pick(read: PickRead) -> str:
     shown = read.name or read.slug or "?"
     return (
         f"{label} picked: {shown}"
-        f"   [{read.cell_type} {read.score:.3f}/{read.margin:.3f}]"
+        f"   [slot {read.slot} {read.cell_type} {read.score:.3f}/{read.margin:.3f}]"
     )
 
 

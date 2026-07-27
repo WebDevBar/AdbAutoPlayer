@@ -9,6 +9,11 @@ from adb_auto_player.models.registries import GameMetadata
 from adb_auto_player.registries import COMMAND_REGISTRY
 
 
+# Labels carrying this prefix are this fork's own commands. They are grouped and
+# pushed to the end of the menu so upstream's options keep their familiar order.
+WDB_PREFIX = "WDB: "
+
+
 class IPCModelConverter:
     """Util class for converting from and to IPC models."""
 
@@ -102,6 +107,21 @@ class IPCModelConverter:
                 i for i, o in enumerate(menu_options) if o.label == "AFK Stages"
             )
             menu_options.insert(afk_idx + 1, dr_opt)
+
+        # WebDevBar fork additions last, in one block.
+        #
+        # Ordering here is REGISTRATION order plus these explicit moves - there
+        # is no alphabetical sort anywhere in the chain (the frontend renders
+        # menu_options as given). So the "WDB: " prefix groups them visually but
+        # cannot move them on its own; this does.
+        #
+        # Kept as a prefix rule rather than a list of labels so a new fork
+        # command is placed correctly without touching this file.
+        wdb = [o for o in menu_options if o.label.startswith(WDB_PREFIX)]
+        if wdb:
+            menu_options = [
+                o for o in menu_options if not o.label.startswith(WDB_PREFIX)
+            ] + wdb
 
         return menu_options
 

@@ -5,6 +5,7 @@ that OCR-confirmed ground truth to measure and tune identification on the draft 
 prematch screens for Modes B and C.
 """
 
+import itertools
 import logging
 from abc import ABC
 from datetime import UTC, datetime
@@ -27,12 +28,18 @@ from adb_auto_player.models.geometry import Point
 from adb_auto_player.ocr import RapidOCRBackend
 
 from ..services.solstice.config import SolsticeConfig
+from ..services.solstice.details_screen import (
+    SOLSTICE_CLASH_TITLE,
+    details_signals,
+    is_details_screen,
+    load_replay_template,
+)
 from ..services.solstice.icons import IconLibrary
 from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.paths import solstice_db_path
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
-from ..services.solstice.summary import SummaryHero, read_summary
+from ..services.solstice.summary import CELL_TYPE, SummaryHero, read_summary
 from ..services.solstice.sync import SyncClient
 from ..services.solstice.tuning import (
     confirmed_sides,
@@ -66,6 +73,30 @@ RESULT_POLL_DELAY = 5.0
 # is being read as the overworld - and since a draw resets the failure counter,
 # nothing else in the loop can ever notice.
 MAX_CONSECUTIVE_DRAWS = 4
+
+# --- Mode B: passive collection while the user plays ------------------------
+# Every one of these is read from the MODULE at use, never captured into a
+# default argument, so a test can patch it.
+POLL_SECONDS = 2.0
+# ~5 minutes. A heartbeat, not an on-stop summary: the GUI stop button is
+# SIGTERM (__main__.py:352) and Python does not run finally blocks on SIGTERM,
+# so anything deferred to exit never runs in the only way a user actually stops
+# this mode.
+HEARTBEAT_POLLS = 150
+# ~30 seconds. A dead ADB connection makes get_screenshot raise on EVERY poll,
+# and "log it and continue" would spin silently for hours while the user plays a
+# whole evening believing they are collecting. This mode's characteristic
+# failure is silence, so it must be loud about the one failure it cannot see
+# past.
+MAX_CONSECUTIVE_SCREENSHOT_FAILURES = 15
+# ~1 minute of a screen showing one detection signal but not the other. The
+# signals are ANDed, so a game update breaking either one stops collection
+# silently; the redundancy is only real if something notices.
+MAX_SIGNAL_DISAGREEMENT = 30
+
+# Mode A's bounded wait for the details screen after tapping the chart button.
+DETAILS_POLL_DELAY = 0.5
+DETAILS_TIMEOUT = 15.0
 
 # The "Current Theme: <name>" plate on the event screen, measured on s3.png (1080x1920
 # native capture). Cropped tight to the theme name line only - "Current Theme" (the
@@ -117,7 +148,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
     @register_command(
         name="SolsticeClashSync",
         gui=GUIMetadata(
-            label="Sync Solstice Clash Data",
+            label="WDB: Sync Solstice Clash Data",
             category=AFKJCategory.EVENTS_AND_OTHER,
             tooltip="Upload collected matches to the shared pool and fetch everyone else's",
         ),
@@ -144,7 +175,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
     @register_command(
         name="SolsticeClashCollect",
         gui=GUIMetadata(
-            label="Collect Solstice Clash Data",
+            label="WDB: Collect Solstice Clash Data",
             category=AFKJCategory.EVENTS_AND_OTHER,
             tooltip="Spectate Solstice Clash matches and record outcomes for analysis",
         ),
@@ -157,6 +188,218 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self.navigate_to_world()
         logging.info("Solstice Clash collection starting")
         self._collect_forever()
+
+    @register_command(
+        name="SolsticeClashCollectCompete",
+        gui=GUIMetadata(
+            label="WDB: Collect While Playing (Compete)",
+            category=AFKJCategory.EVENTS_AND_OTHER,
+            tooltip=(
+                "Watch for post-match details screens while YOU play and record "
+                "them. Never taps, swipes or navigates."
+            ),
+        ),
+    )
+    def collect_while_playing(self, max_polls: int | None = None) -> None:
+        """Record every Solstice Clash details screen the user opens.
+
+        NEVER touches the device. The user is in a live ranked match; a stray tap
+        could lose it. get_screenshot() is the only device call made.
+
+        Deliberately does NOT call start_up(): that runs _set_device_resolution()
+        and can call start_game(), i.e. resize the display or launch the app
+        under a running match. The resolution is checked and refused instead.
+
+        `max_polls` exists for the tests; production passes None and runs until
+        stopped.
+        """
+        replay = load_replay_template(self.template_dir)
+        sync = SyncClient(self._store)
+        logging.info(
+            f"[SC-35] sync {'enabled' if sync.enabled else 'disabled'}; "
+            f"watching for details screens - play normally, this never taps"
+        )
+
+        # armed == "ready to record". Set False after a record and back to True
+        # only when the screen goes away, so one viewing yields one row however
+        # long it stays up. natural_key is the second layer, for a REOPENED
+        # screen, which this one cannot see.
+        armed = True
+        recorded = skipped = 0
+        screenshot_failures = 0
+        disagreements = 0
+        warned_disagreement = False
+        checked_resolution = False
+
+        for poll in itertools.count():
+            if max_polls is not None and poll >= max_polls:
+                break
+            if poll:
+                time_module.sleep(POLL_SECONDS)
+
+            try:
+                frame = self.get_screenshot()
+            except Exception as exc:  # noqa: BLE001 - see MAX_CONSECUTIVE_...
+                screenshot_failures += 1
+                logging.debug(f"[SC-45] screenshot failed: {exc}")
+                if screenshot_failures >= MAX_CONSECUTIVE_SCREENSHOT_FAILURES:
+                    raise GameActionFailedError(
+                        f"[SC-45] {screenshot_failures} consecutive screenshot "
+                        f"failures - the device connection is gone. Collection "
+                        f"has stopped; nothing was being recorded."
+                    ) from exc
+                continue
+            screenshot_failures = 0
+
+            # On the FIRST frame we actually get, not via a separate screenshot:
+            # a dedicated capture would consume a poll's worth of screen and
+            # shift every test's frame queue by one.
+            if not checked_resolution:
+                checked_resolution = True
+                if frame.shape[:2] != (1920, 1080):
+                    raise GameActionFailedError(
+                        f"[SC-42] expected a 1080x1920 screen, got "
+                        f"{frame.shape[1]}x{frame.shape[0]} - this mode cannot "
+                        f"resize the display because you may be in a live match"
+                    )
+
+            if poll and poll % HEARTBEAT_POLLS == 0:
+                logging.info(
+                    f"[SC-43] {poll} polls, {recorded} recorded, {skipped} skipped"
+                )
+
+            signals = details_signals(
+                frame, replay, self._ocr, header_title=SOLSTICE_CLASH_TITLE
+            )
+
+            # One core signal without the other is the shape of a game update
+            # breaking detection. The header is excluded: header=False with both
+            # others true just means another mode's details screen, which is the
+            # guard working, not rot.
+            if signals.template != signals.labels:
+                disagreements += 1
+                if (
+                    disagreements >= MAX_SIGNAL_DISAGREEMENT
+                    and not warned_disagreement
+                ):
+                    warned_disagreement = True
+                    logging.warning(
+                        f"[SC-46] the Replay template and the Ally/Enemy labels "
+                        f"have disagreed for {disagreements} polls "
+                        f"(template={signals.template}, labels={signals.labels}). "
+                        f"One detection signal may have broken in a game update "
+                        f"- collection may be silently degraded."
+                    )
+            else:
+                disagreements = 0
+
+            if not signals.confirmed:
+                armed = True  # screen gone - the next one is a new match
+                continue
+            if not armed:
+                continue
+
+            if self._record_compete_summary(frame):
+                recorded += 1
+                armed = False
+                # Push right after the record, NOT on exit - see HEARTBEAT_POLLS
+                # on why nothing may be deferred to exit. A record only happens
+                # between matches, so this is never network noise during play,
+                # and the wrapper means a dead endpoint cannot cost a match.
+                try:
+                    if sync.enabled:
+                        sync.push()
+                        sync.pull()
+                except Exception as exc:  # noqa: BLE001 - sync never costs a match
+                    logging.warning(f"[SC-30] sync failed, continuing: {exc}")
+            else:
+                skipped += 1
+                # Stay ARMED: the screen is still up and the next poll gets a
+                # cleaner read of the same match.
+
+    def _record_compete_summary(self, frame: np.ndarray) -> bool:
+        """Record one details screen the user played. Returns False if skipped.
+
+        Deliberately leaner than _record_summary: no identification_audit rows
+        and no training. Audit rows are confirmation evidence for cell tuning and
+        this mode cannot long-press to confirm anything, and there is no draft or
+        prematch frame to train from - the mode never saw those screens.
+        """
+        try:
+            read = read_summary(
+                frame, self._solstice_cfg, self._solstice_library, self._ocr
+            )
+        except Exception as exc:  # noqa: BLE001 - one bad read must not end a session
+            logging.warning(f"[SC-41] could not read the summary, skipping: {exc}")
+            return False
+
+        left = [h.slug for h in read.heroes if h.side == "left" and h.slug]
+        right = [h.slug for h in read.heroes if h.side == "right" and h.slug]
+
+        # is_complete, NOT len(read.heroes): read_summary returns one SummaryHero
+        # per configured cell ALWAYS, with slug=None on a failed identification,
+        # so a length check passes on a half-rendered screen. It also rejects a
+        # winner that is not left/right, covering the unresolved-banner case.
+        if not is_complete(left, right, read.winner or ""):
+            logging.debug(
+                f"[SC-41] skipped: {len(left)}+{len(right)} heroes identified, "
+                f"winner={read.winner} - staying armed for a cleaner read"
+            )
+            return False
+
+        captured_at = datetime.now(UTC).isoformat(timespec="seconds")
+        key = natural_key(read.winner, left, right, captured_at)
+        if self._store.match_by_natural_key(key) is not None:
+            logging.debug("[SC-41] already recorded, skipping")
+            return False
+
+        # Theme by DATE. The details screen never shows it, so unlike Mode A
+        # there is no screen read to pass in and nothing to misread.
+        event_id, theme_id, theme_resolved_by = self._store.resolve_theme(
+            captured_at, None
+        )
+
+        match_id = self._store.record_match(
+            MatchRecord(
+                source="compete_summary",
+                captured_at=captured_at,
+                theme=None,
+                event_id=event_id,
+                theme_id=theme_id,
+                theme_resolved_by=theme_resolved_by,
+                outcome=read.winner,
+                outcome_source="observed",
+                left_player=read.left_player,
+                right_player=read.right_player,
+            )
+        )
+        self._store.record_heroes(
+            match_id,
+            [
+                HeroSlot(
+                    side=h.side,
+                    slot=h.slot,
+                    hero_slug=h.slug,
+                    art_ref=h.art_ref,
+                    status="identified" if h.slug else "unknown",
+                    score=h.score,
+                    margin=h.margin,
+                    cell_type=CELL_TYPE,
+                    identified_by="image",
+                    stat_sword=h.stats.sword,
+                    stat_heart=h.stats.heart,
+                    stat_shield=h.stats.shield,
+                )
+                for h in read.heroes
+            ],
+        )
+        self._store.set_natural_key(match_id, key)
+
+        logging.info(
+            f"[SC-40] recorded match {match_id}: {read.winner} won, "
+            f"theme_id={theme_id} ({theme_resolved_by})"
+        )
+        return True
 
     def _open_spectate(self) -> tuple[bool, str | None]:
         """Navigate from the overworld to a live spectated match.

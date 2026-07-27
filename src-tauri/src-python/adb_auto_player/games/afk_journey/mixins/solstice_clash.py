@@ -28,6 +28,7 @@ from adb_auto_player.ocr import RapidOCRBackend
 
 from ..services.solstice.config import SolsticeConfig
 from ..services.solstice.icons import IconLibrary
+from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
@@ -531,6 +532,23 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ):
                 logging.info(f"tuned {confirmed} on the summary screen")
         self._store.record_heroes(match_id, slots)
+
+        # The key can only be computed HERE, not at insert: the match row is
+        # written before the summary is read, so the heroes and the outcome -
+        # everything the key is made of - are not known until now.
+        #
+        # Incomplete matches deliberately keep natural_key NULL and are never
+        # pushed. A half-read match with a key could claim identity over the good
+        # version of the same match, because the first submission wins.
+        left_slugs = [s_.hero_slug for s_ in slots
+                      if s_.side == "left" and s_.hero_slug]
+        right_slugs = [s_.hero_slug for s_ in slots
+                       if s_.side == "right" and s_.hero_slug]
+        if read.winner and is_complete(left_slugs, right_slugs, read.winner):
+            self._store.set_natural_key(
+                match_id,
+                natural_key(read.winner, left_slugs, right_slugs, captured_at),
+            )
 
         # Only long-press-OCR-confirmed identities may seed this - see confirmed_sides().
         confirmed_by_side = confirmed_sides(slots)

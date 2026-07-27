@@ -66,3 +66,57 @@ def test_the_bundled_copy_is_not_moved(tmp_path, monkeypatch):
     seed = bundled_db()
     solstice_db_path()
     assert seed is not None and seed.is_file()
+
+
+def test_the_committed_seed_carries_no_per_machine_data():
+    """The seed ships to contributors. Anything machine-specific in it travels.
+
+    identification_audit once held 548 rows with absolute paths under the
+    developer's vault, and an install row whose UUID every contributor would
+    then claim as their own.
+    """
+    import sqlite3
+
+    seed = bundled_db()
+    assert seed is not None
+    con = sqlite3.connect(seed)
+    for table in ("install", "match", "match_hero", "match_pool", "match_odds",
+                  "identification_audit", "hero_screen_transform"):
+        n = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        assert n == 0, f"{table} has {n} rows - run data/solstice_clash/strip_seed.py"
+
+
+def test_the_committed_seed_still_carries_the_reference_data():
+    """The pooled API serves matches only - no roster, no cell geometry. Strip
+    too much and a fresh install cannot identify a hero at all."""
+    import sqlite3
+
+    con = sqlite3.connect(bundled_db())
+    for table, minimum in (("hero", 100), ("solstice_roster", 100),
+                           ("cell_registry", 20), ("art_transform", 1),
+                           ("theme", 1)):
+        n = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        assert n >= minimum, f"{table} has only {n}"
+
+
+def test_seeding_scrubs_any_per_machine_rows_that_slipped_through(tmp_path, monkeypatch):
+    """Belt and braces: even if a polluted bundle shipped, the copy is cleaned."""
+    import sqlite3
+
+    polluted = tmp_path / "bundle.sqlite"
+    import shutil as _shutil
+
+    _shutil.copy2(bundled_db(), polluted)
+    con = sqlite3.connect(polluted)
+    con.execute(
+        "INSERT INTO install(id,instance_uuid,created_at) VALUES(1,'someone-else','x')"
+    )
+    con.commit()
+    con.close()
+
+    monkeypatch.setenv("ADB_SOLSTICE_BUNDLED_DB", str(polluted))
+    monkeypatch.setenv("ADB_SOLSTICE_DATA_DIR", str(tmp_path / "user"))
+    target = solstice_db_path()
+
+    rows = sqlite3.connect(target).execute("SELECT COUNT(*) FROM install").fetchone()[0]
+    assert rows == 0, "a bundled install identity would be claimed by every contributor"

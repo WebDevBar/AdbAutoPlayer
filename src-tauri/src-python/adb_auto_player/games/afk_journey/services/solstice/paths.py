@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 from pathlib import Path
 
 from adb_auto_player.util import RuntimeInfo
@@ -89,4 +90,42 @@ def solstice_db_path() -> Path:
     if seed is not None:
         # copy, not move - the bundled file stays put for the next fresh install
         shutil.copy2(seed, target)
+        _scrub_seeded_copy(target)
     return target
+
+
+# Emptied on the freshly-seeded copy. Children first, so foreign keys hold.
+_PER_MACHINE_TABLES = (
+    "match_hero",
+    "match_pool",
+    "match_odds",
+    "hero_screen_transform",
+    "identification_audit",
+    "match",
+    "install",
+)
+
+
+def _scrub_seeded_copy(target: Path) -> None:
+    """Remove anything belonging to the machine that built the bundle.
+
+    `strip_seed.py` already empties these before the file is committed, so this
+    should find nothing. It runs anyway because the failure is silent and
+    expensive: a bundled `install` row would make every contributor claim the
+    same instance UUID - migrate.py uses INSERT OR IGNORE against CHECK(id = 1),
+    so the shipped row would never be replaced - and bundled matches would be
+    re-pushed as this install's own on the first sync.
+
+    Only ever runs on a copy we just made, never on an existing user database.
+    """
+    try:
+        con = sqlite3.connect(target)
+        con.execute("PRAGMA foreign_keys = ON")
+        for table in _PER_MACHINE_TABLES:
+            con.execute(f"DELETE FROM {table}")  # noqa: S608 - fixed literals
+        con.commit()
+        con.close()
+    except sqlite3.Error:
+        # A malformed bundle is migrate.py's problem to report, not ours to
+        # crash on - and a seeding failure must not stop the app starting.
+        pass

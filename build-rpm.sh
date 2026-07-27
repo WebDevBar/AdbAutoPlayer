@@ -42,6 +42,25 @@ echo "== 1/6 our patches are tracked in git (webdevbar branch); nothing to copy 
 # pnpm-workspace.yaml, scripts/pytauri-bootstrap.cjs, src-tauri/tauri.bundle.linux.json
 # and the Waydroid device_stream.py fix are committed in-tree on this fork branch.
 
+# Bake the fork API key into the build. Read from the credentials file that
+# lives OUTSIDE every repo, or from the environment. Without it the build still
+# succeeds - sync is simply disabled, which is the right default for a build
+# nobody is going to share.
+SOLSTICE_DIR="src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice"
+CRED_FILE="$HOME/.local/share/webdevbar/gameretro-adb-api.md"
+FORK_KEY="${ADB_SYNC_KEY_BUILTIN:-}"
+if [ -z "$FORK_KEY" ] && [ -f "$CRED_FILE" ]; then
+  FORK_KEY="$(awk '/^## Fork API key/{found=1; next} found && NF {print $1; exit}' "$CRED_FILE")"
+fi
+if [ -n "$FORK_KEY" ]; then
+  printf '"""Generated at build time. NOT committed - see .gitignore."""\n\nFORK_API_KEY = "%s"\n' \
+    "$FORK_KEY" > "$SOLSTICE_DIR/_forkkey.py"
+  echo "== fork key baked in (${#FORK_KEY} chars) =="
+else
+  rm -f "$SOLSTICE_DIR/_forkkey.py"
+  echo "== no fork key found; sync will be disabled in this build =="
+fi
+
 echo "== 2/6 node deps =="
 pnpm install
 

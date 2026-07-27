@@ -19,11 +19,27 @@ from dataclasses import dataclass
 
 DEFAULT_URL = "https://gameretro.net/adb"
 
-# Baked at build time. Not real authentication: it ships inside a binary handed
-# to contributors, so it is extractable by anyone who looks. It stops drive-by
-# traffic. What protects the pool is that every row is attributable and one
-# install can be revoked without touching anyone else.
-FORK_API_KEY = os.environ.get("ADB_SYNC_KEY_BUILTIN", "")
+def _builtin_key() -> str:
+    """The fork key baked in at build time.
+
+    build-rpm.sh writes `_forkkey.py`, which is gitignored - the key must never
+    live in the repository. A development checkout has no such module and falls
+    back to the environment, so sync is simply disabled unless a key is given.
+
+    Not real authentication: it ships inside a binary handed to contributors, so
+    it is extractable by anyone who looks. It stops drive-by traffic and nothing
+    more. What protects the pool is that every row is attributable and one
+    install can be revoked without touching anyone else.
+    """
+    try:
+        from ._forkkey import FORK_API_KEY as baked  # type: ignore[import-not-found]
+
+        return baked
+    except ImportError:
+        return os.environ.get("ADB_SYNC_KEY_BUILTIN", "")
+
+
+FORK_API_KEY = _builtin_key()
 
 BATCH_LIMIT = 500      # server rejects a larger batch with 422
 MAX_CHUNKS_PER_CYCLE = 3

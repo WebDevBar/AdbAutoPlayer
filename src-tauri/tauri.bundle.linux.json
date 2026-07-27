@@ -13,7 +13,7 @@
         "depends": [
           "tesseract"
         ],
-        "release": "2"
+        "release": "3"
       }
     }
   }

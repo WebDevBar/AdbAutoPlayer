@@ -59,3 +59,4 @@ vite.config.ts.timestamp-*
 data/solstice_clash/__pycache__/
 *.rpm
 AdbAutoPlayer-latest.rpm
+_forkkey.py

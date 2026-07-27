@@ -39,6 +39,20 @@ def anchor_dir() -> Path:
     return ANCHORS
 
 
+@pytest.fixture(scope="session")
+def replay_template():
+    """The Replay-button template, pre-loaded.
+
+    Passed in as a numpy array rather than resolved inside the predicate, so the
+    predicate needs no Game, no template_dir and no device.
+    """
+    from adb_auto_player.games.afk_journey.services.solstice.details_screen import (
+        load_replay_template,
+    )
+
+    return load_replay_template(SRC / "games" / "afk_journey" / "templates")
+
+
 def _read_frame(path: Path) -> np.ndarray:
     """Read a fixture frame, failing loudly if it is missing or unreadable.
 

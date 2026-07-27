@@ -1002,6 +1002,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         seen: dict[int, str] = {}
         pool: set[str] | None = None
         last_reads: list[PickRead] = []
+        # Which geometry actually answered, counted rather than printed per pick.
+        # This tally is the whole reason both are read - see draftlog.py.
+        geometry_wins: dict[str, int] = {}
         drafts = 0
         failures = 0
         checked_resolution = False
@@ -1061,6 +1064,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 last_reads = self._read_draft_picks(frame, pool)
                 for pick in newly_locked(seen, last_reads):
                     logging.info(format_pick(pick))
+                    geometry_wins[pick.cell_type] = (
+                        geometry_wins.get(pick.cell_type, 0) + 1
+                    )
 
             elif screen == "prematch_locked":
                 if seen or last_reads:
@@ -1081,10 +1087,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             elapsed = time_module.perf_counter() - started
             slowest = max(slowest, elapsed)
             if poll and poll % HEARTBEAT_POLLS == 0:
+                tally = (
+                    ", ".join(f"{k} {v}" for k, v in sorted(geometry_wins.items()))
+                    or "no picks read yet"
+                )
                 logging.info(
                     f"[SC-53] {poll} polls, {drafts} drafts seen, slowest read "
                     f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}"
-                    f"ms interval"
+                    f"ms interval; geometry that answered: {tally}"
                 )
                 slowest = 0.0
 

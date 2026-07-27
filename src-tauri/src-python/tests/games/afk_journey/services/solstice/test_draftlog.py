@@ -83,6 +83,13 @@ def test_the_pick_line_carries_its_evidence():
     assert "0.842/0.213" in line
 
 
+def test_the_pick_line_keeps_per_pick_noise_out():
+    """Slot and geometry are tracked elsewhere - the line stays readable."""
+    line = format_pick(_read(2, "right", "lily-may"))
+    assert "slot" not in line
+    assert "draft_locked_pick" not in line
+
+
 def test_the_final_line_groups_by_side_in_draft_order():
     line = format_final(
         [

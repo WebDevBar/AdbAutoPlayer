@@ -92,17 +92,20 @@ def newly_locked(seen: dict[int, str], reads: list[PickRead]) -> list[PickRead]:
 
 
 def format_pick(read: PickRead) -> str:
-    """One log line, in the shape asked for, with the evidence appended.
+    """One log line: who picked what, and how sure the read is.
 
-    The scores are not decoration. Phase 1 exists to find out whether these reads can
-    be trusted, and a line that says only 'picked: Lorsan' cannot be audited later.
+    `[score/margin]`. Score is how well the icon matched, 0 to 1. Margin is the gap to
+    the runner-up, which is the number that catches lookalikes: two similar heroes can
+    both score 0.9, and only the margin says whether the top answer was actually
+    distinguishable. Both are kept because the accept rule applies a threshold to each,
+    and a line that says only 'picked: Lorsan' cannot be audited afterwards.
+
+    Which of the two geometries produced the read is NOT in the line - it is counted
+    and reported in the heartbeat, so per-pick noise stays out of the log.
     """
     label = SIDE_LABELS.get(read.side, read.side)
     shown = read.name or read.slug or "?"
-    return (
-        f"{label} picked: {shown}"
-        f"   [slot {read.slot} {read.cell_type} {read.score:.3f}/{read.margin:.3f}]"
-    )
+    return f"{label} picked: {shown}   [{read.score:.3f}/{read.margin:.3f}]"
 
 
 def format_final(reads: list[PickRead]) -> str:

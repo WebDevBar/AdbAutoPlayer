@@ -357,6 +357,37 @@ number built on almost nothing - is worse than showing nothing. If the user pref
 noisier numbers, the thresholds are the knob to turn, and they are configuration rather than
 code.
 
+### Which rows are eligible to train on
+
+Not every row in the database belongs in the fit. The training query is:
+
+```sql
+SELECT ... FROM match
+WHERE outcome IN ('left','right')
+  AND theme_id = :theme
+  AND (theme_resolved_by IS NULL OR theme_resolved_by != 'default')
+```
+
+Two conditions, both load-bearing:
+
+- **Decisive only.** Draws carry no comps at all (section 2).
+- **Not default-resolved.** A row stamped `theme_resolved_by = 'default'` is one where no dated
+  window covered its capture and the OCR name did not match either, so which balance patch it
+  belongs to is genuinely unknown. Since parameters are fitted per theme, pooling those rows
+  mixes generating processes. They are kept rather than discarded because filling in the window
+  later promotes them.
+
+**The `IS NULL` branch is not optional.** `theme_resolved_by` is NULL on every locally-collected
+row until a sync round-trip sets it, and in SQL `NULL != 'default'` evaluates to NULL rather than
+true - so the naive filter drops every unpushed local match. Verified against the live database
+on 2026-07-27: the naive form kept **0 of 32** rows; the NULL-safe form kept all 32. A model
+trained on an empty set is indistinguishable from a model that found no signal, which is exactly
+the failure this spec's gates are meant to make impossible.
+
+This requirement originates in the sync design
+(`gameretro-adb-api/docs/superpowers/specs/2026-07-27-sync-api-design.md`) and is restated here
+because this is the document whose implementer writes the query.
+
 ## 8. Validation
 
 The model is only trusted once it demonstrably beats guessing.

@@ -47,7 +47,6 @@ from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import CELL_TYPE, SummaryHero, read_summary
 from ..services.solstice.vision import (
-    classify_screen,
     extract_cell,
     identify_pool,
     identify_with_pool,
@@ -93,9 +92,21 @@ POLL_SECONDS = 2.0
 # still leaves the identification work (12 cells against <= 20 pool candidates) a wide
 # margin per poll; the loop logs its measured cost so this can be tuned on evidence.
 DRAFT_POLL_SECONDS = 0.4
-# The two competing geometries for the same six positions. Both are read every poll and
-# the stronger answer wins - see services/solstice/draftlog.py.
-DRAFT_CELL_TYPES = ("draft_locked_pick", "draft_pick")
+# Measured on the committed fixtures with the bundled icon library:
+#
+#   spectate_draft.png     draft_pick 3/6 (best 0.98)   draft_locked_pick 1/6 (0.80)
+#   spectate_prematch.png  prematch_pick 6/6 (0.99)     locked_pick 2/6 (0.80)
+#   prematch_locked.png    locked_pick 6/6 (0.99)       prematch_pick 0/6 (0.88)
+#
+# So the geometries are not rivals for one screen - each belongs to a different screen,
+# and reading the wrong one produces confident nonsense rather than nothing. Mode C
+# spectates, so it uses the spectate geometries.
+DRAFT_CELL_TYPES = ("draft_pick",)
+LOCKED_CELL_TYPES = ("prematch_pick",)
+# A partial pool read is WORSE than no pool: it constrains identification to a set that
+# may not contain the right hero. On the draft fixture a 4-of-20 pool read took
+# draft_pick from 3/6 identified down to 0/6. Below this, fall back to the full library.
+MIN_POOL_FOR_CONSTRAINT = 15
 # The observed draft ran ~25s. This bounds the watch so a mis-detected screen cannot
 # park the collection loop here all night; the normal exit is the draft screen going
 # away, not this.
@@ -586,6 +597,17 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             wait_timeout=PREMATCH_WAIT_TIMEOUT if draft_frame is not None else 0.0,
         )
 
+        # The locked-picks screen, read from its own geometry. It is the last look at
+        # the six before the battle, and the only one where nothing can still change.
+        if getattr(self, "_watch_draft_picks", False) and prematch_frame is not None:
+            logging.info("[SC-58] locked picks screen")
+            locked = self._read_draft_picks(
+                prematch_frame,
+                getattr(self, "_last_draft_pool", None),
+                cell_types=LOCKED_CELL_TYPES,
+            )
+            logging.info(format_final(locked))
+
         # The clock starts HERE - once the prematch screen has been SEEN. There is no need
         # to wait for it to clear: seeing it is enough to know the fight is about to begin,
         # and waiting for it to disappear was a minute of dead time per match.
@@ -998,6 +1020,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
         Phase 1 of Mode C: it predicts nothing. It exists to show whether the picks can
         be read correctly and in time to be worth predicting from.
+
+        This mode DOES drive the device - it navigates, opens spectate, and drags the
+        chat widget out of the card band before reading. That is inherited from the
+        collect mode and is safe here because you are spectating, not playing. Mode B
+        is the one that must never touch the device.
         """
         self.start_up(device_streaming=False)
         self.navigate_to_world()
@@ -1033,32 +1060,53 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 continue
 
             started = time_module.perf_counter()
-            if classify_screen(frame, anchor_dir) != "draft":
+            # The SPECTATE draft, detected with the template the working capture path
+            # uses. classify_screen's fixed-position anchor is for the draft you play
+            # yourself: measured on the committed fixtures, spectate_draft.png scores
+            # 1.000 on this template and classifies as `unknown`, while the player's own
+            # draft_selecting.png is the reverse. Gating on the anchor is why the first
+            # live run logged nothing at all.
+            on_draft = (
+                self.game_find_template_match(
+                    template="event/solstice_clash/draft_anchor", screenshot=frame
+                )
+                is not None
+            )
+            if not saw_draft and on_draft:
+                logging.info("[SC-54] draft screen")
+
+            if not on_draft:
                 # Gone already means the draft ended (or we joined after it). Either way
                 # there is nothing left to watch.
                 if saw_draft:
+                    logging.info("[SC-55] draft screen gone - picks are locked")
                     break
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
 
             saw_draft = True
             last_frame = frame
+            self._last_draft_pool = pool
             if pool is None:
                 read = identify_pool(
                     frame, self._solstice_cfg, self._solstice_library, anchor_dir
                 )
                 # An empty read is a FAILED read, not an empty pool: passing it on would
                 # mark every pick a pool miss and hide the real failure.
-                pool = read.slugs or None
-                if pool:
+                if len(read.slugs) >= MIN_POOL_FOR_CONSTRAINT:
+                    pool = read.slugs
                     logging.info(
                         f"[SC-51] pool read: {len(pool)} heroes, "
                         f"{len(read.banned_slots)} banned"
                     )
                 else:
+                    # Deliberately not a constraint. A short read means the grid was
+                    # still animating in, and narrowing to it would exclude the very
+                    # heroes about to be picked.
+                    pool = None
                     logging.warning(
-                        "[SC-52] pool unreadable - identifying against the full "
-                        "library, which is slower and less accurate"
+                        f"[SC-52] pool read only {len(read.slugs)}/20 - identifying "
+                        f"against the full library instead"
                     )
 
             last_reads = self._read_draft_picks(frame, pool)
@@ -1068,14 +1116,32 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             slowest = max(slowest, time_module.perf_counter() - started)
             time_module.sleep(DRAFT_POLL_SECONDS)
 
-        if saw_draft:
-            # The locked six, as one line, from the last frame that still showed them.
-            logging.info(format_final(last_reads))
-            logging.info(
-                f"[SC-53] draft over: {len(seen)}/6 picks read, slowest read "
-                f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}ms "
-                f"interval"
+        if not saw_draft:
+            # Loud, because silence here reads exactly like "no draft was on screen".
+            logging.warning(
+                f"[SC-56] no draft screen in {DRAFT_WATCH_TIMEOUT:.0f}s - nothing was "
+                f"logged. Either this match was joined after the draft, or the draft "
+                f"anchor no longer matches."
             )
+            return last_frame
+
+        if not seen:
+            # Detection worked and identification did not - a different failure, and one
+            # the scores can diagnose, so print them rather than an empty log.
+            worst = ", ".join(
+                f"slot {r.slot} {r.score:.3f}/{r.margin:.3f}"
+                for r in sorted(last_reads, key=lambda r: r.slot)
+            )
+            logging.warning(f"[SC-57] draft seen but no pick identified: {worst}")
+
+        # The locked six, as one line, from the last frame that still showed them.
+        if last_reads:
+            logging.info(format_final(last_reads))
+        logging.info(
+            f"[SC-53] draft over: {len(seen)}/6 picks read, slowest read "
+            f"{slowest * 1000:.0f}ms against a {DRAFT_POLL_SECONDS * 1000:.0f}ms "
+            f"interval"
+        )
         return last_frame
 
     def _read_draft_picks(

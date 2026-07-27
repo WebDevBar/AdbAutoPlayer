@@ -5,16 +5,22 @@ just locked, in draft order, as it happens. That is deliberately the smallest th
 that proves the input the odds model will depend on, and it doubles as the measurement
 Task 7 asks for - a wrong name in the log is a wrong name in the model.
 
-Two cell geometries exist for the same six on-screen positions, registered a day apart
-and offset by about 20px:
+The registered geometries belong to DIFFERENT screens, which is not what it looked
+like at first - they cover the same six positions about 20px apart, so they read like
+rival registrations of one screen. Measured on the committed fixtures:
 
-    draft / draft_locked_pick        (2026-07-25)  y 428-502
-    spectate_draft_picks / draft_pick (2026-07-26)  y 410-495
+    spectate_draft.png     draft_pick 3/6 (best 0.98)   draft_locked_pick 1/6 (0.80)
+    spectate_prematch.png  prematch_pick 6/6 (0.99)     locked_pick 2/6 (0.80)
+    prematch_locked.png    locked_pick 6/6 (0.99)       prematch_pick 0/6 (0.88)
 
-They cannot both be right. The audit rows collected so far pass the accept rule on only
-39% of `draft_pick` reads against 100% on the prematch and summary screens, so this
-module reads BOTH and reports which one answered. Picking the winner is then a fact
-about collected data rather than a guess about which registration was more careful.
+Reading the wrong geometry for a screen does not fail cleanly - it returns confident
+nonsense, which is worse than nothing because nonsense reaches the model. Mode C
+spectates, so it reads the spectate geometries and nothing else.
+
+The 39% accept rate on collected `draft_pick` audit rows is therefore not evidence of
+bad geometry: a draft frame is captured while picks are still landing, and an empty
+slot cannot identify. Three of six identified on a mid-draft frame is the expected
+shape, not a defect.
 """
 
 from __future__ import annotations

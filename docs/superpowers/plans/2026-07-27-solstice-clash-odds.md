@@ -682,6 +682,8 @@ Implements spec sections 7 and 8. Pure; deterministic via an explicit seed.
 ```python
 """Out-of-sample validation and the display gate."""
 
+import random
+
 from adb_auto_player.games.afk_journey.services.solstice.odds import (
     DraftState,
     Prediction,
@@ -695,16 +697,24 @@ from adb_auto_player.games.afk_journey.services.solstice.validate import (
 
 
 def _noise(n=200):
-    """Coin-flip outcomes: no hero signal exists to find."""
+    """Outcomes independent of the heroes: there is no signal to find.
+
+    The labels MUST come from an RNG that has nothing to do with the hero slugs. An
+    earlier version of this fixture derived both the slugs and the label from the loop
+    counter, which made the outcome perfectly predictable from the comp - it reached a
+    test log loss of 0.259 and passed validation, the exact opposite of what this
+    fixture is for.
+    """
+    rng = random.Random(42)
     return [
         TrainingMatch(
-            (f"a{i % 9}", f"b{i % 7}", f"c{i % 5}"),
-            (f"d{i % 8}", f"e{i % 6}", f"f{i % 4}"),
+            tuple(f"h{rng.randrange(40)}" for _ in range(3)),
+            tuple(f"h{rng.randrange(40)}" for _ in range(3)),
             None,
             None,
-            i % 2 == 0,
+            rng.random() < 0.5,
         )
-        for i in range(n)
+        for _ in range(n)
     ]
 
 
@@ -966,8 +976,14 @@ from tests.games.afk_journey.services.solstice.conftest import fresh_db  # noqa:
 
 
 def test_version_is_four(fresh_db):
+    """Version lives in the schema_version TABLE, not in PRAGMA user_version.
+
+    Verified 2026-07-27: migrate.py does `INSERT OR IGNORE INTO schema_version(...)`
+    and never touches `PRAGMA user_version`, which is still 0 on the shipped database.
+    """
     con = sqlite3.connect(fresh_db)
-    assert con.execute("PRAGMA user_version").fetchone()[0] == 4
+    latest = con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
+    assert latest == 4
 
 
 def test_model_fit_and_prediction_tables_exist(fresh_db):
@@ -1017,7 +1033,7 @@ If `conftest.py` has no `fresh_db` fixture, add one that runs `migrate.py` again
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `cd src-tauri/src-python && uv run pytest tests/games/afk_journey/services/solstice/test_schema_v4.py -v`
-Expected: FAIL, `PRAGMA user_version` returns 3
+Expected: FAIL, `MAX(version) FROM schema_version` returns 3
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1075,14 +1091,23 @@ Expected: PASS, including the pre-existing v3 tests
 
 - [ ] **Step 5: Verify the shipped database migrates without loss**
 
+The collection mode may be running and writing to this database. Stop it first, or the
+backup and the migration will race with an insert.
+
 ```bash
 cd /mnt/docs/adbautoplayer
-cp data/solstice_clash/heroes.sqlite /mnt/vault/solstice/heroes-pre-v4.sqlite
-sqlite3 data/solstice_clash/heroes.sqlite "SELECT COUNT(*) FROM match;"   # note it
+mkdir -p /mnt/vault/solstice
+# Backup via sqlite itself, NOT cp - cp of a live database can capture a torn page.
+sqlite3 data/solstice_clash/heroes.sqlite ".backup '/mnt/vault/solstice/heroes-pre-v4.sqlite'"
+sqlite3 data/solstice_clash/heroes.sqlite "SELECT COUNT(*) FROM match;"   # note this number
 python3 data/solstice_clash/migrate.py
-sqlite3 data/solstice_clash/heroes.sqlite "PRAGMA user_version; SELECT COUNT(*) FROM match;"
+sqlite3 data/solstice_clash/heroes.sqlite \
+  "SELECT MAX(version) FROM schema_version; SELECT COUNT(*) FROM match;"
 ```
-Expected: version 4, match count UNCHANGED. If the count moved, stop and restore the backup.
+
+Expected: version `4`, and the match count UNCHANGED from the number noted above. If the
+count moved, stop and restore from `/mnt/vault/solstice/heroes-pre-v4.sqlite` - that data
+cannot be recollected, because it belongs to a theme that rotates on 2026-07-28.
 
 - [ ] **Step 6: Commit**
 
@@ -1113,8 +1138,15 @@ git commit -m "feat(solstice): schema v4 - model fits and logged predictions"
 ```python
 """Reading training data and persisting fits and predictions."""
 
-from adb_auto_player.games.afk_journey.services.solstice.odds import DraftState
-from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+from adb_auto_player.games.afk_journey.services.solstice.odds import (
+    DraftState,
+    Prediction,
+)
+from adb_auto_player.games.afk_journey.services.solstice.store import (
+    HeroSlot,
+    MatchRecord,
+    MatchStore,
+)
 from adb_auto_player.games.afk_journey.services.solstice.validate import ValidationResult
 
 from tests.games.afk_journey.services.solstice.conftest import fresh_db  # noqa: F401
@@ -1124,25 +1156,79 @@ def _result(passes=True):
     return ValidationResult(0.60, 0.6931, 0.68, 0.21, 18, 20, passes)
 
 
-def test_training_matches_excludes_draws_and_unfinished(fresh_db):
-    """Only decisive matches train the model - draws carry no comps at all."""
+def _prediction():
+    return Prediction(0.62, 0.50, 0.73, 0.49, 0.30, "medium", 40, 6)
+
+
+def _slots(left, right, status="identified"):
+    """Six slots, three a side, in the shape record_heroes expects."""
+    out = []
+    for slot, slug in enumerate(left):
+        out.append(HeroSlot(side="left", slot=slot, hero_slug=slug, art_ref=None,
+                            status=status if slug else "unknown"))
+    for slot, slug in enumerate(right):
+        out.append(HeroSlot(side="right", slot=slot, hero_slug=slug, art_ref=None,
+                            status=status if slug else "unknown"))
+    return out
+
+
+def _seed(store, outcome, left=("a", "b", "c"), right=("d", "e", "f"), status="identified"):
+    match_id = store.record_match(
+        MatchRecord(
+            source="spectate",
+            captured_at="2026-07-27T00:00:00Z",
+            theme="converging-paths",
+            left_player="Alice",
+            right_player="Bob",
+            outcome=outcome,
+            outcome_source="test",
+        )
+    )
+    store.record_heroes(match_id, _slots(left, right, status))
+    return match_id
+
+
+def test_training_matches_keeps_only_decisive_matches(fresh_db):
+    """Draws and unfinished matches carry no usable label."""
     store = MatchStore(fresh_db)
-    # Seed via the existing record_match/record_heroes API, one 'left', one 'draw',
-    # one with outcome NULL.
-    ...
-    matches = store.training_matches()
-    assert all(m.left_won in (True, False) for m in matches)
-    assert len(matches) == 1
+    before = len(store.training_matches())
+    _seed(store, "left")
+    _seed(store, "draw")
+    _seed(store, None)
+    after = store.training_matches()
+    assert len(after) - before == 1
+    assert after[-1].left_won is True
 
 
-def test_training_matches_skips_incomplete_comps(fresh_db):
-    """A match with an unidentified slot is a 2v3 and must not train the model."""
-    ...
+def test_training_matches_records_the_right_side_winner(fresh_db):
+    store = MatchStore(fresh_db)
+    before = len(store.training_matches())
+    _seed(store, "right")
+    after = store.training_matches()
+    assert len(after) - before == 1
+    assert after[-1].left_won is False
+
+
+def test_training_matches_skips_an_unidentified_slot(fresh_db):
+    """A missing hero would make a 3v3 look like a 2v3 and corrupt the fit."""
+    store = MatchStore(fresh_db)
+    before = len(store.training_matches())
+    _seed(store, "left", left=("a", "b", None))
+    assert len(store.training_matches()) == before
+
+
+def test_training_matches_skips_a_short_side(fresh_db):
+    store = MatchStore(fresh_db)
+    before = len(store.training_matches())
+    _seed(store, "left", left=("a", "b"))
+    assert len(store.training_matches()) == before
 
 
 def test_record_and_read_back_a_fit(fresh_db):
     store = MatchStore(fresh_db)
-    fit_id = store.record_fit("2026-07-27T00:00:00Z", "converging-paths", 200, _result(), "{}")
+    fit_id = store.record_fit(
+        "2026-07-27T00:00:00Z", "converging-paths", 200, _result(), "{}"
+    )
     assert store.latest_fit("converging-paths") == fit_id
 
 
@@ -1150,14 +1236,30 @@ def test_latest_fit_is_none_before_any_fit(fresh_db):
     assert MatchStore(fresh_db).latest_fit("converging-paths") is None
 
 
-def test_prediction_is_recorded_with_the_gate_state(fresh_db):
+def test_latest_fit_returns_the_newest(fresh_db):
     store = MatchStore(fresh_db)
-    fit_id = store.record_fit("2026-07-27T00:00:00Z", "converging-paths", 20, _result(False), "{}")
+    store.record_fit("2026-07-27T00:00:00Z", "converging-paths", 100, _result(), "{}")
+    second = store.record_fit(
+        "2026-07-27T01:00:00Z", "converging-paths", 200, _result(), "{}"
+    )
+    assert store.latest_fit("converging-paths") == second
+
+
+def test_prediction_is_recorded_even_when_the_gate_is_shut(fresh_db):
+    store = MatchStore(fresh_db)
+    fit_id = store.record_fit(
+        "2026-07-27T00:00:00Z", "converging-paths", 20, _result(False), "{}"
+    )
     draft = DraftState(("a", "b"), ("c",), "Alice", "Bob", 3)
-    ...
+    row_id = store.record_prediction(
+        fit_id, "2026-07-27T00:05:00Z", draft, _prediction(), gate_open=False
+    )
+    assert row_id > 0
 ```
 
-Fill the `...` blocks with the real seeding calls when writing the task - use `MatchRecord` and `HeroSlot` from `store.py` exactly as `test_store.py` already does.
+**Note on assertion style:** every count above is a DELTA against `before`, never an
+absolute number. The shipped `heroes.sqlite` holds real collected matches, so absolute
+counts are not stable - this already broke four tests once.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1169,6 +1271,11 @@ Expected: FAIL, `AttributeError: 'MatchStore' object has no attribute 'training_
 Add to `MatchStore`. `training_matches` must reject anything that would corrupt the fit:
 
 ```python
+    # At the TOP of store.py, add the import - `TrainingMatch` is defined in odds.py,
+    # not here, and the method body constructs one:
+    #     from .odds import TrainingMatch
+    # This import is safe: odds.py imports identity.py only, so there is no cycle.
+
     def training_matches(self, theme: str | None = None) -> list[TrainingMatch]:
         """Decisive, fully-identified matches only.
 
@@ -1277,29 +1384,106 @@ git commit -m "test(solstice): measure draft-screen hero identification accuracy
 
 - [ ] **Step 1: Write the failing test**
 
-Test the pure decision logic with a fake store and a fake frame reader - no device:
+The decision logic must be a **free function**, not a method, so it is testable with no
+device, no mixin instance, and no GUI. Put it in `odds.py` and have the mixin call it.
 
 ```python
-def test_gate_shut_logs_not_enough_data_and_no_number(caplog):
-    ...
-    assert "not enough data" in caplog.text
-    assert "%" not in caplog.text
+"""Formatting and gating of the live odds line - pure, no device."""
+
+import logging
+
+import pytest
+
+from adb_auto_player.games.afk_journey.services.solstice.odds import (
+    DraftState,
+    Prediction,
+    format_odds_line,
+)
+from adb_auto_player.games.afk_journey.services.solstice.validate import ValidationResult
 
 
-def test_gate_open_logs_probability_interval_and_evidence(caplog):
-    ...
-    assert "80% interval" in caplog.text
-    assert "Evidence" in caplog.text
+def _open_result():
+    return ValidationResult(0.60, 0.6931, 0.68, 0.21, 18, 20, True)
 
 
-def test_prediction_is_logged_to_the_database_even_when_the_gate_is_shut():
-    ...
+def _shut_result():
+    return ValidationResult(0.69, 0.6931, 0.69, 0.25, 5, 20, False)
 
 
-def test_the_mode_never_taps_a_bet_button():
-    """Hard constraint: no code path commits a wager."""
-    ...
+def _confident():
+    return Prediction(0.62, 0.50, 0.73, 0.49, 0.30, "medium", 40, 6)
+
+
+def test_shut_gate_says_not_enough_data_and_shows_no_number():
+    line = format_odds_line(
+        _shut_result(), _confident(), n_decisive=20, min_hero_appearances=2
+    )
+    assert line == "Solstice odds: not enough data"
+    assert "%" not in line
+
+
+def test_open_gate_shows_probability_interval_trust_and_evidence():
+    line = format_odds_line(
+        _open_result(), _confident(), n_decisive=200, min_hero_appearances=8
+    )
+    assert "62%" in line
+    assert "80% interval" in line
+    assert "50-73%" in line
+    assert "Trust: medium" in line
+    assert "Evidence: 40 appearances" in line
+    assert "weakest 6" in line
+
+
+def test_a_bare_percentage_is_never_emitted():
+    """Spec section 12: never the bare number, always the evidence with it."""
+    line = format_odds_line(
+        _open_result(), _confident(), n_decisive=200, min_hero_appearances=8
+    )
+    assert "Trust:" in line and "Evidence:" in line
+
+
+def test_three_unknown_picks_are_reported_as_not_enough_data():
+    """SE floor sqrt(3*0.09)=0.52 exceeds MAX_SE, so the gate cannot open."""
+    wide = Prediction(0.62, 0.40, 0.80, 0.49, 0.52, "medium", 40, 6)
+    line = format_odds_line(
+        _open_result(), wide, n_decisive=200, min_hero_appearances=8
+    )
+    assert line == "Solstice odds: not enough data"
+
+
+def test_the_mixin_has_no_bet_confirming_tap():
+    """Hard constraint: no code path in the mode commits a wager."""
+    from pathlib import Path
+
+    source = Path(
+        "adb_auto_player/games/afk_journey/mixins/solstice_clash.py"
+    ).read_text()
+    for forbidden in ("place_bet", "confirm_bet", "bet_confirm", "wager"):
+        assert forbidden not in source
 ```
+
+And the implementation of `format_odds_line`, appended to `odds.py`:
+
+```python
+def format_odds_line(
+    result, prediction: Prediction, n_decisive: int, min_hero_appearances: int
+) -> str:
+    """The single user-visible line. Pure so it can be tested without a device."""
+    from .validate import gate_open
+
+    if not gate_open(result, prediction, n_decisive, min_hero_appearances):
+        return "Solstice odds: not enough data"
+    return (
+        f"Solstice odds: left win {prediction.p_mid:.0%} "
+        f"(80% interval {prediction.p_low:.0%}-{prediction.p_high:.0%})  "
+        f"Trust: {prediction.trust}  "
+        f"Evidence: {prediction.total_appearances} appearances across locked heroes, "
+        f"weakest {prediction.weakest_appearances}"
+    )
+```
+
+The `gate_open` import is deliberately function-local: `validate.py` imports from
+`odds.py`, so a module-level import here would be a circular import.
 
 - [ ] **Step 2: Run test to verify it fails**
 

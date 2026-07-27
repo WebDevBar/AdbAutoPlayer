@@ -59,6 +59,12 @@
   heroes get placed differently by different players. Existing rows keep their hour-bucket
   keys; no backfill.
 - This fork's commands are labelled `WDB:` and grouped at the end of the menu.
+- The working copy moved from `/mnt/docs/adbautoplayer` to `~/Dev/webdevbar/adbautoplayer`,
+  matching every other repo on this machine. `/mnt/docs` survives a reformat and `~/Dev`
+  does not, so the last built RPM is kept at `/mnt/docs/adbautoplayer-rpm/` and
+  `AdbAutoPlayer-latest.rpm` points there until the next local build. Paths in
+  `build-rpm.sh`, `PERSONAL-NOTES.md` and the plan docs were repointed, and the
+  hardcoded-developer-path guard in `test_paths.py` now bans the new path too.
 
 ### Removed
 
@@ -94,6 +100,18 @@
 - `[SC-41]` was doing three jobs - parser raised, incomplete read, and benign dedupe skip.
   Split into `[SC-41]`/`[SC-47]`/`[SC-48]`, because the first two are opposite in what
   they ask you to do and were indistinguishable in a log.
+
+## [wdb-12.9.24-6] - 2026-07-27
+
+Rebuild of upstream 12.9.24 carrying the screenshot-archiving removal and the `[SC-41]`
+split above. Windows `.exe`, Linux `.rpm` and `.deb` attached via GitHub Actions.
+
+https://github.com/WebDevBar/AdbAutoPlayer/releases/tag/wdb-12.9.24-6
+
+The tag and the RPM release number now agree. `wdb-12.9.24-4` was re-run after the
+archiving removal landed, so it shipped `AdbAutoPlayer-12.9.24-5.x86_64.rpm` under a tag
+named `-4` - the assets were current, the label was not, and the release read as stale.
+Rule from here: bump the RPM release, then tag `wdb-<version>-<release>` to match it.
 
 ## [wdb-12.9.24-4] - 2026-07-27
 

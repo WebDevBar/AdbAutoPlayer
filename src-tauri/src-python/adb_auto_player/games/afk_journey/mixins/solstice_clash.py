@@ -94,6 +94,26 @@ MAX_CONSECUTIVE_SCREENSHOT_FAILURES = 15
 # silently; the redundancy is only real if something notices.
 MAX_SIGNAL_DISAGREEMENT = 30
 
+# Enumerated log codes for this mode. Every failure path gets its OWN code: a
+# shared code means a log line tells you something went wrong but not WHICH
+# thing, which is the difference between reading the answer and grepping the
+# whole file for it.
+#
+#   SC-30  sync call failed (shared with Mode A)
+#   SC-35  sync status / summary (shared with Mode A)
+#   SC-40  match recorded                              info
+#   SC-41  already recorded - the natural_key backstop  debug   benign
+#   SC-42  wrong screen resolution, refused to run      raises
+#   SC-43  periodic heartbeat                           info
+#   SC-45  device connection lost, collection stopped   raises
+#   SC-46  detection signals disagree, possible rot     warning once
+#   SC-47  read_summary RAISED on a confirmed screen    warning
+#   SC-48  read completed but was INCOMPLETE            debug
+#
+# SC-47 and SC-48 are deliberately distinct: one means the parser broke, the
+# other means the screen was mid-animation and the next poll will be fine. They
+# were one code until an audit caught that a log could not tell them apart.
+
 # Mode A's bounded wait for the details screen after tapping the chart button.
 DETAILS_POLL_DELAY = 0.5
 DETAILS_TIMEOUT = 15.0
@@ -317,6 +337,35 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # Stay ARMED: the screen is still up and the next poll gets a
                 # cleaner read of the same match.
 
+    def _wait_for_details_screen(self) -> np.ndarray:
+        """Block until the details screen is up, and return THAT frame.
+
+        No header title is required: Mode A navigated to Solstice Clash itself,
+        so it already knows which event it is in. Mode B passes one because it
+        watches whatever the user happens to be playing.
+        """
+        replay = load_replay_template(self.template_dir)
+
+        def _details_ready() -> np.ndarray:
+            frame = self.get_screenshot()
+            # _ocr is a PROPERTY - self._ocr() would raise TypeError.
+            if is_details_screen(frame, replay, self._ocr):
+                return frame
+            # MUST raise, not return False: _execute_or_timeout retries only on
+            # _UndesiredResultError and treats ANY returned value - including
+            # False - as success, which would make this wait a silent no-op.
+            raise _UndesiredResultError()
+
+        return self._execute_or_timeout(
+            _details_ready,
+            delay=DETAILS_POLL_DELAY,
+            timeout=DETAILS_TIMEOUT,
+            timeout_message=(
+                "[SC-44] details screen never appeared after tapping the chart "
+                "button"
+            ),
+        )
+
     def _record_compete_summary(self, frame: np.ndarray) -> bool:
         """Record one details screen the user played. Returns False if skipped.
 
@@ -330,7 +379,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 frame, self._solstice_cfg, self._solstice_library, self._ocr
             )
         except Exception as exc:  # noqa: BLE001 - one bad read must not end a session
-            logging.warning(f"[SC-41] could not read the summary, skipping: {exc}")
+            logging.warning(
+                f"[SC-47] read_summary raised on a confirmed details "
+                f"screen, skipping this poll: {exc!r}"
+            )
             return False
 
         left = [h.slug for h in read.heroes if h.side == "left" and h.slug]
@@ -342,15 +394,19 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # winner that is not left/right, covering the unresolved-banner case.
         if not is_complete(left, right, read.winner or ""):
             logging.debug(
-                f"[SC-41] skipped: {len(left)}+{len(right)} heroes identified, "
-                f"winner={read.winner} - staying armed for a cleaner read"
+                f"[SC-48] incomplete read: {len(left)}+{len(right)} of 3+3 heroes "
+                f"identified, winner={read.winner!r} - staying armed for a "
+                f"cleaner read"
             )
             return False
 
         captured_at = datetime.now(UTC).isoformat(timespec="seconds")
         key = natural_key(read.winner, left, right, captured_at)
         if self._store.match_by_natural_key(key) is not None:
-            logging.debug("[SC-41] already recorded, skipping")
+            logging.debug(
+                f"[SC-41] already recorded ({key[:19]}...), skipping - this "
+                f"is the natural_key backstop, not a failure"
+            )
             return False
 
         # Theme by DATE. The details screen never shows it, so unlike Mode A
@@ -589,9 +645,15 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ),
         )
         self.tap(chart)
-        sleep(2)
+        # Replaces sleep(2)-and-hope with a bounded wait. If the tap missed or
+        # the transition was slow, read_summary used to parse whatever was on
+        # screen. Scoped honestly: this would NOT have caught the live-battle
+        # read-as-a-draw bug, which happened in match-end detection before this
+        # point. It prevents the adjacent failure - recording garbage parsed
+        # from a screen that is not the details screen.
+        frame = self._wait_for_details_screen()
 
-        self._record_summary(draft_frame, prematch_frame, theme)
+        self._record_summary(draft_frame, prematch_frame, theme, frame=frame)
         # Durably recorded. Anything that fails after this point is a navigation problem,
         # not a lost match, and must not count against the failure budget.
         self._match_recorded_this_cycle = True
@@ -729,13 +791,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"stopping: {max_restarts} consecutive cycles recorded no match"
         )
 
-    def _record_summary(self, draft_frame, prematch_frame, theme: str | None) -> None:
+    def _record_summary(
+        self,
+        draft_frame,
+        prematch_frame,
+        theme: str | None,
+        frame: np.ndarray | None = None,
+    ) -> None:
         """Read the summary, record the match, and audit every identification.
 
         `theme` is read during navigation (the summary screen does NOT show it) and
         passed in, so a match cannot be recorded against the wrong balance epoch.
+
+        `frame` is the capture already CONFIRMED to be the details screen.
+        Re-capturing here would reintroduce the race the confirmation exists to
+        close, because the screen can be dismissed between the check and the
+        second capture. Defaulted so every existing caller and test is unchanged.
         """
-        frame = self.get_screenshot()
+        if frame is None:
+            frame = self.get_screenshot()
         read = read_summary(frame, self._solstice_cfg, self._solstice_library, self._ocr)
 
         captured_at = datetime.now(UTC).isoformat(timespec="seconds")

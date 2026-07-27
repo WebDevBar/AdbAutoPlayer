@@ -271,24 +271,36 @@ def test_it_re_arms_after_the_screen_disappears(mode, db):
     assert matches(db) == before + 2
 
 
-def test_reopening_the_same_match_does_not_duplicate(mode, db):
+def test_reopening_the_same_match_does_not_duplicate(mode, db, caplog):
     """Layer 1 re-arms because the screen disappeared; layer 2 catches it."""
     mode.feed(details_frame(match=1), not_details_frame(), details_frame(match=1))
     before = matches(db)
-    mode.collect_while_playing(max_polls=3)
+    with caplog.at_level("DEBUG"):
+        mode.collect_while_playing(max_polls=3)
     assert matches(db) == before + 1
+    # The backstop firing is [SC-41] and is NOT a failure - distinct from both
+    # the parser raising and an incomplete read.
+    assert any("[SC-41]" in r.message for r in caplog.records)
 
 
 # --- what gets recorded ----------------------------------------------------
 
 
-def test_a_partial_read_is_skipped_and_stays_armed(mode, db):
+def test_a_partial_read_is_skipped_and_stays_armed(mode, db, caplog):
     """A frame caught mid-animation must not record, and must not disarm - the
-    next poll gets a clean read of the same screen."""
+    next poll gets a clean read of the same screen.
+
+    Also pins the CODE: an incomplete read is [SC-48], distinct from a parser
+    that raised ([SC-47]) and from a benign dedupe skip ([SC-41]). They were one
+    code until an audit caught that a log could not tell them apart.
+    """
     mode.feed(details_frame(heroes=4), details_frame())
     before = matches(db)
-    mode.collect_while_playing(max_polls=2)
+    with caplog.at_level("DEBUG"):
+        mode.collect_while_playing(max_polls=2)
     assert matches(db) == before + 1
+    assert any("[SC-48]" in r.message for r in caplog.records)
+    assert not any("[SC-47]" in r.message for r in caplog.records)
 
 
 def test_a_frame_with_no_winner_is_skipped(mode, db, monkeypatch):
@@ -366,7 +378,9 @@ def test_it_logs_sc40_once_per_recorded_match(mode, caplog):
 # --- resilience ------------------------------------------------------------
 
 
-def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
+def test_an_exception_in_one_poll_does_not_stop_the_loop(
+    mode, db, monkeypatch, caplog
+):
     """One bad read must not end an unattended session."""
     import adb_auto_player.games.afk_journey.mixins.solstice_clash as mod
 
@@ -381,8 +395,13 @@ def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
 
     monkeypatch.setattr(mod, "read_summary", raise_once)
     mode.feed(details_frame(), not_details_frame(), details_frame())
-    mode.collect_while_playing(max_polls=3)
+    with caplog.at_level("DEBUG"):
+        mode.collect_while_playing(max_polls=3)
     assert matches(db) >= 1
+    # A parser that RAISED is [SC-47], never [SC-48] - one means the code broke,
+    # the other means the screen was mid-animation and the next poll is fine.
+    assert any("[SC-47]" in r.message for r in caplog.records)
+    assert not any("[SC-48]" in r.message for r in caplog.records)
 
 
 def test_it_stops_when_the_device_connection_dies(mode, monkeypatch):
@@ -451,3 +470,36 @@ def test_it_emits_a_periodic_heartbeat(mode, caplog, monkeypatch):
     with caplog.at_level("INFO"):
         mode.collect_while_playing(max_polls=12)
     assert sum("[SC-43]" in r.message for r in caplog.records) == 2
+
+
+# --- Mode A adopting the predicate (Task 4) --------------------------------
+
+
+def test_it_returns_the_frame_once_the_details_screen_appears(mode):
+    """Replaces sleep-and-hope with a bounded wait. Tested on the extracted
+    helper, not _run_one_match, which taps and navigates and cannot be driven by
+    a device-free harness."""
+    mode.feed(not_details_frame(), not_details_frame(), details_frame())
+    frame = mode._wait_for_details_screen()
+    assert frame is not None
+    assert frame.shape[:2] == (1920, 1080)
+
+
+def test_it_raises_sc44_if_the_details_screen_never_arrives(mode, monkeypatch):
+    """A short timeout: the point is the raise, not waiting 15 real seconds."""
+    import adb_auto_player.games.afk_journey.mixins.solstice_clash as mod
+
+    monkeypatch.setattr(mod, "DETAILS_TIMEOUT", 1.0)
+    monkeypatch.setattr(mod, "DETAILS_POLL_DELAY", 0.05)
+    mode.feed(*[not_details_frame()] * 40)
+    with pytest.raises(GameTimeoutError, match=r"\[SC-44\]"):
+        mode._wait_for_details_screen()
+
+
+def test_mode_a_requires_no_header_title(mode):
+    """Mode A navigated to the event itself, so it must NOT require the title -
+    if it did, header=False would reject every screen."""
+    import inspect
+
+    src = inspect.getsource(mode._wait_for_details_screen)
+    assert "header_title" not in src

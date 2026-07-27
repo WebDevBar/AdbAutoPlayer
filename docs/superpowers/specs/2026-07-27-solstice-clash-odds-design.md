@@ -112,8 +112,36 @@ p_i = sigmoid(η_i)
 | `φ_p` player | **0.50** | A player controls their whole side, but OCR name errors and spectator noise make a large player prior dangerous. A three-hero side has prior SD `√3 × 0.30 = 0.52`, so 0.50 makes player skill comparable to the entire draft rather than dominant. |
 | `β0` intercept | **1.0** | Absorbs any left/right structural advantage. |
 
-Fit with `scipy.optimize.minimize(method="L-BFGS-B")`. About 95 hero parameters plus one per
-player plus an intercept - small, and refitting takes well under a second.
+### Fitting: Newton-Raphson in pure numpy, no scipy
+
+**scipy is not available and must not be added.** Verified against this repo on 2026-07-27:
+`numpy>=2.4.6,<2.5` is declared in `src-tauri/pyproject.toml` and bundled in
+`src-tauri/pyembed/.../site-packages/numpy`, while scipy appears in neither `uv.lock` nor the
+bundled runtime. Adding it would be a dependency change requiring approval and would grow the
+shipped bundle substantially, for a problem that does not need it.
+
+Use Newton-Raphson, which suits this problem better than L-BFGS anyway. With the ridge penalty
+the objective is strictly convex, the parameter count is small (~95 heroes plus players plus an
+intercept), and **the Hessian is needed regardless** for the Laplace interval in section 6 - so
+Newton computes the confidence machinery as a side effect of fitting rather than as extra work.
+
+```
+repeat:
+    p = sigmoid(X @ b)
+    g = X.T @ (p - y) + Lam * b                 gradient
+    W = p * (1 - p)
+    H = (X.T * W) @ X + diag(Lam)               Hessian, symmetric positive definite
+    b = b - solve(H, g)
+until max(abs(g)) < 1e-8 or 100 iterations
+```
+
+`H` is symmetric positive definite because `XᵀWX` is positive semi-definite and `Λ` is strictly
+positive, so the solve is always well posed - which is also what makes section 6's `zᵀH⁻¹z`
+safe to compute. Convergence is typically 5 to 8 iterations and the whole fit takes
+milliseconds.
+
+Never form `H⁻¹` explicitly. Use `numpy.linalg.solve(H, g)` when fitting and
+`zᵀ · numpy.linalg.solve(H, z)` for the SE.
 
 **Unregularised logistic regression is forbidden here.** With ~95 heroes and a few hundred
 matches it will invent large strengths for heroes seen once or twice.

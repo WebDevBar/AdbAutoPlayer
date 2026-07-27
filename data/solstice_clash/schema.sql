@@ -173,8 +173,15 @@ CREATE TABLE IF NOT EXISTS match(
   origin             TEXT NOT NULL DEFAULT 'local'
                      CHECK(origin IN ('local','synced')),
   contributor_uuid   TEXT,   -- which install observed it; attribution/quarantine
-  remote_received_at TEXT    -- server-side receipt time, for pull cursors
+  remote_received_at TEXT,   -- server-side receipt time (metadata, not a cursor)
+  -- PER-ROW push state. A timestamp watermark over captured_at looks sufficient
+  -- and is not: a match is inserted BEFORE its heroes are read, so it starts
+  -- unkeyed and unsyncable, and only becomes syncable when set_natural_key()
+  -- runs. If a newer match advanced a watermark in between, this row would sit
+  -- permanently behind it and never be selected again - lost silently.
+  pushed_at          TEXT
 );
+
 
 -- ---------------------------------------------------------------------------
 -- Events and themes

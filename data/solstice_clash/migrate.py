@@ -32,6 +32,7 @@ ADD_COLUMNS = [
     ("match", "origin", "TEXT NOT NULL DEFAULT 'local'"),
     ("match", "contributor_uuid", "TEXT"),
     ("match", "remote_received_at", "TEXT"),
+    ("match", "pushed_at", "TEXT"),
     ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),
@@ -251,6 +252,15 @@ def main() -> None:
                     f"ALTER TABLE install RENAME COLUMN {old_col} TO {new_col}"
                 )
                 renamed.append(f"install.{old_col}->{new_col}")
+
+    # Created HERE, not in schema.sql: it references pushed_at, and schema.sql is
+    # executed BEFORE ADD_COLUMNS adds that column to pre-existing databases.
+    # A partial index on a not-yet-existing column aborts the whole script.
+    if "pushed_at" in columns(con, "match"):
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_match_pushable ON match(pushed_at)"
+            " WHERE origin='local' AND natural_key IS NOT NULL"
+        )
 
     # This install's identity - generated once, then never touched again.
     # uuid4 is right here: it needs to be unique across machines that never talk

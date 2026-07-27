@@ -123,10 +123,38 @@ Pick order is known: left takes slots 1, 4, 5 and right takes 2, 3, 6.
 ```
 η_partial = β0 + Σ_locked_left θ_h - Σ_locked_right θ_h + φ_left - φ_right
 
-Var(η) = z' H⁻¹ z + n_unknown × σ_pick²        σ_pick = σ_θ = 0.30
+Var_total = zᵀ H⁻¹ z + n_unknown × σ_pick²        σ_pick = σ_θ = 0.30
 ```
 
 So four unknown picks add `√(4 × 0.09) = 0.60` to the standard error.
+
+**The reported probability is not `sigmoid(η_partial)`.** What the display must show is
+`P(left wins | locked picks)`, which marginalises over the unknown remainder:
+
+```
+p_reported = E_U[ sigmoid(η_partial + U) ]
+```
+
+Because `sigmoid` is concave above zero and convex below, `sigmoid(E[η]) ≠ E[sigmoid(η)]` -
+using the point value would overstate confidence whenever the draft is incomplete, which is
+exactly when the display is used. Use the standard probit approximation to the logistic-normal
+integral:
+
+```
+p_reported = sigmoid( η_partial / sqrt(1 + π × Var_total / 8) )
+```
+
+This shrinks the estimate toward 0.5 in proportion to how much is unknown, which is the
+desired behaviour. With `η_partial = 0.8` and four picks outstanding
+(`Var_total ≈ 0.36 + 0.05 = 0.41`):
+
+```
+sigmoid(0.8) = 0.690          naive, overconfident
+sigmoid(0.8 / sqrt(1 + 0.161)) = sigmoid(0.743) = 0.678
+```
+
+The interval endpoints are computed on the log-odds scale and then squashed
+(section 6), so they use `sqrt(Var_total)` directly rather than the shrunk value.
 
 **This deliberately rejects imputing from the visible draft pool.** Codex initially proposed
 sampling unknown picks from the visible remaining heroes, then retracted it on learning our
@@ -145,12 +173,41 @@ H = Xᵀ W X + Λ         W_ii = p_i (1 - p_i),  Λ = diag(1/σ_β², 1/σ_θ²,
 SE(η) = sqrt( zᵀ H⁻¹ z + n_unknown σ_pick² )
 ```
 
+**`z` is the prediction design vector**, laid out in the same parameter order as `H`, and it
+must carry every term the mean carries or the interval will be inconsistent with the point
+estimate:
+
+| component | value |
+|---|---|
+| intercept slot | `1` |
+| hero slot `h` | `+1` locked left, `-1` locked right, `0` otherwise |
+| player slot `p` | `+1` if `p` is the left player, `-1` if the right player, `0` otherwise |
+
+**Unseen players and unseen heroes are not simply dropped.** A player or hero absent from the
+fit has no row in `H`, so `zᵀH⁻¹z` cannot account for it. Its mean contribution is `0`, and
+its variance contribution is the prior:
+
+```
+Var_total += σ_φ²  per unseen player present in the match     (0.25)
+Var_total += σ_θ²  per unseen hero already locked             (0.09)
+```
+
+Omitting these would report a narrow interval precisely when the model knows least about the
+participants.
+
 Report an **80% interval**, not 95%: at this sample size a 95% interval is so wide that a
 user learns to ignore it.
 
 ```
-p_low = sigmoid(η - 1.28 SE),  p_mid = sigmoid(η),  p_high = sigmoid(η + 1.28 SE)
+SE       = sqrt(Var_total)
+p_low    = sigmoid(η - 1.28 SE)
+p_mid    = sigmoid(η / sqrt(1 + π SE² / 8))      marginalised, per section 5
+p_high   = sigmoid(η + 1.28 SE)
 ```
+
+`p_mid` is the marginalised estimate from section 5, not `sigmoid(η)`. It always lies between
+`p_low` and `p_high`, since shrinking `η` toward zero moves the point inside an interval that
+is centred on `η`.
 
 Trust label from `SE(η)`:
 
@@ -178,18 +235,37 @@ SE(η)                              <= 0.45
 |η|                                >= 0.35        (p at least 0.586 or at most 0.414)
 ```
 
-and the model must beat **both** baselines out of sample (section 8). Below the gate the
-display reads `not enough data`, which is the honest answer and the cue to skip the round.
+plus the **validation gate**, stated as an executable condition over the 100 shuffle splits of
+section 8:
+
+```
+mean(logloss_model) <= mean(logloss_baselineA) - 0.01
+mean(logloss_model) <= mean(logloss_baselineB) - 0.01
+logloss_model < logloss_baselineB in at least 80 of the 100 splits
+```
+
+Both a mean margin and a win rate across splits are required: a mean margin alone can be
+produced by a handful of lucky splits, and a win rate alone can be produced by margins too
+small to matter.
+
+`|η| >= 0.35` is evaluated on the **displayed** `p_mid`, not on raw `η`, so the gate and the
+display cannot disagree. Equivalently: `p_mid <= 0.414 or p_mid >= 0.586`.
+
+Below the gate the display reads `not enough data`, which is the honest answer and the cue to
+skip the round.
 
 Hero-level strengths are shown under a stricter gate: `appearances >= 10` and
 `SE(θ_h) <= 0.30`.
 
 ### What this means in practice, stated plainly
 
-At the time of writing we have **11 matches with a median of 1 appearance per hero**, so the
-display will read `not enough data` and will keep doing so for some time. Reaching 5
-appearances for each of ~95 heroes needs on the order of **200 matches**; at the measured
-~3 minutes per collection cycle that is roughly **10 hours**, or one overnight run.
+At the time of writing we have **13 matches, 48 distinct heroes, and a best-covered hero at 4
+appearances**, so the display will read `not enough data` and will keep doing so for some
+time. Reaching 5 appearances for each of ~95 heroes needs on the order of **200 matches**.
+The collection rate measured over those 13 matches is **5.5 minutes per match** in steady
+state, excluding two idle gaps, so 200 matches is roughly **18 hours** of uninterrupted
+collection - not the 10 hours a 3-minute cycle would imply. That fits inside the remaining
+`Converging Paths` window only if collection runs close to continuously.
 
 The gate is deliberately strict because the failure mode it prevents - a confident-looking
 number built on almost nothing - is worse than showing nothing. If the user prefers earlier,
@@ -228,7 +304,14 @@ Interpretation:
 | ~0.675 | weak but real |
 | ~0.650 | meaningful signal |
 
-Useful means: below both baselines by at least 0.01 to 0.02, stably across splits.
+The exact pass condition that opens the display gate is stated in section 7 and is not
+restated here, so there is one definition of it.
+
+**The gate is decided by this refit procedure on historical matches, not by live predictions.**
+Section 12's logged live predictions are a monitoring surface: they confirm after the fact
+that live behaviour matches the refit estimate, and they are the input to any later
+recalibration. They are not what first opens the gate, because before the gate opens no
+prediction is shown and the mode would otherwise never bootstrap.
 
 ## 9. Scope: one theme at a time
 
@@ -275,9 +358,13 @@ Never the bare `54%`.
 ## 12. Prediction logging
 
 Every computed estimate is written to the database with the draft state it was computed
-from, the resulting probability and SE, and later the actual outcome. This is what makes
-section 8's validation possible on live predictions rather than only on refits, and it costs
-nothing to record.
+from, the resulting probability and SE, and later the actual outcome. Predictions are logged
+**whether or not the display gate is open**, so the hidden pre-gate period accumulates a
+shadow record.
+
+This is a monitoring surface, not the gate: section 8's refit validation decides when the
+display opens, and these logs confirm afterwards that live behaviour matches it. It costs
+nothing to record and it is the only way to notice the model drifting once it is live.
 
 ## 13. Open items
 

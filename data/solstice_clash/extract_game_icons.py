@@ -16,10 +16,22 @@ wiki library on every measure (see docs/solstice-clash/README.md):
 Waydroid's Android filesystem lives on the HOST, so no root/adb is needed - but the
 directory is owned by the Android UID, so copying it out needs sudo:
 
-    sudo cp -r <that path>/ui /mnt/vault/solstice/gamefiles/
-    sudo chown -R $USER:$USER /mnt/vault/solstice/gamefiles/ui
+    sudo cp -r <that path>/ui <somewhere you own>/
+    sudo chown -R $USER:$USER <somewhere you own>/ui
 
 Relevant subdirectories: hero/ (593), heroskin/ (153), heroult/ (208), duelicon/ (169).
+
+## Refreshing the icons the application SHIPS
+
+This script decodes AST to viewable PNGs, which is a debugging aid. The application
+does not use its output: `IconLibrary.build` decodes the RAW `hero/` assets itself.
+Those raw files are bundled, so refreshing them after a game update is a copy, not a
+run of this script:
+
+    cp <icon dir>/hero/spui_herohead_*.png data/solstice_clash/icons/hero/
+
+They previously lived on one developer's disk, which meant every other install had an
+empty icon library and identified nothing.
 
 ## The container format
 
@@ -100,8 +112,14 @@ def apply_gamma(bgra: np.ndarray, exponent: float = GAMMA_EXPONENT) -> np.ndarra
 
 
 def main() -> None:
-    src = sys.argv[1] if len(sys.argv) > 1 else "/mnt/vault/solstice/gamefiles/ui/icon"
-    dst = sys.argv[2] if len(sys.argv) > 2 else "/mnt/vault/solstice/gamefiles"
+    # Defaults point at the game files as Waydroid stores them, so this runs on any
+    # machine with the game installed. It used to default to one developer's vault.
+    default_src = os.path.expanduser(
+        "~/.local/share/waydroid/data/data/"
+        "com.farlightgames.igame.gp/files/data/ui/icon"
+    )
+    src = sys.argv[1] if len(sys.argv) > 1 else default_src
+    dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(src, "decoded")
     total = 0
     for sub in SUBDIRS:
         indir = os.path.join(src, sub)

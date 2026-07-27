@@ -90,7 +90,7 @@ missed, the cost is one row.
 ```
 every POLL_SECONDS (2.0):
     frame = get_screenshot()
-    if not find_template("battle/result.png", threshold=0.65, screenshot=frame):
+    if not find_template("event/solstice_clash/details_replay", screenshot=frame):
         continue                     # cheap: not a details screen
     read = read_summary(frame)
     if read.winner is None or not six heroes identified:
@@ -101,34 +101,39 @@ every POLL_SECONDS (2.0):
     record(read, key)
 ```
 
-### The detector is upstream's own `battle/result.png`
+### The detector is the Replay button
 
-No new template is needed - the marker already ships with the app, and two candidates that looked
-obvious were measured and rejected first.
+`event/solstice_clash/details_replay.png` - the circular replay icon in the bottom-right of the
+details screen, cropped tight inside the solid disc so none of the semi-transparent dimmed
+background is baked into the template.
 
-Measured against every fixture plus a live compete details screen:
+Measured against every fixture, a live compete details screen, result screens, the draft, the
+prematch, the betting screen, a menu, and the overworld:
 
-| template | on details screens | on everything else | usable |
-|---|---|---|---|
-| **`battle/result.png`** | **0.729 - 0.754** | **0.360 - 0.524** | **yes** |
-| `summary_back` | 1.000 | up to **0.996** (`spectate_draft`) | no |
-| the orange/blue winner tint | returns a winner | returns a winner on draft, prematch, longpress | no |
-| `battle/records.png` | 0.43 - 0.45 | 0.33 - 0.47 | no |
+| template | details screens | result screens | everything else | verdict |
+|---|---|---|---|---|
+| **`details_replay`** | **1.000** | 0.418 | 0.371 - 0.511 | **use this** |
+| `battle/result` | 0.729 - 0.754 | **0.970** | 0.350 - 0.524 | fires a screen too early |
+| `summary_back` | 1.000 | - | up to 0.996 | generic back button |
+| winner tint | a winner | a winner | a winner on most screens | not discriminating |
 
-`battle/result.png` leaves a clean gap from 0.524 to 0.729, so a threshold of **0.65** sits in
-the middle of it. It must be passed explicitly: the default of 0.90 rejects every one of these
-frames.
+The Replay button leaves a 0.49 margin between 0.511 and 1.000, so even the default 0.90
+threshold is safe.
 
-Both rejected candidates are worth recording, because both looked correct on reasoning alone:
+Three candidates were rejected on measurement, and every one of them looked right on reasoning:
 
-- **`summary_back`** is on the details screen - Mode A waits for it there - but it is a generic
-  back button present on half the screens in the game.
-- **The winner tint** was assumed to reject non-result screens. It does not: it returns a winner
-  on the draft, prematch and long-press screens too. Only the overworld returns `None`.
+- **`battle/result`** is upstream's statistics icon and appeared to be free reuse. But it scores
+  **higher on the result screen (0.970) than on the details screen (0.754)**, because it IS the
+  bright chart button you tap to open details - dimmed once you are there. It would have fired one
+  screen early on every match.
+- **`summary_back`** is genuinely on the details screen - Mode A waits for it there - but it is a
+  plain back arrow present on half the screens in the game.
+- **The winner tint** was assumed to reject non-result screens. It returns a winner on the draft,
+  prematch and long-press screens too; only the overworld returns `None`.
 
-After the template check, `read_summary()` still has to produce six identified heroes and a
-winner. That is not redundant - it rejects a frame caught mid-animation, where the screen is
-right but the content has not finished rendering.
+After the template check, `read_summary()` must still produce six identified heroes and a winner.
+That is not redundant: it rejects a frame caught mid-animation, where the screen is right but the
+content has not finished rendering.
 
 **Incomplete reads are skipped silently.** A frame caught mid-animation may parse partially.
 Skipping costs nothing: the screen is still up, and the next poll gets a clean read.

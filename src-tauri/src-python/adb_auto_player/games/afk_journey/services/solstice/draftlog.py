@@ -21,11 +21,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Display only. `left`/`right` stay the stored values everywhere else - colour is an
-# observation channel and the sides do not swap, so the label is a convenience for the
-# person reading the log, never a key. The side is no longer spelled out beside the
-# colour, so if this mapping is ever wrong the log will not show it; the slot number in
-# the evidence bracket is what makes a swap recoverable after the fact.
+# The log mirrors the screen: the game labels the teams Blue and Red, and the person
+# reading this is watching that screen. `left`/`right` remain the stored values
+# everywhere else - a colour is an observation channel, and the model must never key on
+# one - but a log that says `left` when the screen says Blue is harder to check, not
+# easier. The slot number rides along in the evidence bracket so a line can still be
+# traced back to a specific cell.
 SIDE_LABELS = {"left": "Blue", "right": "Red"}
 
 # 1 left, 2 right, 3 right, 4 left, 5 left, 6 right - a snake draft. The registry

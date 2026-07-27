@@ -254,6 +254,31 @@ display cannot disagree. Equivalently: `p_mid <= 0.414 or p_mid >= 0.586`.
 Below the gate the display reads `not enough data`, which is the honest answer and the cue to
 skip the round.
 
+### The gate makes early-draft display impossible, by construction
+
+Unknown picks alone put a floor under `SE`, before any parameter uncertainty is added:
+
+| unknown picks | floor on SE = `√(n × 0.09)` | can `SE <= 0.45` hold? |
+|---|---|---|
+| 0 | 0.00 | yes |
+| 1 | 0.30 | yes |
+| 2 | 0.42 | barely, and only with near-zero parameter uncertainty |
+| 3 | 0.52 | **no** |
+| 4 | 0.60 | **no** |
+| 5 | 0.67 | **no** |
+
+So a number can only ever appear with **at least four of the six picks locked**, and at three
+unknown picks or more the display is guaranteed to read `not enough data` no matter how much
+history has been collected.
+
+This is a deliberate consequence rather than an oversight, and it is stated here because it
+directly limits how early the player gets a signal: reaction time is the whole point of the
+feature, and this gate spends some of it. Whether the useful window - between the fourth pick
+landing and betting closing - is long enough to act on is a question the first live run
+answers, not the spec. If it is too tight, the honest lever is `SE`, not the marginalisation:
+raising the ceiling to 0.55 admits three unknown picks and costs precision, and that is a
+trade for the user to make with real timings in hand.
+
 Hero-level strengths are shown under a stricter gate: `appearances >= 10` and
 `SE(θ_h) <= 0.30`.
 

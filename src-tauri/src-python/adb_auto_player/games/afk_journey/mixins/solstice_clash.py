@@ -53,7 +53,6 @@ from ..services.solstice.tuning import (
 # from the bundled one, and doing that during module import would run it on
 # every command in the app rather than only when Solstice Clash is used.
 SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
-TRAINING_ROOT = Path("/mnt/vault/solstice/training")
 
 # Measured on device 2026-07-26. The far branch (teleport plus auto-path) took ~12s, so
 # 30s gives roughly 2.5x headroom on the only far position we have sampled.
@@ -878,7 +877,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     image_score=hero.score,
                     image_margin=hero.margin,
                     ocr_slug=confirmed,
-                    frame_path=None if confirmed == hero.slug else self._archive(frame),
+                    frame_path=None,
                     match_id=match_id,
                 )
             )
@@ -935,7 +934,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 library=self._solstice_library, frame=frame_img,
                 screen_slug=screen_slug, cell_type=cell_type,
                 confirmed_by_side=confirmed_by_side,
-                frame_path=self._archive(frame_img, kind=screen_slug),
+                frame_path="",
                 match_id=match_id,
             )
             # deduced/set_consistent are MEASUREMENTS, never confirmation - see
@@ -971,20 +970,6 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         if getattr(self, "_store_cache", None) is None:
             self._store_cache = MatchStore(solstice_db_path())
         return self._store_cache
-
-    def _archive(self, frame: np.ndarray, kind: str = "frame") -> str:
-        """Save a frame to the vault and return its path.
-
-        Never /tmp - that is a 16GB tmpfs this project has already filled once. Never
-        rmtree the directory either: training frames accumulate across runs by design.
-        """
-        day = datetime.now(UTC).strftime("%Y-%m-%d")
-        directory = TRAINING_ROOT / day
-        directory.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%H%M%S_%f")
-        path = directory / f"{kind}_{stamp}.png"
-        cv2.imwrite(str(path), frame)
-        return str(path)
 
     def _move_chat_out_of_the_way(self) -> None:
         """Drag the chat bubble upward so it and the emoji clear the hero cards.

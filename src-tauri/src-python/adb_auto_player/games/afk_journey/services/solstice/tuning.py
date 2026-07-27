@@ -217,7 +217,12 @@ def train_from_frame(
     screen_slug: str,
     cell_type: str,
     confirmed_by_side: dict[str, set[str]],
-    frame_path: str,
+    frame_path: str = "",
+    # Kept as a parameter, always empty, because the column still exists. Frames
+    # are no longer archived: nothing ever read one back. train_from_frame takes
+    # the frame IN MEMORY (`frame: np.ndarray` above) and learn_if_improved takes
+    # `gray`, so learning never needed the file - the archive was a write-only
+    # side-record costing ~345MB/day, 72% of it byte-identical duplicates.
     match_id: int | None,
 ) -> TrainResult:
     """Record one training frame's reads against the summary's confirmed identities.

@@ -6,7 +6,8 @@
       "pyembed/python": "./"
     },
     "targets": [
-      "rpm"
+      "rpm",
+      "deb"
     ],
     "linux": {
       "rpm": {
@@ -14,6 +15,11 @@
           "tesseract"
         ],
         "release": "3"
+      },
+      "deb": {
+        "depends": [
+          "tesseract-ocr"
+        ]
       }
     }
   }

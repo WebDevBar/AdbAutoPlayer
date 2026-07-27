@@ -100,6 +100,8 @@ pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/t
 # no-ops against the version already installed.
 STABLE="AdbAutoPlayer-latest.rpm"
 NEWEST="$(ls -1t target/release/bundle/rpm/*.rpm 2>/dev/null | head -1 || true)"
+# The Linux config now also produces a .deb; the stable symlink tracks the RPM
+# because that is what this Fedora machine installs.
 if [ -z "$NEWEST" ]; then
   echo "FAILED: no RPM was produced." >&2
   exit 1

@@ -149,8 +149,9 @@ OCR rather than a template, because the tabs are tinted by outcome - orange for 
 blue for the losing one - so a template cut from an orange "Ally" would not match a blue one. The
 text is the same either way.
 
-**Exact matches only - never `"ally" in text`.** A substring test accepts "Alliance", "Really",
-"Finally", "Enemy Territory" and anything else containing those letters. This project has already
+**Exact matches only - never `"ally" in text`.** Verified against real strings: a substring test
+accepts `"Really"` and `"Rally"`. `"All In"` - which appears on the betting screen, two words away
+from "Ally" - is rejected by both, but only because of a space OCR may not preserve. This project has already
 paid for that lesson once: fuzzy hero-name matching scored `SILVER` against `SILVEN` at 0.833 and
 was replaced with `resolve_hero_name_strict`. An OCR block is compared whole, casefolded and
 stripped, against the exact set `{"ally", "enemy"}`.

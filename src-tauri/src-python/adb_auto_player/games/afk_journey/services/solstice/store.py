@@ -347,6 +347,177 @@ class MatchStore:
             ).fetchall()
         return [OddsSample(*r) for r in rows]
 
+    # ------------------------------------------------------------------
+    # Pooled sync
+    # ------------------------------------------------------------------
+
+    def instance_uuid(self) -> str | None:
+        with self._connect() as con:
+            row = con.execute("SELECT instance_uuid FROM install WHERE id=1").fetchone()
+        return row[0] if row else None
+
+    def pull_cursor(self) -> int:
+        with self._connect() as con:
+            row = con.execute("SELECT pull_cursor FROM install WHERE id=1").fetchone()
+        return int(row[0]) if row and row[0] else 0
+
+    def set_pull_cursor(self, seq: int) -> None:
+        with self._connect() as con:
+            con.execute("UPDATE install SET pull_cursor=? WHERE id=1", (str(seq),))
+
+    def pushable_matches(self, limit: int = 500) -> list[dict]:
+        """Rows this install may send.
+
+        Three conditions, and every one of them matters:
+
+        - `origin='local'` - never echo back rows we PULLED, or every contributor
+          re-uploads everyone else's data forever.
+        - `natural_key IS NOT NULL` - incomplete matches have no identity.
+        - `pushed_at IS NULL` - per row, NOT a timestamp watermark. A match is
+          inserted before its heroes are read, so it becomes syncable later than
+          it was created; a watermark would leave it permanently behind.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT id, natural_key, source, captured_at, theme, outcome,"
+                " left_player, left_rating, left_rank,"
+                " right_player, right_rating, right_rank"
+                " FROM match"
+                " WHERE origin='local' AND natural_key IS NOT NULL"
+                "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"
+                " ORDER BY id LIMIT ?",
+                (limit,),
+            ).fetchall()
+            out = []
+            for r in rows:
+                heroes = con.execute(
+                    "SELECT side, slot, hero_slug, stat_sword, stat_heart, stat_shield"
+                    " FROM match_hero WHERE match_id=? ORDER BY side, slot",
+                    (r[0],),
+                ).fetchall()
+                out.append(
+                    {
+                        "local_id": r[0],
+                        "source": r[2],
+                        "captured_at": r[3],
+                        "event_slug": "solstice-clash",
+                        # The raw screen read, never a slug: identity is the
+                        # server's to decide.
+                        "theme_ocr": r[4],
+                        "outcome": r[5],
+                        "left_player": r[6], "left_rating": r[7], "left_rank": r[8],
+                        "right_player": r[9], "right_rating": r[10], "right_rank": r[11],
+                        "heroes": [
+                            {
+                                "side": h[0], "slot": h[1], "hero_slug": h[2],
+                                "stat_sword": h[3], "stat_heart": h[4],
+                                "stat_shield": h[5],
+                            }
+                            for h in heroes
+                        ],
+                    }
+                )
+        return out
+
+    def adopt_canonical(
+        self,
+        local_id: int,
+        natural_key: str,
+        theme_slug: str | None,
+        theme_resolved_by: str | None,
+    ) -> None:
+        """Take the server's identity for a row we just pushed, then mark it sent.
+
+        All in ONE transaction. Without adoption the client duplicates its own
+        data: it stores a row under its locally-computed key, the server accepts
+        it under the canonical one, and the next pull returns that match under a
+        key matching nothing locally - so it is inserted a second time.
+
+        The collision branch is not an edge case. If another contributor already
+        pushed this match and we already pulled it, a synced row is sitting on
+        the canonical key and rewriting ours would violate UNIQUE. Keep OUR row -
+        it is this install's own observation, with its own hero evidence - and
+        drop the synced copy.
+        """
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        with self._connect() as con:
+            clash = con.execute(
+                "SELECT id FROM match WHERE natural_key=? AND id<>?",
+                (natural_key, local_id),
+            ).fetchone()
+            if clash is not None:
+                con.execute("DELETE FROM match WHERE id=?", (clash[0],))
+            theme_id = None
+            if theme_slug:
+                row = con.execute(
+                    "SELECT id FROM theme WHERE slug=?", (theme_slug,)
+                ).fetchone()
+                theme_id = row[0] if row else None
+            con.execute(
+                "UPDATE match SET natural_key=?, pushed_at=?,"
+                " theme_id=COALESCE(?, theme_id),"
+                " theme_resolved_by=COALESCE(?, theme_resolved_by)"
+                " WHERE id=?",
+                (natural_key, now, theme_id, theme_resolved_by, local_id),
+            )
+
+    def mark_push_rejected(self, local_id: int, reason: str) -> None:
+        """A row the server refuses is not a failed push - retrying is pointless."""
+        with self._connect() as con:
+            con.execute(
+                "UPDATE match SET push_rejected_reason=? WHERE id=?", (reason, local_id)
+            )
+
+    def upsert_synced(self, row: dict) -> int | None:
+        """Insert a pulled match, or do nothing if we already have it.
+
+        Remote ids are meaningless here - `match.id` is a per-database
+        autoincrement - so hero rows are remapped onto the LOCAL id.
+        """
+        with self._connect() as con:
+            existing = con.execute(
+                "SELECT id FROM match WHERE natural_key=?", (row["natural_key"],)
+            ).fetchone()
+            if existing is not None:
+                return None
+            theme_id = None
+            if row.get("theme_slug"):
+                t = con.execute(
+                    "SELECT id FROM theme WHERE slug=?", (row["theme_slug"],)
+                ).fetchone()
+                theme_id = t[0] if t else None
+            cur = con.execute(
+                "INSERT INTO match(natural_key, source, captured_at, theme,"
+                " theme_id, theme_resolved_by, outcome, outcome_source,"
+                " left_player, left_rating, left_rank,"
+                " right_player, right_rating, right_rank,"
+                " origin, contributor_uuid, remote_received_at)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'synced', ?, ?)",
+                (
+                    row["natural_key"], row["source"], row["captured_at"],
+                    None, theme_id, row.get("theme_resolved_by"),
+                    row["outcome"], "synced",
+                    row.get("left_player"), row.get("left_rating"), row.get("left_rank"),
+                    row.get("right_player"), row.get("right_rating"),
+                    row.get("right_rank"),
+                    row.get("contributor_uuid"), row.get("remote_received_at"),
+                ),
+            )
+            match_id = int(cur.lastrowid)
+            for h in row.get("heroes", []):
+                con.execute(
+                    "INSERT INTO match_hero(match_id, side, slot, hero_slug, status,"
+                    " stat_sword, stat_heart, stat_shield)"
+                    # status is NOT NULL locally but the server carries no scores
+                    # or geometry - that is THIS machine's evidence. A pulled hero
+                    # is identified by definition: the server only accepts
+                    # complete matches.
+                    " VALUES(?,?,?,?, 'identified', ?,?,?)",
+                    (match_id, h["side"], h["slot"], h["hero_slug"],
+                     h.get("stat_sword"), h.get("stat_heart"), h.get("stat_shield")),
+                )
+        return match_id
+
     def resolve_theme(
         self,
         captured_at: str,

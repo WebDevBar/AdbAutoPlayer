@@ -34,6 +34,7 @@ ADD_COLUMNS = [
     ("match", "remote_received_at", "TEXT"),
     ("match", "theme_resolved_by", "TEXT"),
     ("match", "pushed_at", "TEXT"),
+    ("match", "push_rejected_reason", "TEXT"),
     ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),

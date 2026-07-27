@@ -187,7 +187,10 @@ CREATE TABLE IF NOT EXISTS match(
   -- unkeyed and unsyncable, and only becomes syncable when set_natural_key()
   -- runs. If a newer match advanced a watermark in between, this row would sit
   -- permanently behind it and never be selected again - lost silently.
-  pushed_at          TEXT
+  pushed_at          TEXT,
+  -- A row the server permanently refuses. Without this it is re-sent on
+  -- every sync forever, because pushed_at stays NULL.
+  push_rejected_reason TEXT
 );
 
 

@@ -32,6 +32,7 @@ from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
+from ..services.solstice.sync import SyncClient
 from ..services.solstice.tuning import (
     confirmed_sides,
     learn_if_improved,
@@ -109,6 +110,33 @@ CHAT_DRAG_SECONDS = 2.0
 
 class SolsticeClashMixin(AFKJourneyBase, ABC):
     """Solstice Clash data collection."""
+
+    @register_command(
+        name="SolsticeClashSync",
+        gui=GUIMetadata(
+            label="Sync Solstice Clash Data",
+            category=AFKJCategory.EVENTS_AND_OTHER,
+            tooltip="Upload collected matches to the shared pool and fetch everyone else's",
+        ),
+    )
+    def sync_solstice_clash(self) -> None:
+        """Push then pull, without starting a collection run.
+
+        Push first so this install's own matches are in the pool before it reads
+        the pool back. Needs no device: it only touches the local database and
+        the network.
+        """
+        store = MatchStore(SOLSTICE_DB)
+        sync = SyncClient(store)
+        if not sync.enabled:
+            logging.warning("[SC-36] sync is disabled - nothing to do")
+            return
+        pushed, duplicate, rejected = sync.push()
+        pulled = sync.pull()
+        logging.info(
+            f"[SC-35] sync: pushed {pushed}, duplicate {duplicate}, "
+            f"rejected {rejected}, pulled {pulled}"
+        )
 
     @register_command(
         name="SolsticeClashCollect",
@@ -350,6 +378,17 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         consecutive_failures = 0
         consecutive_draws = 0
         recorded = 0
+
+        # Seed the local pool before collecting. Wrapped like every other
+        # sync call: a dead endpoint must never stop a collection run.
+        sync = SyncClient(self._store)
+        logging.info(
+            f"[SC-35] sync {'enabled' if sync.enabled else 'disabled'}"
+        )
+        try:
+            sync.pull()
+        except Exception as exc:  # noqa: BLE001
+            logging.warning(f"[SC-30] initial pull failed: {exc}")
         while consecutive_failures < max_restarts:
             self._match_recorded_this_cycle = False
             self._draw_this_cycle = False
@@ -397,6 +436,18 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     logging.warning(
                         f"[SC-22] match failed ({consecutive_failures}/{max_restarts}): {exc}"
                     )
+
+            # Push at the BOTTOM of the loop body - after the accounting above and
+            # after the recovery below - so every path reaches it: a clean cycle,
+            # a recorded-then-navigation-failed cycle ([SC-21]), and a failed
+            # cycle that still has an older backlog. Hooking the normal return of
+            # _run_one_match would skip exactly the matches most worth pushing.
+            try:
+                if sync.enabled:
+                    sync.push()
+                    sync.pull()
+            except Exception as exc:  # noqa: BLE001 - sync must never cost a match
+                logging.warning(f"[SC-30] sync failed, continuing: {exc}")
 
             # Checked out here, NOT inside the try above: a raise in that block is
             # caught by its own except and downgraded to a warning, which is precisely

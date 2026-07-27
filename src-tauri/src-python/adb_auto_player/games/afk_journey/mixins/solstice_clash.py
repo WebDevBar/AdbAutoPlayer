@@ -30,6 +30,7 @@ from ..services.solstice.config import SolsticeConfig
 from ..services.solstice.icons import IconLibrary
 from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
+from ..services.solstice.paths import solstice_db_path
 from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
 from ..services.solstice.summary import SummaryHero, read_summary
 from ..services.solstice.sync import SyncClient
@@ -41,7 +42,9 @@ from ..services.solstice.tuning import (
 # is where those functions are defined. Importing them here would leave this module
 # unimportable at the end of Task 8 and fail its green-suite gate.
 
-SOLSTICE_DB = Path("/mnt/docs/adbautoplayer/data/solstice_clash/heroes.sqlite")
+# Resolved at call time, not import time: the first call seeds the user copy
+# from the bundled one, and doing that during module import would run it on
+# every command in the app rather than only when Solstice Clash is used.
 SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
 TRAINING_ROOT = Path("/mnt/vault/solstice/training")
 
@@ -126,7 +129,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         the pool back. Needs no device: it only touches the local database and
         the network.
         """
-        store = MatchStore(SOLSTICE_DB)
+        store = MatchStore(solstice_db_path())
         sync = SyncClient(store)
         if not sync.enabled:
             logging.warning("[SC-36] sync is disabled - nothing to do")
@@ -631,7 +634,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
     @property
     def _solstice_cfg(self) -> SolsticeConfig:
         if getattr(self, "_cfg_cache", None) is None:
-            self._cfg_cache = SolsticeConfig.load(SOLSTICE_DB)
+            self._cfg_cache = SolsticeConfig.load(solstice_db_path())
         return self._cfg_cache
 
     @property
@@ -649,7 +652,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
     @property
     def _store(self) -> MatchStore:
         if getattr(self, "_store_cache", None) is None:
-            self._store_cache = MatchStore(SOLSTICE_DB)
+            self._store_cache = MatchStore(solstice_db_path())
         return self._store_cache
 
     def _archive(self, frame: np.ndarray, kind: str = "frame") -> str:

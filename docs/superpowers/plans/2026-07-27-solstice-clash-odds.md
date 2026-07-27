@@ -12,6 +12,14 @@
 
 ## Global Constraints
 
+- **Count only matches with a full three-a-side of identified heroes.** Builds before
+  `wdb-12.9.24-7` had no bundled hero art, so on any machine but the developer's every
+  cell read `unknown` and matches were recorded with no heroes at all. Those rows carry an
+  outcome and a theme, so a naive `COUNT(*)` for section 7's `decisive matches this theme
+  >= 75` would open the display gate on evidence that does not exist. They are inert for
+  sync - no `natural_key`, so they are never pushed - but they are NOT inert for counting.
+  This applies to the fit, the validation splits, and the gate alike.
+
 - **scipy is NOT available and must NOT be added.** numpy only. Fit with Newton-Raphson (spec section 3). Verified 2026-07-27: numpy is in `src-tauri/pyproject.toml` and the bundled runtime; scipy is in neither `uv.lock` nor `src-tauri/pyembed/`.
 - **Never form `H⁻¹` explicitly.** Use `numpy.linalg.solve(H, g)` and `z @ numpy.linalg.solve(H, z)`.
 - **The mode never places a bet.** No tap that commits a wager, under any condition.

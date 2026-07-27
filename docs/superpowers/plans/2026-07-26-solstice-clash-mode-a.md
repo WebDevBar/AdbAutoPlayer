@@ -50,7 +50,7 @@ Path prefixes, used throughout:
 - `TST` = `src-tauri/src-python/tests/games/afk_journey/services/solstice`
 - `AFKJ` = `src-tauri/src-python/adb_auto_player/games/afk_journey`
 
-Run tests from `src-tauri/src-python` with `/mnt/docs/adbautoplayer/.venv/bin/python -m pytest`.
+Run tests from `src-tauri/src-python` with `~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest`.
 
 ---
 
@@ -237,7 +237,7 @@ def test_deleting_a_match_does_not_break_transform_evidence(db: Path) -> None:
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_schema_v3.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_schema_v3.py -v`
 
 Expected: FAIL - `no such table: screen`.
 
@@ -392,21 +392,21 @@ applied with:
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -v`
 
 Expected: all pass, including the pre-existing 46.
 
 - [ ] **Step 6: Migrate the shipped database and confirm it is non-destructive**
 
 ```bash
-cd /mnt/docs/adbautoplayer
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 print({t: c.execute(f'select count(*) from {t}').fetchone()[0]
        for t in ('hero','hero_skin','solstice_roster','cell_registry','art_transform')})"
-/mnt/docs/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 print({t: c.execute(f'select count(*) from {t}').fetchone()[0]
@@ -526,7 +526,7 @@ def test_unknown_source_is_rejected(tmp_db):
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_store.py -v -k "audit or transform or unknown_source"`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_store.py -v -k "audit or transform or unknown_source"`
 
 Expected: FAIL - `cannot import name 'AuditRow'`.
 
@@ -715,7 +715,7 @@ Add `from datetime import UTC, datetime` to the imports if not present.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -v`
 
 Expected: all pass.
 
@@ -746,7 +746,7 @@ so callers have one exception type."
 These are native 1080x1920 device captures. Geometry and match-score tests are meaningless at any other resolution, so they are committed at full size (~12MB total). That is deliberate.
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 D=src-tauri/src-python/tests/games/afk_journey/services/solstice/data
 cp /mnt/vault/solstice/summary/summary_01.png        $D/summary_01.png
 cp /mnt/vault/solstice/summary/summary_02.png        $D/summary_02.png
@@ -758,8 +758,8 @@ cp /mnt/vault/solstice/live/match01/raw/000104002.png $D/spectate_prematch.png
 - [ ] **Step 2: Verify every frame is 1080x1920**
 
 ```bash
-cd /mnt/docs/adbautoplayer/src-tauri/src-python
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer/src-tauri/src-python
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import cv2, glob
 for f in sorted(glob.glob('tests/games/afk_journey/services/solstice/data/*.png')):
     print(cv2.imread(f).shape, f)"
@@ -851,7 +851,7 @@ def ocr_backend():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_naming.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_naming.py -v`
 
 Expected: FAIL - `No module named ...naming`.
 
@@ -920,7 +920,7 @@ def resolve_hero_name(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_naming.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_naming.py -v`
 
 Expected: all pass.
 
@@ -1132,9 +1132,9 @@ The seeds above only reach the database when `migrate.py` runs. The tests load t
 list and the tests could not pass no matter how correct the parser is.
 
 ```bash
-cd /mnt/docs/adbautoplayer
-/mnt/docs/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 print('summary cells:', c.execute(
@@ -1145,7 +1145,7 @@ print('scale key:', c.execute(
 
 Expected: `summary cells: 6` and the five-scale chain.
 
-Then run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
+Then run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
 
 Expected: FAIL - `No module named ...summary`.
 
@@ -1322,7 +1322,7 @@ def read_summary(
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_summary.py -v`
 
 Expected: all pass. If a stat column or header band is off, adjust the constants against the fixture rather than loosening the assertions.
 
@@ -1398,7 +1398,7 @@ def test_tuning_returns_none_when_the_truth_never_wins(cfg, library, frames):
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py -v`
 
 Expected: FAIL - `No module named ...tuning`.
 
@@ -1529,7 +1529,7 @@ def _best_scale_for(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py -v`
 
 Expected: both pass. This test is slow (a full crop x scale sweep); if it exceeds ~3 minutes, narrow `DEFAULT_CROPS` in the test call rather than weakening the assertion.
 
@@ -1598,8 +1598,8 @@ In `AFKJ/popup_message_handler.py`, add to `misc_messages`:
 Because the dialog uses the standard confirm button, **no `teleport_confirm.png` template is required** - drop it from the Step 1 template list. Verify the match before relying on it:
 
 ```bash
-cd /mnt/docs/adbautoplayer/src-tauri/src-python
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer/src-tauri/src-python
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import cv2
 t=cv2.imread('adb_auto_player/games/afk_journey/templates/navigation/confirm.png')
 f=cv2.imread('/mnt/vault/solstice/summary/teleport_dialog.png')
@@ -1703,11 +1703,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 - [ ] **Step 4: Verify the mixin registers and the templates resolve**
 
 ```bash
-cd /mnt/docs/adbautoplayer/src-tauri/src-python
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer/src-tauri/src-python
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 from pathlib import Path
 from adb_auto_player.file_loader import SettingsLoader
-SettingsLoader.set_app_config_dir(Path('/mnt/docs/adbautoplayer/src-tauri'))
+SettingsLoader.set_app_config_dir(Path('~/Dev/webdevbar/adbautoplayer/src-tauri'))
 SettingsLoader.set_resource_dir(Path('adb_auto_player').resolve())
 from adb_auto_player.games.afk_journey.mixins.solstice_clash import SolsticeClashMixin
 print('mixin imports OK')
@@ -1720,7 +1720,7 @@ Expected: imports cleanly, and all nine new templates are listed. `draft_anchor`
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest -q`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest -q`
 
 Expected: green, including `test_all_mixins_extended.py`.
 
@@ -2049,7 +2049,7 @@ from ..services.solstice.summary import SummaryHero, read_summary
 # is where those functions are defined. Importing them here would leave this module
 # unimportable at the end of Task 8 and fail its green-suite gate.
 
-SOLSTICE_DB = Path("/mnt/docs/adbautoplayer/data/solstice_clash/heroes.sqlite")
+SOLSTICE_DB = Path("~/Dev/webdevbar/adbautoplayer/data/solstice_clash/heroes.sqlite")
 SOLSTICE_ICON_DIR = Path("/mnt/vault/solstice/gamefiles/ui/icon")
 TRAINING_ROOT = Path("/mnt/vault/solstice/training")
 
@@ -2074,7 +2074,7 @@ Do NOT shell out to `adb shell input swipe`.
 
 - [ ] **Step 5: Run the suite**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest -q`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest -q`
 
 Expected: green.
 
@@ -2170,7 +2170,7 @@ def test_learn_if_improved_refuses_unconfirmed(cfg, library, frames, tmp_db):
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py::test_learn_if_improved_stores_a_better_transform -v`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/test_tuning.py::test_learn_if_improved_stores_a_better_transform -v`
 
 Expected: FAIL until Task 2's `learn_transform` and Task 6's `tune_cell` are both present. If both are already implemented this test may pass immediately - that is fine, it is a regression guard for the wiring below.
 
@@ -2537,9 +2537,9 @@ shipped `heroes.sqlite`. Without this, `cfg.cells("prematch_pick")` is empty and
 `train_from_frame` writes 0 rows instead of 6.
 
 ```bash
-cd /mnt/docs/adbautoplayer
-/mnt/docs/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python data/solstice_clash/migrate.py
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 for t in ('draft_pick','prematch_pick','summary_hero'):
@@ -2549,7 +2549,7 @@ for t in ('draft_pick','prematch_pick','summary_hero'):
 
 Expected: `draft_pick 6`, `prematch_pick 6`, `summary_hero 6`.
 
-Then run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
+Then run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python -m pytest tests/games/afk_journey/services/solstice/ -q`
 
 Expected: green.
 
@@ -2582,8 +2582,8 @@ Expected: device listed, AFK Journey focused. **If Waydroid has crashed or the g
 - [ ] **Step 2: Snapshot the database before the run**
 
 ```bash
-cd /mnt/docs/adbautoplayer
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 print({t: c.execute(f'select count(*) from {t}').fetchone()[0]
@@ -2602,9 +2602,9 @@ from pathlib import Path
 
 from adb_auto_player.file_loader import SettingsLoader
 
-SettingsLoader.set_app_config_dir(Path("/mnt/docs/adbautoplayer/src-tauri"))
+SettingsLoader.set_app_config_dir(Path("~/Dev/webdevbar/adbautoplayer/src-tauri"))
 SettingsLoader.set_resource_dir(
-    Path("/mnt/docs/adbautoplayer/src-tauri/src-python/adb_auto_player")
+    Path("~/Dev/webdevbar/adbautoplayer/src-tauri/src-python/adb_auto_player")
 )
 
 from adb_auto_player.games.afk_journey.mixins.solstice_clash import SolsticeClashMixin
@@ -2625,15 +2625,15 @@ game.navigate_to_world()
 game._collect_forever(max_restarts=1, max_matches=1)
 ```
 
-Run: `cd src-tauri/src-python && /mnt/docs/adbautoplayer/.venv/bin/python /tmp/solstice/run_one.py`
+Run: `cd src-tauri/src-python && ~/Dev/webdevbar/adbautoplayer/.venv/bin/python /tmp/solstice/run_one.py`
 
 Watch the log throughout.
 
 - [ ] **Step 4: Verify what was actually written**
 
 ```bash
-cd /mnt/docs/adbautoplayer
-/mnt/docs/adbautoplayer/.venv/bin/python -c "
+cd ~/Dev/webdevbar/adbautoplayer
+~/Dev/webdevbar/adbautoplayer/.venv/bin/python -c "
 import sqlite3
 c=sqlite3.connect('data/solstice_clash/heroes.sqlite')
 print('match:', c.execute('select id,source,outcome,blue_player,red_player from match order by id desc limit 1').fetchall())

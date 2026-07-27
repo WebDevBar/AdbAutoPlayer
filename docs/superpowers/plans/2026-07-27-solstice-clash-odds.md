@@ -1123,7 +1123,7 @@ The collection mode may be running and writing to this database. Stop it first, 
 backup and the migration will race with an insert.
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 mkdir -p /mnt/vault/solstice
 # Backup via sqlite itself, NOT cp - cp of a live database can capture a torn page.
 sqlite3 data/solstice_clash/heroes.sqlite ".backup '/mnt/vault/solstice/heroes-pre-v4.sqlite'"
@@ -1591,13 +1591,13 @@ Expected: no failures. Fix any breakage immediately rather than noting it.
 - [ ] **Step 2: Lint**
 
 ```bash
-cd /mnt/docs/adbautoplayer && uv run ruff check src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/
+cd ~/Dev/webdevbar/adbautoplayer && uv run ruff check src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/
 ```
 
 - [ ] **Step 3: Confirm scipy was never introduced**
 
 ```bash
-cd /mnt/docs/adbautoplayer && ! grep -rn "import scipy\|from scipy" src-tauri/src-python/ && echo "clean"
+cd ~/Dev/webdevbar/adbautoplayer && ! grep -rn "import scipy\|from scipy" src-tauri/src-python/ && echo "clean"
 ```
 Expected: `clean`
 

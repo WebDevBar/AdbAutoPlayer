@@ -76,7 +76,7 @@ this plan does not make. Phase 1 is not complete until 1b ships.
 These four frames were captured during design and cover the screens Phase 1 must classify.
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 mkdir -p src-tauri/src-python/tests/games/afk_journey/services/solstice/data
 cp /tmp/solstice/compete/192048_396.png  src-tauri/src-python/tests/games/afk_journey/services/solstice/data/banning.png
 cp /tmp/solstice/skin_talene.png         src-tauri/src-python/tests/games/afk_journey/services/solstice/data/selecting.png
@@ -150,7 +150,7 @@ def test_slot_rect_returns_expected_width():
 - [ ] **Step 3: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_geometry.py -q
 ```
 
@@ -232,7 +232,7 @@ def slot_rect(name: str) -> tuple[int, int, int, int]:
 - [ ] **Step 5: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_geometry.py -q
 ```
 
@@ -241,7 +241,7 @@ Expected: PASS, 8 tests.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/ \
         src-tauri/src-python/tests/games/afk_journey/services/solstice/
 git commit -m "feat(solstice): geometry constants for Solstice Clash screens
@@ -294,7 +294,7 @@ for name, (r, c) in {'ban_glyph_red': (3, 0), 'ban_glyph_blue': (3, 1)}.items():
     print(name, glyph.shape[1], 'x', glyph.shape[0])
 ```
 
-Run: `cd /mnt/docs/adbautoplayer && uv run --group dev python /tmp/cut_glyphs.py`
+Run: `cd ~/Dev/webdevbar/adbautoplayer && uv run --group dev python /tmp/cut_glyphs.py`
 
 Expected: two 90x100 grayscale PNGs written.
 
@@ -401,7 +401,7 @@ def test_empty_glyph_list_reports_nothing_banned(selecting):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_extract.py -q
 ```
 
@@ -499,7 +499,7 @@ def load_ban_glyphs(anchor_dir: Path) -> list[np.ndarray]:
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_extract.py -q
 ```
 
@@ -508,7 +508,7 @@ Expected: PASS, 7 tests. If `test_no_false_positives_on_any_other_card` fails, t
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/heroes.py \
         src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors/ban_glyph_red.png \
         src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors/ban_glyph_blue.png \
@@ -609,7 +609,7 @@ def test_probe_larger_than_entry_does_not_raise(banning):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_match.py -q
 ```
 
@@ -676,7 +676,7 @@ def match_portrait(
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_match.py -q
 ```
 
@@ -685,7 +685,7 @@ Expected: PASS, 5 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/heroes.py \
         src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_match.py
 git commit -m "feat(solstice): hero matcher with fixed search direction and unknown path
@@ -716,7 +716,7 @@ Accepts only at score >= 0.90 with a >= 0.10 margin; never guesses."
 Each anchor is a small, high-contrast, position-stable region unique to one screen.
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 ANCH=src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors
 mkdir -p "$ANCH"
 DATA=src-tauri/src-python/tests/games/afk_journey/services/solstice/data
@@ -809,7 +809,7 @@ def test_blank_image_is_unknown(anchors):
 - [ ] **Step 3: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_vision.py -q
 ```
 
@@ -902,7 +902,7 @@ def classify(
 - [ ] **Step 5: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_vision.py -q
 ```
 
@@ -911,7 +911,7 @@ Expected: PASS, 5 tests. If `test_outworld_is_not_mistaken_for_a_pool_screen` fa
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/screens.py \
         src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/vision.py \
         src-tauri/src-python/adb_auto_player/games/afk_journey/templates/event/solstice_clash/anchors/ \
@@ -1054,7 +1054,7 @@ def test_load_manifest_missing_file_returns_empty(tmp_path: Path):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_store.py -q
 ```
 
@@ -1217,7 +1217,7 @@ class SolsticeStore:
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_store.py -q
 ```
 
@@ -1226,7 +1226,7 @@ Expected: PASS, 8 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/store.py \
         src-tauri/src-python/tests/games/afk_journey/services/solstice/test_store.py
 git commit -m "feat(solstice): SQLite schema + manifest reconciliation
@@ -1331,7 +1331,7 @@ def test_banned_cards_are_excluded(anchors, ban_glyphs):
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_library.py -q
 ```
 
@@ -1433,7 +1433,7 @@ def build_library(
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_library.py -q
 ```
 
@@ -1442,7 +1442,7 @@ Expected: PASS, 6 tests. If `test_banned_cards_are_excluded` reports 20, the ban
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/heroes.py \
         src-tauri/src-python/tests/games/afk_journey/services/solstice/test_heroes_library.py
 git commit -m "feat(solstice): library builder with screen gating and frequency filter
@@ -1466,7 +1466,7 @@ must recur in >= 6 frames, which eliminated 890 of 1045 artefacts in testing."
 - [ ] **Step 0: Run the linter**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev ruff check src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/ \
                               src-tauri/src-python/tests/games/afk_journey/services/solstice/
 ```
@@ -1477,7 +1477,7 @@ most likely failures given how Tasks 2, 3 and 6 build up `heroes.py` incremental
 - [ ] **Step 1: Run the entire test suite**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest -q 2>&1 | tail -20
 ```
 
@@ -1523,7 +1523,7 @@ All tests run without a device against committed fixture frames:
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 git add src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/README.md \
         docs/superpowers/plans/2026-07-25-solstice-clash-phase1.md
 git commit -m "docs(solstice): service README and plan progress"

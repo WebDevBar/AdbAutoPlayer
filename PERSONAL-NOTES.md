@@ -4,6 +4,22 @@ Private fork of [AdbAutoPlayer/AdbAutoPlayer](https://github.com/AdbAutoPlayer/A
 Upstream ships no Linux release, so we build our own RPM and carry a few
 Fedora/Waydroid patches.
 
+## Where it lives
+
+`~/Dev/webdevbar/adbautoplayer` - moved there on 2026-07-27 from `/mnt/docs/adbautoplayer`
+so the fork sits with every other repo on this machine.
+
+What that trade costs: `/mnt/docs` is a separate disk that survives a reformat and `~/Dev`
+is not. `target/` (13 GB of build output) and `.venv` were not carried over - both are
+rebuildable, `.venv` with `uv sync` and `target/` with `./build-rpm.sh`. The one artifact
+worth keeping is the last built RPM, so it lives on the surviving disk at
+`/mnt/docs/adbautoplayer-rpm/` and the repo-root `AdbAutoPlayer-latest.rpm` symlink points
+there until the next local build overwrites it.
+
+`~/Dev/webdevbar/fedora-setup/SETUP-waydroid-adbautoplayer.md` covers the Waydroid host
+side (storage, SELinux, `suspend=false`, adb auto-connect, the gamescope viewer). The
+build and install of this fork are documented here.
+
 ## Remotes / branches
 
 - `origin` -> `WebDevBar/AdbAutoPlayer` (this private fork) - we push here.
@@ -27,14 +43,15 @@ Fedora/Waydroid patches.
 ## Build + install
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 # BUMP bundle.linux.rpm.release in src-tauri/tauri.bundle.linux.json first
 ./build-rpm.sh
-sudo dnf upgrade /mnt/docs/adbautoplayer/dist/AdbAutoPlayer-latest.rpm
+sudo dnf upgrade ~/Dev/webdevbar/adbautoplayer/AdbAutoPlayer-latest.rpm
 ```
 
-`dist/AdbAutoPlayer-latest.rpm` is a symlink the build refreshes, so the install
-command never changes even though the real filename carries version and release.
+`AdbAutoPlayer-latest.rpm` at the repo root is a symlink the build refreshes, so the
+install command never changes even though the real filename carries version and
+release. It is NOT in `dist/` - that directory is the SvelteKit build output.
 
 ### ⛔ Always bump the RPM release
 
@@ -168,12 +185,18 @@ behaviour for a build with no key, rather than a failure.
 
 ```bash
 # bump bundle.linux.rpm.release in src-tauri/tauri.bundle.linux.json first
-gh release create webdevbar-12.9.24-3 --repo WebDevBar/AdbAutoPlayer \
-  --title "12.9.24-3" --notes "Solstice Clash data collection and pooled sync"
+gh release create wdb-12.9.24-6 --repo WebDevBar/AdbAutoPlayer \
+  --title "WDB 12.9.24-6" --notes "Screenshot archiving removed"
 ```
 
 Publishing the release triggers the workflow. Artifacts also appear on any
 `workflow_dispatch` run, so a build can be tested without cutting a release.
 
-Tag names are prefixed `webdevbar-` so they never collide with upstream tags,
-which the rebase flow relies on.
+Tag names are prefixed `wdb-` so they never collide with upstream tags, which the
+rebase flow relies on.
+
+**The tag number must equal the RPM release you just bumped to.** `wdb-12.9.24-4` was
+re-run after a later commit and ended up carrying `AdbAutoPlayer-12.9.24-5.x86_64.rpm`,
+so the release read as one build older than the assets actually were. Only the RPM
+filename carries a release number - the `.exe` and `.deb` do not - which is exactly why
+the tag has to.

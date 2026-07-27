@@ -17,9 +17,12 @@ from adb_auto_player.games.afk_journey.services.solstice.paths import (
 def test_no_developer_path_is_hardcoded():
     """The regression this module exists to prevent."""
     src = Path(__file__).resolve().parents[5] / "adb_auto_player/games/afk_journey"
+    banned = ("/mnt/docs/adbautoplayer", "/home/toshe/Dev", "Dev/webdevbar/adbautoplayer")
     for f in (src / "mixins/solstice_clash.py",
               src / "services/solstice/paths.py"):
-        assert "/mnt/docs/adbautoplayer" not in f.read_text(), f
+        text = f.read_text()
+        for path in banned:
+            assert path not in text, f"{f} hardcodes {path}"
 
 
 def test_user_dir_is_writable_and_per_user(tmp_path, monkeypatch):

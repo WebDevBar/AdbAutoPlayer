@@ -7,7 +7,7 @@
 # an external vault dir. Faithful to publish.yaml as of tag 12.9.17.
 #
 # UPDATE FLOW (when upstream tags a new release X.Y.Z):
-#   cd /mnt/docs/adbautoplayer
+#   cd ~/Dev/webdevbar/adbautoplayer
 #   git fetch upstream --tags
 #   git rebase --onto X.Y.Z <current-tag> webdevbar   # carry our patches onto the new tag
 #   ./build-rpm.sh

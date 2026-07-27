@@ -121,7 +121,7 @@ them to act on a different copy, pass the path explicitly - **both take it as `a
 These are raw `adb exec-out screencap` frames at 1080x1920. They already exist:
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 mkdir -p src-tauri/src-python/tests/games/afk_journey/services/solstice/data
 cp /tmp/solstice/draft.png      src-tauri/src-python/tests/games/afk_journey/services/solstice/data/draft_selecting.png
 cp /tmp/solstice/prematch.png   src-tauri/src-python/tests/games/afk_journey/services/solstice/data/prematch_locked.png
@@ -225,7 +225,7 @@ def test_hero_rows_and_aliases(db_path):
 - [x] **Step 3: Run it and watch it fail**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest src-tauri/src-python/tests/games/afk_journey/services/solstice/test_config.py -q
 ```
 
@@ -384,7 +384,7 @@ markers = [
 Verify:
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev pytest --markers | grep network
 ```
 
@@ -393,7 +393,7 @@ Expected: the marker is listed.
 - [x] **Step 1: Add the dependency**
 
 ```bash
-cd /mnt/docs/adbautoplayer/src-tauri
+cd ~/Dev/webdevbar/adbautoplayer/src-tauri
 uv add lz4 texture2ddecoder
 uv run python -c "import lz4.block, texture2ddecoder; print('ok')"
 ```
@@ -895,7 +895,7 @@ static UI region that scored **0.999** on draft screens and **0.763** on spectat
 - [x] **Step 1: Cut the draft anchor**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 python3 - <<'PY'
 import cv2, os
 src = "src-tauri/src-python/tests/games/afk_journey/services/solstice/data/draft_selecting.png"
@@ -1049,7 +1049,7 @@ The committed red/blue pair misses Tilaya's overlay (scored 0.279/0.241, under t
 threshold), so a banned card leaks into results as a phantom hero.
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 python3 - <<'PY'
 import cv2, os
 src = "src-tauri/src-python/tests/games/afk_journey/services/solstice/data/draft_selecting.png"
@@ -1287,7 +1287,7 @@ Then **apply it to the shipped database**, otherwise every test in this task fai
 `no such table: match` - `conftest.py` copies `data/solstice_clash/heroes.sqlite` as-is:
 
 ```bash
-cd /mnt/docs/adbautoplayer/data/solstice_clash
+cd ~/Dev/webdevbar/adbautoplayer/data/solstice_clash
 python3 migrate.py
 python3 -c "
 import sqlite3
@@ -1647,7 +1647,7 @@ git commit -m "feat(solstice): match/match_hero/match_odds store (schema v2)"
 - [x] **Step 0: Lint**
 
 ```bash
-cd /mnt/docs/adbautoplayer
+cd ~/Dev/webdevbar/adbautoplayer
 uv run --group dev ruff check \
   src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/ \
   src-tauri/src-python/tests/games/afk_journey/services/solstice/

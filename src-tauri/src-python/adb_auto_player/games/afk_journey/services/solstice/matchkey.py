@@ -32,10 +32,10 @@ def natural_key(
     right_slugs: list[str],
     captured_at: datetime | str,
 ) -> str:
-    """sha256 over outcome, both sorted hero sides, and the UTC hour bucket.
+    """sha256 over outcome, both sorted hero sides, and a 10-minute UTC bucket.
 
     Theme is deliberately NOT included. It is derived from the capture time,
-    which the hour bucket already covers, and including it made the key change
+    which the time bucket already covers, and including it made the key change
     whenever a theme window was backfilled - breaking identity for every client
     that had already adopted the old key.
 
@@ -49,7 +49,17 @@ def natural_key(
         # would depend on the machine's timezone.
         raise ValueError("captured_at must be timezone-aware")
 
-    bucket = captured_at.astimezone(UTC).strftime("%Y-%m-%dT%H")
+    # TEN-MINUTE bucket. Was an hour until 2026-07-27; an hour is coarse enough
+    # that two genuinely DIFFERENT matches with the same comps and outcome
+    # collide and one is silently dropped, which loses real signal because the
+    # same six heroes get placed differently on the field by different players.
+    #
+    # MUST match app/identity.py in gameretro-adb-api exactly. The server key is
+    # the authoritative one; this local key exists only for local dedupe, and if
+    # the two drift, the local backstop looks up a key that was never stored.
+    # A pinned digest in both test suites makes that drift fail loudly.
+    moment = captured_at.astimezone(UTC)
+    bucket = f"{moment:%Y-%m-%dT%H}:{moment.minute // 10}"
     payload = "|".join(
         [
             outcome,

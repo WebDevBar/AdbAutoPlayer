@@ -30,12 +30,19 @@ def test_key_distinguishes_sides():
     assert a != b
 
 
-def test_key_buckets_to_the_utc_hour():
-    a = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:00:01Z"))
-    b = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:59:59Z"))
-    c = natural_key("left", ["a"], ["b"], dt("2026-07-27T02:00:01Z"))
+def test_key_buckets_to_ten_minutes():
+    """Two spectators of one match capture seconds apart; ten minutes is ample."""
+    a = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:10:01Z"))
+    b = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:19:59Z"))
     assert a == b
-    assert a != c
+
+
+def test_two_matches_ten_minutes_apart_are_different_matches():
+    """Why the bucket is no longer an hour: two DIFFERENT matches with the same
+    comps and outcome are real signal, and an hourly bucket dropped one."""
+    a = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:05:00Z"))
+    b = natural_key("left", ["a"], ["b"], dt("2026-07-27T01:15:00Z"))
+    assert a != b
 
 
 def test_key_is_timezone_independent():
@@ -78,5 +85,5 @@ def test_the_key_matches_the_server_algorithm():
         dt("2026-07-27T01:43:05Z"),
     )
     assert key == (
-        "sha256:ad7d3be46bba8685ee06c8585b7bd910ed5cf099c12738d515de0b9a2c5d7b95"
+        "sha256:a441384a8c7747c4c36ade5ac9eeaf3d1e102fc4a133a0fcdfee1f73e80a5bdd"
     )

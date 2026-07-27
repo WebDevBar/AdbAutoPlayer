@@ -1,6 +1,6 @@
 # Passive Collection (Mode B) - Design
 
-**Status:** design, under review
+**Status:** APPROVED - 3 review rounds plus an independent review, final NO ISSUES FOUND
 **Date:** 2026-07-27
 **Related:** Mode A (spectate collection), and the pooled sync at `gameretro.net/adb`
 

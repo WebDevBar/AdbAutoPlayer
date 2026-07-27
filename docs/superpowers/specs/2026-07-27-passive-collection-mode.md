@@ -316,6 +316,22 @@ typo. It parallels the existing `spectate_summary`.
 long-press OCR confirmation which this mode cannot do without tapping. Recording audit rows
 without confirmation evidence would pollute the learning path with unverified reads.
 
+## 8b. Cross-observer identity - resolved, do not re-raise
+
+A review asked whether `natural_key`'s ordered `(left, right)` pair is stable when the same match
+is recorded by a player (compete) and by a spectator, since `summary.py:131` notes the Ally/Enemy
+labels flip.
+
+**It is stable. The concern conflated labels with panel positions.** Confirmed with the user
+2026-07-27: a player's own team can appear in either panel, top or bottom. What always marks their
+side is the *Ally label* - and the label plays no part in side assignment. `_winner_by_panel_tint`
+maps the top panel to `left` by position and tint, which is a property of the match, not of who is
+watching. Two observers of the same match see the same physical arrangement and derive the same
+key.
+
+The labels exist in this system for exactly one purpose: confirming the details screen is on
+screen, as an OR over `{"ally", "enemy"}` with no position component. Nothing else may read them.
+
 ## 9. Sync
 
 Rows collected here are `origin='local'` with a `natural_key`, so they are pushed by the existing

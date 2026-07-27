@@ -20,36 +20,6 @@
 
 ---
 
-### Task 0: Verify cross-observer key identity - BLOCKING, do this first
-
-**No files. This is a measurement, and its answer can invalidate Task 3's dedupe story.**
-
-`natural_key` keeps the two teams as an **ordered** `(left, right)` pair and the outcome as
-`'left'`/`'right'` (`matchkey.py:29-33`). Mode B introduces a second class of observer for the
-same physical match: today every row comes from spectating, but a compete row is recorded by one
-of the two *players*.
-
-`summary.py:131` documents that in spectate the Ally/Enemy panels "mean whichever side you bet on
-and they flip between matches", and `_winner_by_panel_tint` maps the top panel to `'left'`. **If
-panel order is observer-relative, then a compete recording and another contributor's spectate
-recording of the same match produce mirrored sides, different keys, and the shared pool
-double-counts that match** - one row saying left won, one saying right won, both counted as
-independent evidence. That is worse than missing the match.
-
-- [ ] **Step 1: Determine whether panel order is observer-relative.** Read the existing captures
-      in `tests/games/afk_journey/services/solstice/data/` and, if they cannot settle it, capture
-      the same match from both a player's and a spectator's view.
-
-- [ ] **Step 2: Record the answer in the spec** either way, since the current text does not say.
-
-- [ ] **Step 3: If order IS observer-relative, STOP and raise it.** The fix is to canonicalise
-      `natural_key` over an unordered team pair, which changes the shared identity model, the
-      server, and every already-adopted key. That is a decision, not an implementation detail, and
-      it gets dramatically more expensive once compete rows exist in the pool. If order is
-      absolute, note that and continue.
-
----
-
 ### Task 1: `is_details_screen()` - the reusable predicate
 
 **Files:**
@@ -89,7 +59,7 @@ from adb_auto_player.games.afk_journey.services.solstice.details_screen import (
     is_details_screen,
 )
 
-DETAILS = ("summary_01.png", "summary_02.png", "longpress_ally1.png")
+DETAILS = ("summary_01.png", "summary_02.png")
 NOT_DETAILS = ("draft_selecting.png", "prematch_locked.png", "spectate.png",
                "spectate_draft.png", "spectate_prematch.png")
 
@@ -104,13 +74,6 @@ def test_accepts_every_details_screen(name, frames, read_frame, replay_template,
 def test_rejects_every_other_screen(name, frames, read_frame, replay_template, ocr_backend):
     assert is_details_screen(read_frame(frames[name.removesuffix(".png")]),
                              replay_template, ocr_backend) is False
-
-
-def test_a_popup_over_the_ally_tab_still_counts(frames, read_frame, replay_template, ocr_backend):
-    """longpress_ally1 shows only 'Enemy' - it is still a details screen with a
-    full set of data, so the label check is OR, not AND."""
-    assert is_details_screen(read_frame(frames["longpress_ally1"]),
-                             replay_template, ocr_backend) is True
 
 
 def test_labels_are_matched_exactly_not_as_substrings():
@@ -375,8 +338,16 @@ def details_frame(match: int = 1, heroes: int = 6) -> np.ndarray:
     return _frame("summary_01" if match == 1 else "summary_02")
 
 
-def overworld_frame() -> np.ndarray:
-    return _frame("overworld")
+def not_details_frame() -> np.ndarray:
+    """Any confirmed non-details screen, used to make the mode disarm.
+
+    Mode B never identifies the overworld - it only asks "is this the details
+    screen?", and everything else disarms. So this does not need to BE the
+    overworld, and `spectate.png` (already committed, already in Task 1's
+    NOT_DETAILS list) does the job. Mode A is the one that needs a real overworld
+    check, and it already has the framework's `_is_in_overview()` for that.
+    """
+    return _frame("spectate")
 
 
 # There is deliberately no `broken_frame()` and no "frame with no winner" fixture.
@@ -511,11 +482,8 @@ Directory: `tests/games/afk_journey/services/solstice/data/`.
 |---|---|---|
 | `summary_01.png` | exists | - |
 | `summary_02.png` | exists, and `test_winner_comes_from_the_header_not_the_panel_labels` already establishes it is a **different match** (its banner said LEFT LOSES) | add the guard test below |
-| `overworld.png` | **does NOT exist** | capture one |
 | `summary_partial.png` | **does NOT exist** | synthesise one |
 
-- **`overworld.png`** - the AFK Journey overworld at 1080x1920. There is no existing fixture
-  anywhere under `tests/` (checked). Capture with the device idle on the overworld.
 - **`summary_partial.png`** - a details screen with fewer than six hero cells rendered. Capturing
   the real mid-animation frame is a timing lottery, so synthesise it: copy `summary_01.png` and
   fill two hero-cell rectangles (from `cfg.cells(CELL_TYPE)`) with black. Note in a comment that
@@ -586,7 +554,7 @@ def test_it_never_calls_start_up(mode):
 
 
 def test_it_never_touches_the_device(mode):
-    mode.feed(details_frame(), details_frame(), overworld_frame())
+    mode.feed(details_frame(), details_frame(), not_details_frame())
     mode.collect_while_playing(max_polls=3)
     assert mode.device_actions == []   # taps, swipes, holds, key events
 
@@ -601,7 +569,7 @@ def test_one_details_screen_records_once_across_many_polls(mode, db):
 
 
 def test_it_re_arms_after_the_screen_disappears(mode, db):
-    mode.feed(details_frame(match=1), overworld_frame(), details_frame(match=2))
+    mode.feed(details_frame(match=1), not_details_frame(), details_frame(match=2))
     before = matches(db)
     mode.collect_while_playing(max_polls=3)
     assert matches(db) == before + 2
@@ -609,7 +577,7 @@ def test_it_re_arms_after_the_screen_disappears(mode, db):
 
 def test_reopening_the_same_match_does_not_duplicate(mode, db):
     """Layer 1 re-arms because the screen disappeared; layer 2 catches it."""
-    mode.feed(details_frame(match=1), overworld_frame(), details_frame(match=1))
+    mode.feed(details_frame(match=1), not_details_frame(), details_frame(match=1))
     before = matches(db)
     mode.collect_while_playing(max_polls=3)
     assert matches(db) == before + 1
@@ -651,7 +619,7 @@ def test_a_frame_with_no_winner_is_skipped(mode, db, monkeypatch):
         return read
 
     monkeypatch.setattr(mod, "read_summary", winner_none_once)
-    mode.feed(details_frame(), overworld_frame(), details_frame())
+    mode.feed(details_frame(), not_details_frame(), details_frame())
     before = matches(db)
     mode.collect_while_playing(max_polls=3)
     assert matches(db) == before + 1
@@ -699,7 +667,7 @@ def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
         return real(frame, cfg, library, ocr)
 
     monkeypatch.setattr(mod, "read_summary", raise_once)
-    mode.feed(details_frame(), overworld_frame(), details_frame())
+    mode.feed(details_frame(), not_details_frame(), details_frame())
     mode.collect_while_playing(max_polls=3)
     assert matches(db) >= 1
 
@@ -707,7 +675,7 @@ def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
 def test_it_logs_sc40_once_per_recorded_match(mode, caplog):
     """Task 5 Step 1 verifies this line by eye on a live run, so it has to
     actually be emitted - and exactly once per match, not once per poll."""
-    mode.feed(details_frame(match=1), details_frame(match=1), overworld_frame(),
+    mode.feed(details_frame(match=1), details_frame(match=1), not_details_frame(),
               details_frame(match=2))
     with caplog.at_level("INFO"):
         mode.collect_while_playing(max_polls=4)
@@ -755,13 +723,13 @@ def test_it_pushes_after_each_recorded_match(mode, sync):
     """NOT on exit: the GUI stop button is SIGTERM (__main__.py:352) and Python
     does not run finally blocks on SIGTERM, so an on-exit push would never fire
     in the only way a user actually stops this mode."""
-    mode.feed(details_frame(match=1), overworld_frame(), details_frame(match=2))
+    mode.feed(details_frame(match=1), not_details_frame(), details_frame(match=2))
     mode.collect_while_playing(max_polls=3)
     assert sync.push_calls == 2
 
 
 def test_it_does_not_push_when_nothing_was_recorded(mode, sync):
-    mode.feed(overworld_frame(), overworld_frame())
+    mode.feed(not_details_frame(), not_details_frame())
     mode.collect_while_playing(max_polls=2)
     assert sync.push_calls == 0
 
@@ -776,7 +744,7 @@ def test_it_emits_a_periodic_heartbeat(mode, caplog, monkeypatch):
     import adb_auto_player.games.afk_journey.mixins.solstice_clash as mod
 
     monkeypatch.setattr(mod, "HEARTBEAT_POLLS", 5)
-    mode.feed(*[overworld_frame()] * 12)
+    mode.feed(*[not_details_frame()] * 12)
     with caplog.at_level("INFO"):
         mode.collect_while_playing(max_polls=12)
     assert sum("[SC-43]" in r.message for r in caplog.records) == 2

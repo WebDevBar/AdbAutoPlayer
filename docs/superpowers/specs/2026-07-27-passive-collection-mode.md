@@ -92,6 +92,9 @@ every POLL_SECONDS (2.0):
     frame = get_screenshot()
     if not find_template("event/solstice_clash/details_replay", screenshot=frame):
         continue                     # cheap: not a details screen
+    text = ocr(frame[350:1730, 0:220])          # the roster tab strip
+    if "ally" not in text and "enemy" not in text:
+        continue                     # second, independent signal
     read = read_summary(frame)
     if read.winner is None or not six heroes identified:
         continue                     # mid-animation or partial read
@@ -131,9 +134,29 @@ Three candidates were rejected on measurement, and every one of them looked righ
 - **The winner tint** was assumed to reject non-result screens. It returns a winner on the draft,
   prematch and long-press screens too; only the overworld returns `None`.
 
-After the template check, `read_summary()` must still produce six identified heroes and a winner.
-That is not redundant: it rejects a frame caught mid-animation, where the screen is right but the
-content has not finished rendering.
+### A second, independent signal: the roster tab labels
+
+The Replay button is one template. If a game update moves or restyles it, detection silently
+stops and the mode quietly collects nothing. So the frame must also show **"Ally" or "Enemy"**,
+read by OCR from `x 0-220, y 350-1730` - the strip holding both roster tabs, below the player-name
+header and left of the stat columns, so no other text is in frame.
+
+Measured on that region: all four details screens produce one or both labels, and none of the
+fifteen other screens produces either.
+
+OCR rather than a template, because the tabs are tinted by outcome - orange for the winning trio,
+blue for the losing one - so a template cut from an orange "Ally" would not match a blue one. The
+text is the same either way.
+
+**"Ally" OR "Enemy", not both.** On `longpress_ally1` a popup covers the Ally tab and only "Enemy"
+reads - yet that is still a details screen with a full set of data worth capturing. Requiring both
+would reject it for no benefit.
+
+### And finally the data itself
+
+After both checks, `read_summary()` must still produce six identified heroes and a winner. That is
+not redundant: it rejects a frame caught mid-animation, where the screen is right but the content
+has not finished rendering.
 
 **Incomplete reads are skipped silently.** A frame caught mid-animation may parse partially.
 Skipping costs nothing: the screen is still up, and the next poll gets a clean read.

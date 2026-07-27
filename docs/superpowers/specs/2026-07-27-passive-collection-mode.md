@@ -79,8 +79,15 @@ These are different questions and they belong in different places.
 ### `is_details_screen(frame) -> bool` - a pure predicate
 
 Reusable, stateless, and knows nothing about recording. Mode A can use it too: today it taps the
-chart button and assumes it landed, with no confirmation it is actually on the summary before
-reading it.
+chart button, sleeps two seconds, and reads blind - if the tap misses or the transition is slow,
+`read_summary()` runs against whatever is on screen and the colour probes sample those coordinates
+regardless. Replacing the sleep with a bounded wait on this predicate turns "assume it landed"
+into confirmation.
+
+To be precise about the scope: this would **not** have caught the earlier live-battle-read-as-a-
+draw bug. That happened in match-end detection, before the chart tap, on a path this predicate
+does not guard. It prevents the adjacent failure - recording garbage parsed from a non-details
+screen - not that one.
 
 It contains no deduplication, because "is this a details screen" and "have I seen this match" are
 unrelated questions, and folding them together would make the check useless to any caller that
@@ -117,6 +124,13 @@ viewing. If the user reopens the same match's details later, or restarts the mod
 help. `match_by_natural_key()` catches that, and it is the same key the pooled server dedupes on,
 so local and remote agree.
 
+Most of this layer already exists. `record_match()` does `INSERT ... ON CONFLICT(natural_key) DO
+NOTHING` and returns the existing id, and its docstring was written for exactly this case:
+*"Re-observing a match must not duplicate it or raise - Mode B will see the same match on
+consecutive polls."* `record_heroes()` likewise upserts on `(match_id, side, slot)`. So the
+explicit `match_by_natural_key()` check is an optimisation that avoids the write, not the thing
+that provides correctness.
+
 Layer 1 is the cheap common case; layer 2 is correctness. Neither alone is enough.
 
 ### One ordering constraint
@@ -147,6 +161,22 @@ It is accepted rather than fixed because the alternative is worse: the pooled se
 this exact key, so adding a local-only discriminator would make local and remote disagree about
 what one match is. If it proves to bite in practice, the fix belongs in the shared identity model
 and has to be coordinated with the API, not patched here.
+
+**Do not "fix" this by adding player names to the key.** They are excluded deliberately -
+`matchkey.py` records why - and adding them would break dedupe between two spectators of the same
+match, which is the pool's whole purpose.
+
+**The one duplicate neither layer can catch: hero-slug jitter.** The key is built from identified
+hero slugs. If a borderline identification resolves differently on a second viewing of the same
+screen, the keys differ and both rows are stored - a duplicate carrying a corrupted comp. Unlikely
+on a static screen re-read from near-identical frames, and the accept rule (`score >= 0.70 and
+margin >= 0.10`) makes a flip improbable, but it is the residual hole and is worth knowing before
+someone chases a mystery duplicate.
+
+**The hour rollover bites on re-records, not just first records.** A flicker that briefly hides
+the detector, or a reopen, that happens to straddle :59/:00 produces a different bucket and
+therefore a genuine duplicate. That is the realistic path to the hour edge in this mode, rather
+than a single record landing on the boundary.
 
 ## 5. The user's flow
 

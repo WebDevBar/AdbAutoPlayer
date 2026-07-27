@@ -278,9 +278,17 @@ has not finished rendering.
 **Incomplete reads are skipped silently.** A frame caught mid-animation may parse partially.
 Skipping costs nothing: the screen is still up, and the next poll gets a clean read.
 
-**No failure counter, no restart budget.** There is nothing to recover: the mode has no state to
-lose and takes no actions that can fail. An exception in one poll is logged and the loop
-continues.
+**No failure counter, no restart budget - for READ failures.** There is nothing to recover: the
+mode has no state to lose and takes no actions that can fail. An exception while parsing one poll
+is logged and the loop continues.
+
+**A dead device is the exception, and it does stop the mode.** The reasoning above is about game
+state, not about the connection. If ADB drops - cable, `adbd` restart, device sleep -
+`get_screenshot()` raises on *every* poll, and "log it and continue" means spinning silently for
+hours while the user plays an entire evening believing they are collecting. This mode's
+characteristic failure is silence, so it must be loud about the one failure it cannot see past:
+15 consecutive screenshot failures raises `[SC-45]` and stops. The counter resets on any
+successful screenshot, so transient failures never accumulate into a false alarm.
 
 ## 7. Event and theme
 

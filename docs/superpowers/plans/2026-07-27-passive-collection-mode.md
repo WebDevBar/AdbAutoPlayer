@@ -574,7 +574,7 @@ def test_it_refuses_a_wrong_resolution(mode):
     """Every coordinate was measured on 1080x1920, and the mode may not resize
     the display - so it checks and refuses rather than acting."""
     mode.set_frame_size(720, 1280)
-    with pytest.raises(GameActionFailedError, match=r"\\[SC-42\\]"):
+    with pytest.raises(GameActionFailedError, match=r"\[SC-42\]"):
         mode.collect_while_playing(max_polls=1)
 
 
@@ -704,11 +704,21 @@ def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
     assert matches(db) >= 1
 
 
+def test_it_logs_sc40_once_per_recorded_match(mode, caplog):
+    """Task 5 Step 1 verifies this line by eye on a live run, so it has to
+    actually be emitted - and exactly once per match, not once per poll."""
+    mode.feed(details_frame(match=1), details_frame(match=1), overworld_frame(),
+              details_frame(match=2))
+    with caplog.at_level("INFO"):
+        mode.collect_while_playing(max_polls=4)
+    assert sum("[SC-40]" in r.message for r in caplog.records) == 2
+
+
 def test_it_stops_when_the_device_connection_dies(mode, monkeypatch):
     """A dead ADB connection must not spin silently for hours while the user
     plays, believing they are collecting."""
     monkeypatch.setattr(mode, "get_screenshot", MagicMock(side_effect=OSError("adb")))
-    with pytest.raises(GameActionFailedError, match=r"\\[SC-45\\]"):
+    with pytest.raises(GameActionFailedError, match=r"\[SC-45\]"):
         mode.collect_while_playing(max_polls=100)
 
 
@@ -848,7 +858,7 @@ if not is_complete(left, right, read.winner or ""):
         f"[SC-41] skipped: {len(left)}+{len(right)} heroes identified, "
         f"winner={read.winner} - staying armed for a cleaner read"
     )
-    continue        # do NOT arm: the next poll should retry the same screen
+    continue        # stay ARMED: the next poll should retry the same screen
 ```
 
 `is_complete` also rejects a `winner` that is not `'left'` or `'right'` (`matchkey.py:24`), so it
@@ -875,6 +885,26 @@ the problem instead of guarding it.
 The spec's objection to per-match pushing was network noise during play. It does not apply: a
 record only happens when a details screen is up, which is *between* matches, never during one.
 The existing `[SC-30]` wrapper already makes a slow or dead endpoint non-fatal.
+
+**Emit `[SC-40]` when the match is recorded** - at info, one line per match. Nothing in the plan
+was actually emitting it, yet Task 5 Step 1 verifies it, so live verification would have failed on
+a working implementation:
+
+```python
+# resolve_theme returns (event_id, theme_id, theme_resolved_by) - there is no
+# theme NAME in scope here (solstice_clash.py:504). Log the id and how it was
+# resolved; a name would be an undefined variable.
+recorded += 1
+# armed = False AFTER recording. The spec's convention (spec lines 106-115) is
+# that armed means "ready to record"; it is set back to True only when the
+# screen disappears. Setting it True here would disable layer-1 dedupe entirely
+# and reprocess the still-open screen on every poll.
+armed = False
+logging.info(
+    f"[SC-40] recorded match {match_id}: {read.winner} won, "
+    f"theme_id={theme_id} ({theme_resolved_by})"
+)
+```
 
 ```python
 # Immediately after the match is durably recorded, inside the poll loop.
@@ -956,6 +986,9 @@ This requires `is_details_screen` to report *which* signals fired. Add a sibling
 detail, and keep the boolean predicate as a thin wrapper over it so Task 1's tests and Mode A are
 unaffected:
 
+Add `from typing import NamedTuple` to `details_screen.py` - Task 1's import block does not
+include it.
+
 ```python
 class DetailsSignals(NamedTuple):
     template: bool
@@ -1021,7 +1054,7 @@ def test_it_raises_sc44_if_the_details_screen_never_arrives(mode, monkeypatch):
     monkeypatch.setattr(mod, "DETAILS_TIMEOUT", 1.0)
     monkeypatch.setattr(mod, "DETAILS_POLL_DELAY", 0.05)
     mode.feed(*[_frame("spectate")] * 40)
-    with pytest.raises(GameTimeoutError, match=r"\\[SC-44\\]"):
+    with pytest.raises(GameTimeoutError, match=r"\[SC-44\]"):
         mode._wait_for_details_screen()
 ```
 
@@ -1143,9 +1176,12 @@ Must be unchanged from Step 2.
 
 - [ ] **Step 4: Confirm it syncs**
 
-Look for `[SC-35]` in the log on stop. Then confirm locally that the rows were accepted - the
-client only sets `pushed_at` after the server adopts them, so a non-null value IS the
-confirmation, and it needs no API key:
+Expect one `[SC-35]` line **per recorded match**, not one on stop - the push now happens right
+after each record, because a push on stop would be skipped by SIGTERM (see Task 3). If you see a
+single `[SC-35]` at the end, the implementation followed the old design and is wrong.
+
+Then confirm locally that the rows were accepted - the client only sets `pushed_at` after the
+server adopts them, so a non-null value IS the confirmation, and it needs no API key:
 
 ```bash
 sqlite3 ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite \

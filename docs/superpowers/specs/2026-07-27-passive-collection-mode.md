@@ -92,8 +92,9 @@ every POLL_SECONDS (2.0):
     frame = get_screenshot()
     if not find_template("event/solstice_clash/details_replay", screenshot=frame):
         continue                     # cheap: not a details screen
-    text = ocr(frame[350:1730, 0:220])          # the roster tab strip
-    if "ally" not in text and "enemy" not in text:
+    blocks = ocr(frame[350:1730, 0:220])        # the roster tab strip
+    labels = {b.text.strip().casefold() for b in blocks}
+    if not (labels & {"ally", "enemy"}):        # EXACT match, never substring
         continue                     # second, independent signal
     read = read_summary(frame)
     if read.winner is None or not six heroes identified:
@@ -147,6 +148,12 @@ fifteen other screens produces either.
 OCR rather than a template, because the tabs are tinted by outcome - orange for the winning trio,
 blue for the losing one - so a template cut from an orange "Ally" would not match a blue one. The
 text is the same either way.
+
+**Exact matches only - never `"ally" in text`.** A substring test accepts "Alliance", "Really",
+"Finally", "Enemy Territory" and anything else containing those letters. This project has already
+paid for that lesson once: fuzzy hero-name matching scored `SILVER` against `SILVEN` at 0.833 and
+was replaced with `resolve_hero_name_strict`. An OCR block is compared whole, casefolded and
+stripped, against the exact set `{"ally", "enemy"}`.
 
 **"Ally" OR "Enemy", not both.** On `longpress_ally1` a popup covers the Ally tab and only "Enemy"
 reads - yet that is still a details screen with a full set of data worth capturing. Requiring both

@@ -311,8 +311,23 @@ without confirmation evidence would pollute the learning path with unverified re
 ## 9. Sync
 
 Rows collected here are `origin='local'` with a `natural_key`, so they are pushed by the existing
-`pushable_matches()` selection with no change. Push happens on mode stop rather than per match -
-the user is playing, and a network call between matches is unnecessary noise.
+`pushable_matches()` selection with no change.
+
+**Push happens after each recorded match.** An earlier draft of this spec said "on mode stop,
+rather than per match - the user is playing, and a network call between matches is unnecessary
+noise." That is retracted: it is undeliverable, and the reasoning was wrong on its own terms.
+
+Undeliverable, because the GUI stop button calls `task_process.terminate()`
+(`__main__.py:352`) - SIGTERM on a `multiprocessing.Process` - and no signal handler exists
+anywhere in the Python tree. **Python does not run `finally` blocks on SIGTERM.** A push on stop
+would never fire in the only way a user actually stops this mode.
+
+Wrong on its own terms, because a record only happens while a details screen is up, which is
+*between* matches, never during one. There is no noise to avoid. The existing `[SC-30]` wrapper
+already makes a slow or dead endpoint non-fatal.
+
+Nothing is lost either way if the process is killed: unpushed rows keep `pushed_at IS NULL` and go
+out on the next Mode A run or manual sync.
 
 ## 10. User feedback
 
@@ -327,7 +342,23 @@ for the polls that see nothing:
 `[SC-41]` at debug level only - at info it would print every 2 seconds while a details screen is
 open.
 
-On stop, a summary: how many matches were recorded and how many were pushed.
+A **periodic heartbeat** every ~5 minutes, not a summary on stop - an on-stop line would be
+skipped by SIGTERM for exactly the reason §9 gives. A heartbeat also answers "is this still
+working?" while the user can still act on the answer:
+
+```
+[SC-43] 150 polls, 3 matches recorded, 1 skipped this session
+```
+
+Two failures are loud, because this mode's characteristic failure is silence:
+
+- `[SC-45]` the device connection is gone (15 consecutive screenshot failures). Collection stops.
+  "There is nothing to recover" in §6 is about game state; a mode that cannot see the screen is
+  not collecting, and must say so rather than spin for hours.
+- `[SC-46]` the Replay template and the Ally/Enemy labels have disagreed for ~1 minute. §6
+  justifies the second signal as insurance against a game update restyling the button, but the two
+  are combined with AND - so a restyle stops collection silently either way. The insurance only
+  exists if something notices the disagreement. Warned once per session, not per poll.
 
 ## 11. Open questions
 

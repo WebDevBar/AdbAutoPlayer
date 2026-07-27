@@ -15,8 +15,38 @@
 - **Exact string matching only**, never substring. `"ally" in text` accepts "Really" and "Rally". This project already replaced fuzzy hero matching after `SILVER` scored 0.833 against `SILVEN`.
 - **Duplicates are worse than misses.** Each duplicate is another vote in the model; a miss costs one row.
 - Source paths: `src-tauri/src-python/adb_auto_player/games/afk_journey/`. Tests: `src-tauri/src-python/tests/games/afk_journey/`.
-- Log codes continue the existing `[SC-nn]` scheme: `SC-40` recorded, `SC-41` skipped, `SC-42` wrong resolution, `SC-43` session summary, `SC-44` details screen never appeared (Task 4). Existing codes are reused unchanged: `SC-30` sync failed, `SC-35` sync summary.
+- Log codes continue the existing `[SC-nn]` scheme: `SC-40` recorded (info), `SC-41` skipped (**debug** - it repeats every poll while a screen is up), `SC-42` wrong resolution, `SC-43` periodic heartbeat, `SC-44` details screen never appeared (Task 4), `SC-45` device connection lost, `SC-46` detector signals disagree. Existing codes are reused unchanged: `SC-30` sync failed, `SC-35` sync summary.
 - **No test in this work may touch the real database, the network, or the device.** All three are reachable by default through property fallbacks (`_solstice_cfg` -> `solstice_db_path()`, which CREATES the user's live database) and through `SyncClient`, which has a baked-in key and would push synthetic fixture matches into the shared pool. Task 3's harness closes all three; do not weaken it.
+
+---
+
+### Task 0: Verify cross-observer key identity - BLOCKING, do this first
+
+**No files. This is a measurement, and its answer can invalidate Task 3's dedupe story.**
+
+`natural_key` keeps the two teams as an **ordered** `(left, right)` pair and the outcome as
+`'left'`/`'right'` (`matchkey.py:29-33`). Mode B introduces a second class of observer for the
+same physical match: today every row comes from spectating, but a compete row is recorded by one
+of the two *players*.
+
+`summary.py:131` documents that in spectate the Ally/Enemy panels "mean whichever side you bet on
+and they flip between matches", and `_winner_by_panel_tint` maps the top panel to `'left'`. **If
+panel order is observer-relative, then a compete recording and another contributor's spectate
+recording of the same match produce mirrored sides, different keys, and the shared pool
+double-counts that match** - one row saying left won, one saying right won, both counted as
+independent evidence. That is worse than missing the match.
+
+- [ ] **Step 1: Determine whether panel order is observer-relative.** Read the existing captures
+      in `tests/games/afk_journey/services/solstice/data/` and, if they cannot settle it, capture
+      the same match from both a player's and a spectator's view.
+
+- [ ] **Step 2: Record the answer in the spec** either way, since the current text does not say.
+
+- [ ] **Step 3: If order IS observer-relative, STOP and raise it.** The fix is to canonicalise
+      `natural_key` over an unordered team pair, which changes the shared identity model, the
+      server, and every already-adopted key. That is a decision, not an implementation detail, and
+      it gets dramatically more expensive once compete rows exist in the pool. If order is
+      absolute, note that and continue.
 
 ---
 
@@ -250,6 +280,8 @@ import numpy as np
 import pytest
 from adb_auto_player.exceptions import GameActionFailedError
 from adb_auto_player.games.afk_journey.mixins.solstice_clash import SolsticeClashMixin
+from adb_auto_player.exceptions import GameTimeoutError
+from adb_auto_player.games.afk_journey.services.solstice.details_screen import TAB_STRIP
 from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
 from adb_auto_player.games.afk_journey.services.solstice.summary import SummaryRead
 
@@ -672,13 +704,77 @@ def test_an_exception_in_one_poll_does_not_stop_the_loop(mode, db, monkeypatch):
     assert matches(db) >= 1
 
 
-def test_it_pushes_on_stop_not_per_match(mode, sync):
-    """`sync` is autouse, so it is active in every test in this file; naming it
-    here is only to read the counter."""
+def test_it_stops_when_the_device_connection_dies(mode, monkeypatch):
+    """A dead ADB connection must not spin silently for hours while the user
+    plays, believing they are collecting."""
+    monkeypatch.setattr(mode, "get_screenshot", MagicMock(side_effect=OSError("adb")))
+    with pytest.raises(GameActionFailedError, match=r"\\[SC-45\\]"):
+        mode.collect_while_playing(max_polls=100)
+
+
+def test_a_recovered_screenshot_resets_the_failure_counter(mode, db, monkeypatch):
+    """Transient failures must not accumulate across a whole session into a
+    false 'connection is gone'."""
+    calls = {"n": 0}
+    real = mode.get_screenshot
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] % 3 == 0:
+            raise OSError("transient")
+        return real()
+
+    monkeypatch.setattr(mode, "get_screenshot", flaky)
+    mode.feed(*[details_frame()] * 60)
+    mode.collect_while_playing(max_polls=60)      # must not raise
+    assert matches(db) >= 1
+
+
+def test_it_warns_once_when_the_two_signals_disagree(mode, caplog):
+    """The whole point of the second signal is noticing a broken first one.
+    A details screen with its tab strip blacked out fires the template only."""
+    frame = details_frame()
+    x0, y0, x1, y1 = TAB_STRIP
+    frame[y0:y1, x0:x1] = 0
+    mode.feed(*[frame] * 40)
+    mode.collect_while_playing(max_polls=40)
+    assert sum("[SC-46]" in r.message for r in caplog.records) == 1
+
+
+def test_it_pushes_after_each_recorded_match(mode, sync):
+    """NOT on exit: the GUI stop button is SIGTERM (__main__.py:352) and Python
+    does not run finally blocks on SIGTERM, so an on-exit push would never fire
+    in the only way a user actually stops this mode."""
     mode.feed(details_frame(match=1), overworld_frame(), details_frame(match=2))
     mode.collect_while_playing(max_polls=3)
-    assert sync.push_calls == 1
+    assert sync.push_calls == 2
+
+
+def test_it_does_not_push_when_nothing_was_recorded(mode, sync):
+    mode.feed(overworld_frame(), overworld_frame())
+    mode.collect_while_playing(max_polls=2)
+    assert sync.push_calls == 0
+
+
+def test_it_emits_a_periodic_heartbeat(mode, caplog, monkeypatch):
+    """An on-stop summary would be skipped by SIGTERM exactly like the push.
+    A heartbeat also answers 'is this still working?' while the user can act.
+
+    HEARTBEAT_POLLS is 150 in production; patched down so the test does not need
+    150 frames to see one line.
+    """
+    import adb_auto_player.games.afk_journey.mixins.solstice_clash as mod
+
+    monkeypatch.setattr(mod, "HEARTBEAT_POLLS", 5)
+    mode.feed(*[overworld_frame()] * 12)
+    with caplog.at_level("INFO"):
+        mode.collect_while_playing(max_polls=12)
+    assert sum("[SC-43]" in r.message for r in caplog.records) == 2
 ```
+
+`sync` is autouse, so it is active in every test in this file; the tests that name it do so only
+to read the counter. `HEARTBEAT_POLLS` and `MAX_CONSECUTIVE_SCREENSHOT_FAILURES` must both be read
+from the module at use, not captured into defaults, for the same reason as `POLL_SECONDS`.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -744,7 +840,11 @@ helper - it is already imported at `solstice_clash.py:31`:
 left = [h.slug for h in read.heroes if h.side == "left" and h.slug]
 right = [h.slug for h in read.heroes if h.side == "right" and h.slug]
 if not is_complete(left, right, read.winner or ""):
-    logging.info(
+    # DEBUG, not info. A details screen that never becomes complete - an
+    # unidentifiable hero after a game update, say - is on screen for tens of
+    # seconds, and at info this line prints every 2 seconds for all of it. The
+    # spec is explicit about this.
+    logging.debug(
         f"[SC-41] skipped: {len(left)}+{len(right)} heroes identified, "
         f"winner={read.winner} - staying armed for a cleaner read"
     )
@@ -758,23 +858,124 @@ covers the no-winner case in the same call. `max_polls` exists for the tests; pr
 way `_collect_forever` does at `solstice_clash.py:387`. Do NOT add a `self._sync` attribute:
 nothing initialises one on a real instance, so every production run would crash on it.
 
-Push **once, on exit** rather than per match, and inside the same
-`try/except Exception -> [SC-30]` wrapper the existing code uses. Mode B's whole premise is that
-the user is playing a ranked match, so a 15-second timeout mid-session is exactly the cost the
-"sync must never cost a match" rule exists to prevent - and unlike Mode A there is no cycle
-boundary to absorb it.
+**Push after each recorded match - NOT on exit.** The spec originally said "push on stop"; that
+is undeliverable and the spec has been corrected.
+
+The GUI stop button calls `task_process.terminate()` (`__main__.py:352`), which is SIGTERM on a
+`multiprocessing.Process`. No signal handler is installed anywhere in the Python tree, and
+`SIGTERM_EXIT_CODE = -15` at `__main__.py:71` shows that is the expected path. **Python does not
+run `finally` blocks on SIGTERM.** So a push in a `finally` would never fire in the only way a
+user actually stops this mode - and a test asserting it would pass only because the test exits
+through `max_polls`, the one exit path production never takes.
+
+Installing a SIGTERM handler was considered and rejected: it changes process-wide behaviour for
+every mode to serve one, and it would still lose the data on SIGKILL. Pushing per match deletes
+the problem instead of guarding it.
+
+The spec's objection to per-match pushing was network noise during play. It does not apply: a
+record only happens when a details screen is up, which is *between* matches, never during one.
+The existing `[SC-30]` wrapper already makes a slow or dead endpoint non-fatal.
 
 ```python
-finally:
-    try:
-        if sync.enabled:
-            sync.push()
-            sync.pull()
-    except Exception as exc:  # noqa: BLE001 - sync must never cost a match
-        logging.warning(f"[SC-30] sync failed, continuing: {exc}")
+# Immediately after the match is durably recorded, inside the poll loop.
+try:
+    if sync.enabled:
+        sync.push()
+        sync.pull()
+except Exception as exc:  # noqa: BLE001 - sync must never cost a match
+    logging.warning(f"[SC-30] sync failed, continuing: {exc}")
 ```
 
-In a `finally`, so stopping the mode with Ctrl-C still pushes what was collected.
+Nothing is lost if the process is killed anyway: unpushed rows keep `pushed_at IS NULL` and go
+out on the next Mode A run or manual sync.
+
+**`[SC-43]` is a periodic heartbeat, not an on-stop summary** - for the same reason. Emit it
+every `HEARTBEAT_POLLS = 150` polls (about 5 minutes at 2s):
+
+```python
+HEARTBEAT_POLLS = 150
+
+if poll and poll % HEARTBEAT_POLLS == 0:
+    logging.info(
+        f"[SC-43] {poll} polls, {recorded} matches recorded, "
+        f"{skipped} skipped this session"
+    )
+```
+
+An on-stop summary would be silently skipped by SIGTERM exactly like the push. A heartbeat also
+answers "is this thing still working?" *during* the session, which is when the user can still act
+on the answer.
+
+**Liveness: count consecutive screenshot failures and stop.** "An exception in one poll is logged
+and the loop continues" is right for a bad read; it is wrong for a dead connection. If ADB drops -
+cable, `adbd` restart, device sleep - `get_screenshot()` raises on every poll and the loop spins
+silently for hours while the user plays an entire evening believing they are collecting.
+
+Mode A has a restart budget for precisely this class of failure. Mode B, whose entire failure mode
+IS silence, needs the equivalent:
+
+```python
+MAX_CONSECUTIVE_SCREENSHOT_FAILURES = 15   # ~30 seconds
+
+# on a get_screenshot() exception:
+screenshot_failures += 1
+if screenshot_failures >= MAX_CONSECUTIVE_SCREENSHOT_FAILURES:
+    raise GameActionFailedError(
+        f"[SC-45] {screenshot_failures} consecutive screenshot failures - the "
+        f"device connection is gone. Collection has stopped; nothing was being "
+        f"recorded."
+    )
+# reset to 0 on any successful screenshot
+```
+
+Stopping loudly is correct here even though the mode is otherwise unstoppable-by-design: the spec's
+"there is nothing to recover" applies to *game state*, not to a dead device. A mode that cannot
+see the screen is not collecting, and saying so is the whole point.
+
+**Detector disagreement warning.** The spec justifies the second signal as insurance against a
+game update restyling the Replay button - but `is_details_screen` is an AND, so a restyle still
+stops collection silently, and there are now two things that can. The conjunction is still right
+(it is what buys the false-positive margin), but the claimed robustness only exists if something
+notices the signals disagreeing:
+
+```python
+MAX_SIGNAL_DISAGREEMENT = 30   # ~1 minute of a screen showing one signal only
+
+# When exactly one of the two signals fires, count it; reset on agreement.
+# Warn ONCE per session, not per poll.
+if disagreements == MAX_SIGNAL_DISAGREEMENT and not warned_disagreement:
+    warned_disagreement = True
+    logging.warning(
+        f"[SC-46] the Replay template and the Ally/Enemy labels have disagreed "
+        f"for {disagreements} polls. One of the two detection signals may have "
+        f"broken in a game update - collection may be silently degraded."
+    )
+```
+
+This requires `is_details_screen` to report *which* signals fired. Add a sibling that returns the
+detail, and keep the boolean predicate as a thin wrapper over it so Task 1's tests and Mode A are
+unaffected:
+
+```python
+class DetailsSignals(NamedTuple):
+    template: bool
+    labels: bool
+
+    @property
+    def confirmed(self) -> bool:
+        return self.template and self.labels
+
+
+def details_signals(frame, replay_template, ocr) -> DetailsSignals: ...
+
+
+def is_details_screen(frame, replay_template, ocr) -> bool:
+    return details_signals(frame, replay_template, ocr).confirmed
+```
+
+Add to Task 1: a test that `details_signals` reports `template=True, labels=False` on a details
+screen whose tab strip has been blacked out, and that `is_details_screen` returns False for it.
+That is the exact shape of the failure this is meant to catch.
 
 - [ ] **Step 4: Run to verify it passes**
 - [ ] **Step 5: Run the full solstice suite** - `uv run pytest tests/games/afk_journey/services/solstice/ -q`, expect no regressions against the current 124
@@ -914,7 +1115,31 @@ sqlite3 ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite \
 
 Both numbers equal, and equal to the number of matches played.
 
-- [ ] **Step 3: Confirm the device was untouched** - the match played out normally with no stray input.
+- [ ] **Step 3: Confirm the device was untouched** - the match played out normally with no stray
+      input, and no perceptible frame drops or input lag. The mode runs `screencap` every two
+      seconds during a live ranked match; "never touch the device" was scoped to taps, but a
+      screenshot has real on-device cost and this is the only place it gets measured.
+
+- [ ] **Step 3b: Confirm other game modes do not false-positive.** With the mode still running,
+      open the post-battle details/stats screen of at least two NON-Solstice battle types (Arena
+      and Dream Realm at minimum). Nothing may record.
+
+      This was never measured. The predicate's rejection set is entirely Solstice screens plus the
+      overworld - but Mode B runs while the user plays the game at large, and other modes have
+      post-battle screens with rosters. Today the protection is accidental: a 5-hero layout read at
+      Solstice cell coordinates should fail `is_complete`. "Should" is doing a lot of work there,
+      and the cost of being wrong is a non-Solstice match recorded as `compete_summary` and
+      **pushed into the shared pool**, which is the one contamination this design most needs to
+      avoid.
+
+      If anything records, stop: the predicate needs a third signal, not a tweak.
+
+```bash
+sqlite3 ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite \
+  "SELECT COUNT(*) FROM match WHERE source='compete_summary';"
+```
+
+Must be unchanged from Step 2.
 
 - [ ] **Step 4: Confirm it syncs**
 

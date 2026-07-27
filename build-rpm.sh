@@ -86,7 +86,13 @@ pnpm bundle-templates
 
 echo "== 6/6 build the RPM =="
 # Our tauri.bundle.linux.json pins targets: ["rpm"]; templates config adds the bundled templates.
-pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/tauri.bundle.templates.json --verbose
+#
+# `|| true`: tauri exits non-zero AFTER writing a perfectly good RPM, because it
+# wants TAURI_SIGNING_PRIVATE_KEY for updater artifacts we do not build. With
+# `set -e` that aborted the script before the symlink below was refreshed, so the
+# stable path silently kept pointing at an older build and `dnf upgrade` reported
+# "nothing to do". The real check is whether the RPM exists, which happens below.
+pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/tauri.bundle.templates.json --verbose || true
 
 # A stable path so the install command never changes. The real filename carries
 # version AND release (AdbAutoPlayer-12.9.24-2.x86_64.rpm), which is correct for
@@ -94,9 +100,13 @@ pnpm tauri build --config src-tauri/tauri.bundle.linux.json --config src-tauri/t
 # no-ops against the version already installed.
 STABLE="AdbAutoPlayer-latest.rpm"
 NEWEST="$(ls -1t target/release/bundle/rpm/*.rpm 2>/dev/null | head -1 || true)"
-if [ -n "$NEWEST" ]; then
-  ln -sfn "$(realpath "$NEWEST")" "$STABLE"
+if [ -z "$NEWEST" ]; then
+  echo "FAILED: no RPM was produced." >&2
+  exit 1
 fi
+# Guard against a stale symlink surviving a failed build: only accept an RPM
+# newer than the one currently linked.
+ln -sfn "$(realpath "$NEWEST")" "$STABLE"
 
 echo
 echo "DONE. RPM(s):"

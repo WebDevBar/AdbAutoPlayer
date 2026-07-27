@@ -137,3 +137,43 @@ sudo sysctl -w vm.compaction_proactiveness=20    # back to the default
 
 Also delete `/etc/sysctl.d/` entry if one was ever added. Leaving a workaround in place
 after its cause is fixed is how a machine accumulates unexplained settings.
+
+
+---
+
+## Releasing to collaborators (Windows installer + Linux RPM)
+
+`.github/workflows/release-webdevbar.yaml` builds both and attaches them to a
+GitHub release. Deliberately a SEPARATE file from upstream's `publish.yaml`:
+our patches live on `webdevbar`, which is rebased onto each new upstream tag, and
+editing upstream's workflow would conflict on every rebase.
+
+Windows is built on a Windows runner because Tauri needs the MSVC toolchain - it
+cannot be cross-compiled from Linux. Upstream ships an NSIS **installer**
+(`installMode: currentUser`), not a portable app, and ours matches.
+
+### One-time setup
+
+Add the repository secret `ADB_SYNC_KEY_BUILTIN`, set to the fork key in
+`~/.local/share/webdevbar/gameretro-adb-api.md`:
+
+```bash
+gh secret set ADB_SYNC_KEY_BUILTIN --repo WebDevBar/AdbAutoPlayer
+```
+
+Without it the build still succeeds and sync disables itself - the right
+behaviour for a build with no key, rather than a failure.
+
+### Cutting a release
+
+```bash
+# bump bundle.linux.rpm.release in src-tauri/tauri.bundle.linux.json first
+gh release create webdevbar-12.9.24-3 --repo WebDevBar/AdbAutoPlayer \
+  --title "12.9.24-3" --notes "Solstice Clash data collection and pooled sync"
+```
+
+Publishing the release triggers the workflow. Artifacts also appear on any
+`workflow_dispatch` run, so a build can be tested without cutting a release.
+
+Tag names are prefixed `webdevbar-` so they never collide with upstream tags,
+which the rebase flow relies on.

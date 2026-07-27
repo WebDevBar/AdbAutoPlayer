@@ -27,6 +27,7 @@ class MatchRecord:
     theme: str | None = None       # RAW OCR read, provenance only
     event_id: int | None = None    # resolved - see MatchStore.resolve_theme
     theme_id: int | None = None    # resolved - the source of truth, not `theme`
+    theme_resolved_by: str | None = None  # 'window' | 'ocr' | 'default'
     balance_epoch: str | None = None
     left_player: str | None = None
     left_rating: int | None = None
@@ -162,6 +163,7 @@ class MatchStore:
         "natural_key",
         "event_id",
         "theme_id",
+        "theme_resolved_by",
         "source",
         "captured_at",
         "theme",
@@ -350,8 +352,8 @@ class MatchStore:
         captured_at: str,
         ocr_name: str | None = None,
         event_slug: str = "solstice-clash",
-    ) -> tuple[int | None, int | None]:
-        """Return (event_id, theme_id) for a capture, by DATE first.
+    ) -> tuple[int | None, int | None, str | None]:
+        """Return (event_id, theme_id, resolved_by) for a capture, by DATE first.
 
         Resolution order, and the order matters:
 
@@ -371,7 +373,7 @@ class MatchStore:
                 "SELECT id FROM event WHERE slug=?", (event_slug,)
             ).fetchone()
             if row is None:
-                return None, None
+                return None, None, None
             event_id = int(row[0])
 
             dated = con.execute(
@@ -383,7 +385,7 @@ class MatchStore:
                 (event_id, captured_at, captured_at),
             ).fetchone()
             if dated is not None:
-                return event_id, int(dated[0])
+                return event_id, int(dated[0]), "window"
 
             if ocr_name:
                 named = con.execute(
@@ -391,12 +393,12 @@ class MatchStore:
                     (event_id, ocr_name),
                 ).fetchone()
                 if named is not None:
-                    return event_id, int(named[0])
+                    return event_id, int(named[0]), "ocr"
 
             fallback = con.execute(
                 "SELECT id FROM theme WHERE event_id=? AND is_default=1", (event_id,)
             ).fetchone()
-            return event_id, (int(fallback[0]) if fallback else None)
+            return event_id, (int(fallback[0]) if fallback else None), "default"
 
     def _screen_id(self, con: sqlite3.Connection, slug: str) -> int:
         row = con.execute("SELECT id FROM screen WHERE slug=?", (slug,)).fetchone()

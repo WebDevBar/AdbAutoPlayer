@@ -446,7 +446,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # is filed under - a misread name must not be able to file a match against
         # the wrong balance patch, because matches are only comparable within a
         # theme.
-        event_id, theme_id = self._store.resolve_theme(captured_at, theme)
+        event_id, theme_id, theme_resolved_by = self._store.resolve_theme(
+            captured_at, theme
+        )
 
         match_id = self._store.record_match(
             MatchRecord(
@@ -455,6 +457,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 theme=theme,
                 event_id=event_id,
                 theme_id=theme_id,
+                theme_resolved_by=theme_resolved_by,
                 outcome=read.winner,
                 outcome_source="observed",
                 left_player=read.left_player,

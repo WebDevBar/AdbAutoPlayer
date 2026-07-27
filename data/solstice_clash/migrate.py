@@ -32,6 +32,7 @@ ADD_COLUMNS = [
     ("match", "origin", "TEXT NOT NULL DEFAULT 'local'"),
     ("match", "contributor_uuid", "TEXT"),
     ("match", "remote_received_at", "TEXT"),
+    ("match", "theme_resolved_by", "TEXT"),
     ("match", "pushed_at", "TEXT"),
     ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
     ("hero", "external_id", "INTEGER"),

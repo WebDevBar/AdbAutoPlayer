@@ -174,6 +174,14 @@ CREATE TABLE IF NOT EXISTS match(
                      CHECK(origin IN ('local','synced')),
   contributor_uuid   TEXT,   -- which install observed it; attribution/quarantine
   remote_received_at TEXT,   -- server-side receipt time (metadata, not a cursor)
+  -- How the theme was resolved, carried through from the server on sync.
+  -- 'default' means no dated window covered the capture and the OCR name did not
+  -- match either, so the row landed in the event's fallback bucket. Such rows are
+  -- EXCLUDED from odds training - a visibly unknown theme is useful, a
+  -- confidently wrong one is not - and can be promoted later by filling in the
+  -- window and re-resolving. The flag has to exist on the row or that exclusion
+  -- is an instruction nobody can act on.
+  theme_resolved_by  TEXT CHECK(theme_resolved_by IN ('window','ocr','default')),
   -- PER-ROW push state. A timestamp watermark over captured_at looks sufficient
   -- and is not: a match is inserted BEFORE its heroes are read, so it starts
   -- unkeyed and unsyncable, and only becomes syncable when set_natural_key()

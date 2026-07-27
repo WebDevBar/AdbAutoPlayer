@@ -6,6 +6,38 @@
 
 ---
 
+## 0. Prerequisites - these block implementation
+
+Two things must be settled before any of the work below is worth doing. They are stated here
+rather than in "open items" because an engineer who treats them as follow-ups will build a
+mode that cannot run.
+
+**P1. The spectate draft screen must be proven readable.** This mode's entire input is the set
+of locked picks read from the spectate draft screen. Mode A registered `spectate_draft_picks`
+cell geometry but **never validated its accuracy on that screen** - cross-screen training was
+cut from Mode A's scope. Until that is measured, nothing in section 12 can be trusted to have
+correct inputs.
+
+Order of work: capture draft-screen frames as fixtures, measure identification accuracy
+against the same accept rule Mode A uses (`score >= 0.70 and margin >= 0.10`), and only then
+one device smoke test. If accuracy on that screen is materially worse than on the summary
+screen, the geometry must be retuned before the model is wired in - a wrong hero read produces
+a confident wrong number, which is the exact failure this design exists to avoid.
+
+**P2. Player identity handling (section 9) ships with the first fit, not after it.** Player
+terms are part of the model from the start, so the vetting rules must exist before any
+parameters are fitted. Fitting first and adding vetting later means the first fitted `φ` values
+are built on merged phantom players.
+
+### Testing boundary
+
+These prerequisites are the only device-dependent part of this design. Everything statistical -
+fitting, marginalisation, variance, validation, the gate - is pure and must be testable on
+fixture match data with no device and no GUI. Screen-reading validation and statistical tests
+never share a test path.
+
+---
+
 ## 1. Goal
 
 While spectating a Solstice Clash draft, show the player an estimate of which side is
@@ -338,7 +370,55 @@ that live behaviour matches the refit estimate, and they are the input to any la
 recalibration. They are not what first opens the gate, because before the gate opens no
 prediction is shown and the mode would otherwise never bootstrap.
 
-## 9. Scope: one theme at a time
+## 9. Player identity safety
+
+Player identity is a fitted parameter, so a wrong identity is a wrong model, not a cosmetic
+defect. Names come from OCR and are demonstrably unreliable.
+
+**Raw OCR text must never be used as a player key.** Two distinct failure modes, both observed
+in real collected data:
+
+- **Splitting** - one player read two ways becomes two players, each with half a history.
+- **Merging** - and this is the dangerous one - several players read the same way become one
+  phantom player whose `φ_p` absorbs all of their records. In the manual match data, every
+  name overlapped by the account badge truncated to `GAME`. In the collected matches, a name
+  is stored as `【kru`, which is plainly a partial read. Any two players sharing a truncated
+  prefix would silently merge.
+
+Merging is worse than splitting: splitting weakens a term toward its prior, whereas merging
+manufactures a confident term from unrelated matches.
+
+### Rules
+
+`identity.py` maps a raw OCR string to a trusted key or to `None`:
+
+1. Normalise: Unicode NFKC, strip surrounding whitespace and control characters.
+2. Reject as untrusted if any of:
+   - fewer than 3 characters after normalisation;
+   - the string is a strict prefix of a different observed name (suspected truncation);
+   - the string is on the known-bad list, which starts with `GAME`.
+3. Otherwise return the normalised string as the key.
+
+### What an untrusted name means
+
+An untrusted name is **not** a new player and **not** guessed. That match contributes its
+hero information normally and its player term is simply absent:
+
+- **When fitting** - the row is included, with no `φ` term on that side. The hero terms still
+  learn from it.
+- **When predicting** - `φ = 0` for that side and `Var_total += σ_φ²`, exactly as for an
+  unseen player in section 6. Uncertainty widens rather than confidence being invented.
+
+This keeps a bad read cheap. The alternative - dropping the match entirely - would throw away
+good hero data to protect a weaker parameter.
+
+### Consequence for existing data
+
+The prefix rule is evaluated against names already collected, so it is order-dependent and
+must be applied as a batch pass over the whole table at fit time, not incrementally at insert
+time. Player keys are therefore derived during fitting and never stored as a match column.
+
+## 10. Scope: one theme at a time
 
 Hero balance and the map change with the theme, so parameters are fitted **per theme** and
 reset when the theme rotates. `Converging Paths` rotates 2026-07-28; the next themes are
@@ -349,20 +429,22 @@ Cross-theme memory is a possible later refinement - carrying the previous theme'
 as a weak prior, `θ_current ~ N(ρ θ_previous, σ_theme²)` with `ρ` around 0.25 - but v1 fits
 each theme from scratch.
 
-## 10. Components
+## 11. Components
 
 | file | responsibility |
 |---|---|
 | `services/solstice/odds.py` | **new**, pure. Fit the model from match rows; predict from a partial draft. No device, no UI. |
-| `services/solstice/store.py` | **modify**. Read matches for fitting; persist fitted parameters. |
-| `data/solstice_clash/schema.sql` + `migrate.py` | **modify**. Tables for fitted parameters and logged predictions. |
+| `services/solstice/validate.py` | **new**, pure. The repeated-shuffle validation of section 8, the three baselines, and the pass/fail evaluation of section 7's validation gate. Returns a result object; decides nothing about display. |
+| `services/solstice/identity.py` | **new**, pure. Normalise and vet player names per section 9 (Player identity safety). Maps a raw OCR string to either a trusted player key or `None`. |
+| `services/solstice/store.py` | **modify**. Read matches for fitting; persist fitted parameters, validation summaries, and gate state. |
+| `data/solstice_clash/schema.sql` + `migrate.py` | **modify**. Tables for fitted parameters, validation runs, gate state, and logged predictions. |
 | `mixins/solstice_clash.py` | **modify**. During the draft, read locked picks, call the predictor, log the result. |
 | frontend panel | **new**. Displays the current estimate, interval, trust label and evidence. |
 
 Everything statistical is pure and testable against fixture match data with no device and no
 GUI, in the same shape as Mode A's services.
 
-## 11. Display
+## 12. Display
 
 Two surfaces, both in the existing AdbAutoPlayer UI:
 
@@ -380,7 +462,7 @@ Evidence: 17 appearances across locked heroes, weakest 1
 
 Never the bare `54%`.
 
-## 12. Prediction logging
+## 13. Prediction logging
 
 Every computed estimate is written to the database with the draft state it was computed
 from, the resulting probability and SE, and later the actual outcome. Predictions are logged
@@ -391,18 +473,17 @@ This is a monitoring surface, not the gate: section 8's refit validation decides
 display opens, and these logs confirm afterwards that live behaviour matches it. It costs
 nothing to record and it is the only way to notice the model drifting once it is live.
 
-## 13. Open items
+## 14. Open items
 
 - **Draw handling** (section 2) - v1 documents the conditional; recording draws with comps
   and fitting the three-outcome model is the first follow-up.
-- **Player-name reliability** - names come from OCR. Mode A saw a name read as `GAME` when
-  the account badge overlapped it. A misread name creates a phantom player, splitting one
-  player's history in two. Needs a normalisation and probably a minimum-length sanity check
-  before player terms are trusted.
 - **Whether player terms actually reduce selection bias** or merely absorb variance. Codex
   was asked directly and its answer should be treated as a hypothesis to test, not settled:
   compare fitted `θ` with and without player terms once enough data exists.
-- **Reading the draft live** - Mode C must read locked picks from the spectate draft screen.
-  Mode A registered `spectate_draft_picks` cell geometry but its accuracy on that screen was
-  never validated, because cross-screen training was reduced in scope. That validation is a
-  prerequisite for this mode, not an afterthought.
+- **Whether the useful window is long enough to act in.** Section 7 shows a number can only
+  appear once four of six picks are locked. Whether that leaves enough time before betting
+  closes is a timing question the first live run answers.
+
+Player-name reliability and draft-screen readability were open items in the first draft of
+this spec and have been promoted to prerequisites P1 and P2 in section 0. They are not
+follow-ups.

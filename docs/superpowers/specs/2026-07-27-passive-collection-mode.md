@@ -45,32 +45,67 @@ reliable anyway (section 6).
 `right_player` is them. That is data, not a problem - but it means player-name reads are worth no
 more here than in spectate, and are still excluded from identity.
 
-## 4. Deduplication - the core of it
+## 4. Two separate concerns: "is this the screen?" and "have I already had it?"
 
-`natural_key` already answers "is this the same match" (theme-free hash of outcome, both sorted
-hero sides, and the UTC hour bucket). The problem is *when* it is computed.
+These are different questions and they belong in different places.
 
-Mode A's path inserts the match row, records the heroes, and only then sets the key - because it
-navigates to the summary and reads it in that order. With `natural_key` NULL on insert, the
-`ON CONFLICT(natural_key) DO NOTHING` clause does nothing at all: SQLite permits unlimited NULLs
-in a UNIQUE column.
+### `is_details_screen(frame) -> bool` - a pure predicate
 
-So passive mode inverts the order:
+Reusable, stateless, and knows nothing about recording. Mode A can use it too: today it taps the
+chart button and assumes it landed, with no confirmation it is actually on the summary before
+reading it.
 
-1. parse the summary from the frame
-2. compute `natural_key` from what was parsed
-3. `match_by_natural_key()` - already exists in the store
-4. if it returns an id, **do nothing at all**, not even a log line at info level
-5. otherwise insert the match, its heroes, and the key
+It contains no deduplication, because "is this a details screen" and "have I seen this match" are
+unrelated questions, and folding them together would make the check useless to any caller that
+does not want the second one.
 
-Step 4 is the one that matters. Recording the same match 20 times would corrupt the model far
-more effectively than missing it entirely - each duplicate is a vote.
+### Deduplication - passive mode only, in two layers
+
+Mode A never needed this: it navigates away immediately after recording. Passive mode polls a
+screen the user leaves open for tens of seconds, so it would otherwise record one match twenty
+times - and duplicates are worse than omissions, because each one is another vote in the model.
+
+**Layer 1 - arm/disarm on the screen transition.** Record once, then refuse to record again until
+the details screen has *disappeared*. Re-arm when it does.
+
+```
+armed = True
+each poll:
+    on_details = is_details_screen(frame)
+    if not on_details:
+        armed = True          # screen gone - the next one is a new match
+        continue
+    if not armed:
+        continue              # same screen still open, already recorded
+    ... record ...
+    armed = False
+```
+
+This matches the actual flow - open the details screen, dismiss it, play the next match - and
+costs one boolean. No database lookup per poll, and it does not depend on the key being
+computable, so it still holds if a read is partial.
+
+**Layer 2 - `natural_key`, as a backstop.** The arm/disarm flag only covers one continuous
+viewing. If the user reopens the same match's details later, or restarts the mode, the flag is no
+help. `match_by_natural_key()` catches that, and it is the same key the pooled server dedupes on,
+so local and remote agree.
+
+Layer 1 is the cheap common case; layer 2 is correctness. Neither alone is enough.
+
+### One ordering constraint
+
+The key can only be computed after the summary is parsed - it is made of the outcome and the two
+hero sides. Mode A's path inserts the match row first and sets the key afterwards, which is why
+its `ON CONFLICT(natural_key) DO NOTHING` never fires: SQLite permits unlimited NULLs in a UNIQUE
+column, so a NULL key conflicts with nothing.
+
+Passive mode therefore parses first, computes the key, checks it, and only then inserts.
 
 ### The hour-bucket edge
 
-A match straddling :59 and :00 gets two different keys and would be recorded twice. Mode A has
-the same edge and accepts it. Here it is *less* likely, because both readings come from the same
-machine within seconds of each other rather than from two spectators minutes apart.
+A match straddling :59 and :00 gets two different keys and could be recorded twice. Mode A has the
+same edge and accepts it. Layer 1 makes it rarer here, since a single continuous viewing is
+covered by the flag regardless of what the clock does.
 
 ## 5. The user's flow
 
@@ -88,21 +123,24 @@ missed, the cost is one row.
 ## 6. The polling loop
 
 ```
+armed = True
+
 every POLL_SECONDS (2.0):
     frame = get_screenshot()
-    if not find_template("event/solstice_clash/details_replay", screenshot=frame):
-        continue                     # cheap: not a details screen
-    blocks = ocr(frame[350:1730, 0:220])        # the roster tab strip
-    labels = {b.text.strip().casefold() for b in blocks}
-    if not (labels & {"ally", "enemy"}):        # EXACT match, never substring
-        continue                     # second, independent signal
+    if not is_details_screen(frame):
+        armed = True                 # screen gone; next one is a new match
+        continue
+    if not armed:
+        continue                     # still the same screen, already recorded
+
     read = read_summary(frame)
     if read.winner is None or not six heroes identified:
         continue                     # mid-animation or partial read
+
     key = natural_key(read.winner, left, right, captured_at)
-    if store.match_by_natural_key(key):
-        continue                     # already recorded; say nothing
-    record(read, key)
+    if not store.match_by_natural_key(key):     # backstop
+        record(read, key)
+    armed = False
 ```
 
 ### The detector is the Replay button

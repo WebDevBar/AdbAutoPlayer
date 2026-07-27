@@ -297,7 +297,9 @@ def main() -> None:
         # slug,               name,                starts_at, ends_at,    default
         ("unknown",           "Unknown / Default", None,      None,       1),
         ("fierce-duel",       "Fierce Duel",       None,      None,       0),
-        ("converging-paths",  "Converging Paths",  None,      "2026-07-28T00:00:00Z", 0),
+        # Rotates 02:00 Europe/Skopje on 2026-07-29, which is exactly midnight UTC -
+        # and therefore also an hour-bucket boundary, so no match straddles it.
+        ("converging-paths",  "Converging Paths",  None,      "2026-07-29T00:00:00Z", 0),
         ("flourishing-wilds", "Flourishing Wilds", None,      None,       0),
         ("tactical-grounds",  "Tactical Grounds",  None,      None,       0),
     ]

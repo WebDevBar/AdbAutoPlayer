@@ -82,12 +82,22 @@ broadcast receiver, no UI framework, no dependencies beyond androidx-core.
 ```xml
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<service android:name=".OverlayService" android:exported="true"/>
+<service
+    android:name=".OverlayService"
+    android:exported="true"
+    android:permission="android.permission.DUMP"/>
 ```
 
 `android:exported="true"` is required or the shell cannot start it: components without an
 intent filter default to private on Android 12+, and `am start-foreground-service` from
-adb would fail with a permission denial. The `SYSTEM_ALERT_WINDOW` permission must be
+adb would fail with a permission denial.
+
+`android:permission` is what stops that from meaning *anything on the device* can start
+the service and paint arbitrary text across the bottom of the screen. `DUMP` is
+signature-or-privileged, so no ordinary app can hold it, while the adb shell does -
+verified on the target device, where `dumpsys` runs. The effect is that the service is
+reachable from adb and from nothing else. Exported without this is a real hole on a phone,
+even if it is harmless on a single-purpose emulator. The `SYSTEM_ALERT_WINDOW` permission must be
 declared even though the grant is done by `appops` - the app-op is the grant, the manifest
 entry is the request, and neither substitutes for the other. `Settings.canDrawOverlays()`
 is checked before `addView` and the service stops itself if it is false, rather than
@@ -171,10 +181,14 @@ Four call sites, all of which already exist in `solstice_clash.py`:
 
 | Existing point | Overlay action |
 |---|---|
-| draft screen confirmed | ensure installed, start service |
-| odds computed (4th pick onward) | broadcast the text |
-| picks lock / `_log_final_odds` | broadcast empty |
+| draft screen confirmed | ensure installed and granted |
+| odds computed (4th pick onward) | `start-foreground-service --es text "<odds>"` |
+| picks lock / `_log_final_odds` | `start-foreground-service --es text ""` |
 | run ends | `force-stop` |
+
+There is no separate "start" step. The first update starts the service, every later one
+reuses it, and one that arrives after the OS killed it starts it again - which is the
+whole reason the transport is a service start rather than a broadcast.
 
 ## Distribution
 
@@ -247,9 +261,9 @@ the measured box, rather than quietly covering a read band.
 cleared, and diff against a capture with the service stopped. They must be identical. This
 is what catches an `OPAQUE` format or a stray background colour.
 
-The Kotlin side gets no unit tests: it is one view and one receiver, and the behaviour
-worth testing is whether it lands in the right pixels, which only the fixture pair above
-can answer.
+The Kotlin side gets no unit tests: it is one view and one `onStartCommand`, and the
+behaviour worth testing is whether it lands in the right pixels, which only the fixture
+pair and the geometry assertion above can answer.
 
 The controller gets full unit tests - it formats text and emits command lists, both pure.
 

@@ -160,6 +160,36 @@ class DreamRealmSettings(BaseModel):
     spend_gold: bool = Field(default=False, alias="Spend Gold", title="Spend Gold")
 
 
+class WDBModesSettings(BaseModel):
+    """Settings for the WebDevBar fork's own modes.
+
+    Separate from the upstream sections on purpose: these belong to a fork whose patches
+    are rebased onto each new upstream tag, and a setting added inside an upstream section
+    would conflict on every rebase.
+    """
+
+    save_draft_frames: bool = Field(
+        default=False,
+        alias="Save Draft Screenshots",
+        title="Save Draft Screenshots",
+        description=(
+            "Keep the draft screenshot of every recorded match. Lets a new idea - reading "
+            "hero levels, stars, or pick order - be tested against matches already "
+            "collected instead of waiting weeks for new ones. Costs roughly 1-2 MB per "
+            "match, so it is OFF by default."
+        ),
+    )
+    draft_frame_dir: str = Field(
+        default="",
+        alias="Screenshot Folder",
+        title="Screenshot Folder",
+        description=(
+            "Where to write them. Leave empty for a 'frames' folder beside the Solstice "
+            "Clash database."
+        ),
+    )
+
+
 class GuildManagerScanSettings(BaseModel):
     """Guild Manager Scan Settings model."""
 
@@ -397,6 +427,11 @@ class Settings(TomlSettings):
         default_factory=SupremeArenaSettings,
         alias="Supreme Arena",
         title="Supreme Arena",
+    )
+    wdb_modes: WDBModesSettings = Field(
+        default_factory=WDBModesSettings,
+        alias="WDB Modes",
+        title="WDB Modes",
     )
     custom_routine_one: TaskListSettings = Field(
         default_factory=TaskListSettings,

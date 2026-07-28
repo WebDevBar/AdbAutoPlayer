@@ -165,3 +165,24 @@ def _scrub_seeded_copy(target: Path) -> None:
         # A malformed bundle is migrate.py's problem to report, not ours to
         # crash on - and a seeding failure must not stop the app starting.
         pass
+
+
+def draft_frame_dir(configured: str = "") -> Path:
+    """Where saved draft screenshots go.
+
+    Beside the database by default, because that is a directory a contributor already
+    knows about and can delete wholesale.
+
+    Args:
+        configured: The user's chosen folder, or "" for the default.
+
+    Returns:
+        The directory, created if it did not exist.
+    """
+    target = (
+        Path(configured).expanduser()
+        if configured
+        else solstice_db_path().parent / "frames"
+    )
+    target.mkdir(parents=True, exist_ok=True)
+    return target

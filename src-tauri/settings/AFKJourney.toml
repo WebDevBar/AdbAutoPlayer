@@ -105,3 +105,7 @@ Attempts = 5
 ["Supreme Arena"]
 Attempts = 5
 "Opponent Position" = "Left"
+
+["WDB Modes"]
+"Save Draft Screenshots" = false
+"Screenshot Folder" = ""

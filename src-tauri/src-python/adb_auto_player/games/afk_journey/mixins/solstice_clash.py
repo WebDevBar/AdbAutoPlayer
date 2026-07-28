@@ -56,7 +56,11 @@ from ..services.solstice.odds import (
     load_matches,
     predict as predict_odds,
 )
-from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
+from ..services.solstice.paths import (
+    draft_frame_dir,
+    solstice_db_path,
+    solstice_icon_dir,
+)
 from ..services.solstice.pools import read_pools, read_spectators
 from ..services.solstice.ratings import read_ratings
 from ..services.solstice.screens import (
@@ -1303,6 +1307,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         slowest = 0.0
         deadline = time_module.monotonic() + DRAFT_WATCH_TIMEOUT
         saw_draft = False
+        last_draft_frame = None
 
         while time_module.monotonic() < deadline:
             started = time_module.perf_counter()
@@ -1318,6 +1323,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # frame read as "draft over" - ending the watch ~10s early and capping every
             # run at four of six picks.
             on_draft = is_draft_screen(frame, screens)
+            if on_draft:
+                last_draft_frame = frame
             if not saw_draft and on_draft:
                 logging.info("[SC-54] draft screen")
 
@@ -1333,6 +1340,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     # locked screen, so if the settle re-check later disagrees, reading
                     # it beats reading nothing.
                     self._first_locked_frame = frame
+                    self._save_draft_frame(last_draft_frame)
                     break
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
@@ -1508,6 +1516,35 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 logging.warning(f"[SC-79] frame saved to {target}")
         except Exception as exc:  # noqa: BLE001 - the match is already lost
             logging.debug(f"[SC-79] could not report the failure: {exc}")
+
+    def _save_draft_frame(self, frame) -> None:
+        """Keep this draft's screenshot, if the user asked for that.
+
+        OFF by default, and the reason is other people: this is shared with
+        collaborators, and silently filling somebody's disk at 1-2 MB a match is not a
+        default anyone consented to.
+
+        Why keep them at all: every idea about reading something new off the draft -
+        hero levels, star tiers, pick order, which heroes went unpicked - is currently
+        answerable only by collecting for weeks. With the frames kept, the same question
+        is answered against matches already recorded. The one time this was skipped, the
+        crowd-trajectory question became permanently unanswerable.
+
+        Never fatal. A failed write costs a screenshot, not a match.
+        """
+        try:
+            if frame is None:
+                return
+            wdb = getattr(self.settings, "wdb_modes", None)
+            if wdb is None or not wdb.save_draft_frames:
+                return
+            target = draft_frame_dir(wdb.draft_frame_dir)
+            stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+            path = target / f"draft-{stamp}.png"
+            cv2.imwrite(str(path), frame)
+            logging.debug(f"[SC-83] draft frame saved to {path}")
+        except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
+            logging.debug(f"[SC-83] could not save the draft frame: {exc}")
 
     def _log_final_odds(self, merged) -> None:
         """Print the odds block for the completed six-hero draft."""

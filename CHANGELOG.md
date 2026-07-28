@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Solstice Clash odds: the crowd is out and the hero model is in at full strength.**
+  The operator reported confident calls landing the wrong way - a 75% pick losing - and 54
+  scored predictions made it measurable: the displayed number was right 27 times in 54 and
+  scored worse than always guessing the base rate. `W_CROWD` 0.70 to 0.0, `W_HEROES` 0.50
+  to 1.0, `SIGMA_THETA` 0.15 to 0.20.
+  - The crowd is flat across its own confidence, scores 0.83 logloss standalone against a
+    0.69 constant, and is a noisy echo of the rating gap: correlation 0.475, the same pick
+    40 times in 51, and on the 11 disagreements the rating is right 8 and the crowd 3. At
+    weight 0.70 it outvoted every signal that works and supplied nearly all of the
+    displayed spread, which is precisely why the confident calls were wrong. Set to zero
+    rather than negative - the fitted slope is indistinguishable from zero.
+  - The hero model was raised because it now works. It measured no edge at 245 matches and
+    at 340 it clears the pre-registered bar in two rounds, on shuffle splits AND
+    walk-forward validation, in three independent implementations. The earlier null was
+    correct when made; the corpus grew past where 93 hero parameters become learnable.
+  - Pools and spectator counts are still read, recorded and synced every match, so the
+    crowd remains a weight to revisit rather than something deleted.
+  - Everything measured is in `docs/solstice-clash/model-findings-ledger.md` with its
+    sample size and what would re-open it, including the ~58 configurations that lost.
+
+- **Solstice Clash: matches pool across themes within an event.** `CROSS_THEME_WEIGHT`
+  0.35 to 1.0, and the display gate counts the event. A theme applies modifiers that hit
+  every hero equally, so a sibling theme is evidence about the same heroes; the old
+  weighting would have dropped every collected match to a third of its weight at the
+  rotation, starving the model exactly when it had the most data.
+
+### Fixed
+
+- **The odds block named signals that were not in the number**, and the final block
+  invented the counts it passed to the display gate - reporting "0 matches for this theme"
+  against hundreds collected whenever a match's ratings OCR failed.
+
+- **The theme is decided by its dated window alone.** OCR was a fallback when no window
+  covered a capture; it is now a hint stored for backfilling and nothing more. On a pooled
+  server one contributor's drifting screen read could file everyone's matches under the
+  wrong theme, and theme is what the model conditions on.
+
 ### Added
 
 - **Solstice Clash: the odds block names what built the number.** The header said "from

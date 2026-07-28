@@ -11,6 +11,18 @@ sample size rather than about the game.
 Started 2026-07-29. Append; do not rewrite history. A superseded row keeps its date and
 gains a note.
 
+## Revisit next
+
+**Rank-weighted hero popularity, at ~200 rated matches.** Score a hero by the mean rating
+of the players who picked it rather than by how often it was picked - a quality signal
+rather than a bandwagon count. On the 61 matches that currently carry ratings it clears
+the bar (+0.0137, 3.2x SE, 18/25) on the same matches where plain popularity fails
+(-0.0111, 12/25), and the sign flips between them. That is the hypothesis behaving exactly
+as predicted, on far too little data to act on.
+
+Rated matches accumulate on every run, so this becomes answerable without any new
+collection work. It is the single most promising untested signal.
+
 ## How things are measured
 
 25 seeded shuffle splits, 80/20, mean held-out logloss against the training-fold base

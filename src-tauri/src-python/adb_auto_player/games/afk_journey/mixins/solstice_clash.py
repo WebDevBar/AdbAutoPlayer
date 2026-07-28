@@ -1531,7 +1531,17 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 getattr(self, "_spectators", None),
                 ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
             )
-            gate = gate_reason(fitted, MIN_LOCKED_FOR_ODDS, 0, has_ratings)
+            # Both of these used to be invented: MIN_LOCKED_FOR_ODDS for a count we
+            # actually have, and a literal 0 for the theme total. With ratings present
+            # the gate returns early and neither was ever read, so the lie only surfaced
+            # on a match whose ratings OCR failed - which then reported "0 matches for
+            # this theme" against 292 collected.
+            gate = gate_reason(
+                fitted,
+                len(left) + len(right),
+                getattr(self, "_theme_matches", 0),
+                has_ratings,
+            )
             logging.info("[SC-76] FINAL - all picks locked")
             for line in format_odds(prediction, len(left) + len(right), gate):
                 logging.info(line)
@@ -1590,6 +1600,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 f"{len(fitted.heroes)} heroes"
             )
             self._odds_fit = fitted
+            self._theme_matches = same_theme
             return fitted, same_theme
         except Exception as exc:  # noqa: BLE001 - odds are never worth a match
             logging.warning(f"[SC-73] odds model could not be fitted: {exc}")

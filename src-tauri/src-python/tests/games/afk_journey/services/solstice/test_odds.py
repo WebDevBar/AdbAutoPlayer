@@ -355,3 +355,19 @@ def test_the_stored_source_records_the_composition():
     assert p.source_code == "r+c+h"
     # The server column is 16 characters and silently truncates past it.
     assert len(p.source_code) <= 16
+
+
+def test_the_gate_reports_the_real_theme_count_not_a_placeholder():
+    """The final block passed a literal 0 for the theme total, so a match whose ratings
+    OCR failed reported "0 matches for this theme" against 292 collected. The gate is the
+    thing that decides whether a number is shown at all - it must be told the truth."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        MIN_MATCHES_FOR_ODDS,
+        gate_reason,
+    )
+
+    fitted = fit(_dominant(n=40))
+    # No ratings, so the gate cannot short-circuit and must judge on collected matches.
+    assert gate_reason(fitted, 6, MIN_MATCHES_FOR_ODDS + 10, has_ratings=False) is None
+    thin = gate_reason(fitted, 6, 0, has_ratings=False)
+    assert thin is not None and "0 matches for this theme" in thin

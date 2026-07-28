@@ -639,20 +639,20 @@ class MatchStore:
         ocr_name: str | None = None,
         event_slug: str = "solstice-clash",
     ) -> tuple[int | None, int | None, str | None]:
-        """Return (event_id, theme_id, resolved_by) for a capture, by DATE first.
+        """Return (event_id, theme_id, resolved_by) for a capture, from the WINDOW.
 
-        Resolution order, and the order matters:
+        The dated window is the ONLY thing that decides a theme. A capture no
+        window covers falls to the event default and is filed as explicitly
+        unknown; it never falls back to the screen read.
 
-        1. The dated window containing `captured_at`. Authoritative, because it
-           cannot be wrong the way a screen read can.
-        2. The OCR name, only if no window covers the capture - useful while the
-           windows for a new theme have not been filled in yet.
-        3. The event's default theme, so the answer is never NULL.
+        The OCR name is still recorded on the match, as a hint for backfilling a
+        window later - it is just not allowed to decide anything. A screen read
+        can be wrong in ways a clock cannot, and themes change roster balance, so
+        a match filed under the WRONG theme silently corrupts the model while one
+        filed under a vague default is visibly unknown and can be promoted later.
 
-        Themes change roster balance, and match data is only comparable within
-        one. A match filed under the WRONG theme is worse than one filed under a
-        vague default: the first silently corrupts a model, the second is visibly
-        unknown.
+        `ocr_name` is accepted and ignored, so every call site keeps compiling
+        and none of them can quietly reintroduce the fallback.
         """
         with self._connect() as con:
             row = con.execute(
@@ -672,14 +672,6 @@ class MatchStore:
             ).fetchone()
             if dated is not None:
                 return event_id, int(dated[0]), "window"
-
-            if ocr_name:
-                named = con.execute(
-                    "SELECT id FROM theme WHERE event_id=? AND lower(name)=lower(?)",
-                    (event_id, ocr_name),
-                ).fetchone()
-                if named is not None:
-                    return event_id, int(named[0]), "ocr"
 
             fallback = con.execute(
                 "SELECT id FROM theme WHERE event_id=? AND is_default=1", (event_id,)

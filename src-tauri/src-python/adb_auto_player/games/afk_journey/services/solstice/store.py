@@ -405,7 +405,9 @@ class MatchStore:
         """
         with self._connect() as con:
             return con.execute(
-                "SELECT m.id, m.outcome, m.theme_id, m.left_player, m.right_player,"
+                "SELECT m.id, m.outcome, m.theme_id, m.event_id,"
+                "       m.left_player, m.right_player,"
+                "       m.left_rating, m.right_rating,"
                 "       h.side, h.hero_slug"
                 "  FROM match m JOIN match_hero h ON h.match_id = m.id"
                 " WHERE m.outcome IN ('left','right') AND h.hero_slug IS NOT NULL"

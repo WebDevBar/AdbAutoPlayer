@@ -49,6 +49,7 @@ from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
+    band_evidence,
     fit as fit_odds,
     format_odds,
     gate_reason,
@@ -56,6 +57,7 @@ from ..services.solstice.odds import (
     predict as predict_odds,
 )
 from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
+from ..services.solstice.ratings import read_ratings
 from ..services.solstice.screens import (
     is_draft_screen,
     is_locked_screen,
@@ -1020,8 +1022,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 outcome_source="observed",
                 left_player=read.left_player,
                 right_player=read.right_player,
+                left_rating=getattr(self, "_draft_ratings", (None, None))[0],
+                right_rating=getattr(self, "_draft_ratings", (None, None))[1],
             )
         )
+        self._draft_ratings = (None, None)
 
         slots: list[HeroSlot] = []
         for hero in read.heroes:
@@ -1231,6 +1236,23 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # matches and nothing it learns changes while the picks land, so doing
                 # it per pick would spend the draft re-deriving the same numbers.
                 fitted, theme_matches = self._fit_odds()
+
+                # The ladder ratings, read HERE because this is where they are on screen
+                # while betting is open. Codex's estimate: a 100-150 point gap plausibly
+                # moves win probability 5-15 points, which at this sample size is worth
+                # more than all 93 hero strengths combined - 277 matches over 93 heroes
+                # is 3 matches per parameter.
+                try:
+                    left_rating, right_rating = read_ratings(frame, self._ocr, "draft")
+                    if left_rating and right_rating:
+                        logging.info(
+                            f"[SC-74] ratings {left_rating} vs {right_rating} "
+                            f"(gap {left_rating - right_rating:+d})"
+                        )
+                    self._draft_ratings = (left_rating, right_rating)
+                except Exception as exc:  # noqa: BLE001 - never worth a match
+                    logging.debug(f"[SC-74] ratings unreadable: {exc}")
+                    self._draft_ratings = (None, None)
             saw_draft = True
             last_frame = frame
             # No pool read. Narrowing six identifications by first identifying twenty
@@ -1312,13 +1334,20 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             _event, theme_id, _how = self._store.resolve_theme(now)
             fitted = fit_odds(matches, theme_id=theme_id)
             same_theme = sum(1 for m in matches if m.theme_id == theme_id)
+            # Rank evidence pools across themes but never across events: rank points
+            # reset on every theme change and the ladder resets between events, so a gap
+            # from another event is a different scale entirely.
+            self._band_evidence = band_evidence(matches, event_id=_event)
+            rated = sum(seen for seen, _ in self._band_evidence.values())
             logging.info(
                 f"[SC-72] odds model: {len(matches)} matches "
-                f"({same_theme} this theme), {len(fitted.heroes)} heroes"
+                f"({same_theme} this theme, {rated} with ratings), "
+                f"{len(fitted.heroes)} heroes"
             )
             return fitted, same_theme
         except Exception as exc:  # noqa: BLE001 - odds are never worth a match
             logging.warning(f"[SC-73] odds model could not be fitted: {exc}")
+            self._band_evidence = {}
             return None, 0
 
     def _log_odds(self, fitted, settled: dict, theme_matches: int) -> None:
@@ -1326,13 +1355,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         try:
             left = [p.slug for p in settled.values() if p.side == "left" and p.slug]
             right = [p.slug for p in settled.values() if p.side == "right" and p.slug]
-            gate = gate_reason(fitted, len(settled), theme_matches)
+            ratings = getattr(self, "_draft_ratings", (None, None))
+            has_ratings = ratings[0] is not None and ratings[1] is not None
+            gate = gate_reason(fitted, len(settled), theme_matches, has_ratings)
             prediction = (
-                predict_odds(fitted, left, right) if fitted is not None else None
+                predict_odds(
+                    fitted,
+                    left,
+                    right,
+                    ratings[0],
+                    ratings[1],
+                    getattr(self, "_band_evidence", None),
+                )
+                if fitted is not None
+                else None
             )
             if prediction is None:
                 return
-            for line in format_odds(prediction, len(settled), gate):
+            source = "rating" if has_ratings else "model"
+            for line in format_odds(prediction, len(settled), gate, source):
                 logging.info(line)
         except Exception as exc:  # noqa: BLE001
             logging.warning(f"[SC-73] odds could not be computed: {exc}")

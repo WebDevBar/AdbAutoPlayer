@@ -45,6 +45,44 @@ SIGMA_BETA = 1.0  # intercept
 # because the question is worth revisiting once players repeat.
 USE_PLAYER_TERMS = False
 
+# The ladder rating gap, as ONE fitted coefficient rather than 93. Scaled per 100 points,
+# so the fitted value reads directly as "what a 100-point lead is worth in log-odds" -
+# and if it is worth nothing, the fit says so rather than us assuming it.
+#
+# This is the feature most likely to work at this sample size: hero strengths ask for 93
+# parameters from a few hundred matches, this asks for one, and the rating is the game's
+# own summary of who is the better player.
+RATING_SCALE = 100.0
+
+# What a rating gap is worth, as percentage points moved off an even 50/50 toward the
+# higher-rated side. This is a STATED PRIOR from watching the event, not a measurement:
+# no collected match carried a rating until 2026-07-28, so there is nothing to fit yet.
+# It is used because a considered prior beats a coefficient fitted on zero observations,
+# and it is a table rather than a formula so that replacing any band with a measured
+# number later is a one-line change.
+#
+# Read as: a 150-point gap makes the better-rated side about 72%, not 50%.
+RATING_NUDGE = (
+    # (gap at least, percentage points off 50)
+    (400, 0.50),
+    (300, 0.40),
+    (250, 0.35),
+    (200, 0.30),
+    (150, 0.22),
+    (125, 0.15),
+    (100, 0.10),
+    (50, 0.05),
+    (0, 0.015),
+)
+# Once ratings have been collected for long enough to fit `gamma`, this switches off and
+# the fitted coefficient takes over. Kept as a flag so the changeover is deliberate.
+USE_RATING_PRIOR = True
+# No gap alone is proof. 400+ points means "heavily favoured", not "certain".
+MAX_RATING_PROBABILITY = 0.93
+# Loose enough not to fight real signal, tight enough that one 1000-point outlier cannot
+# swing the model.
+SIGMA_RATING = 0.5
+
 # Matches from another theme in the same event count this much against a match from the
 # theme being predicted. Same game, same heroes, different pool and battlefield rules.
 CROSS_THEME_WEIGHT = 0.35
@@ -63,6 +101,9 @@ class Match:
     theme_id: int | None = None
     left_player: str | None = None
     right_player: str | None = None
+    left_rating: int | None = None
+    right_rating: int | None = None
+    event_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -110,8 +151,9 @@ def design(
     )
     hero_at = {h: 1 + i for i, h in enumerate(heroes)}
     player_at = {p: 1 + len(heroes) + i for i, p in enumerate(players)}
+    rating_at = 1 + len(heroes) + len(players)
 
-    x = np.zeros((len(matches), 1 + len(heroes) + len(players)))
+    x = np.zeros((len(matches), rating_at + 1))
     y = np.zeros(len(matches))
     w = np.ones(len(matches))
 
@@ -125,6 +167,10 @@ def design(
             x[row, player_at[match.left_player]] += 1.0
         if match.right_player in player_at:
             x[row, player_at[match.right_player]] -= 1.0
+        # A missing rating contributes ZERO, which is "no information about the gap"
+        # rather than "the gap was zero" - the column is centred on zero either way.
+        if match.left_rating is not None and match.right_rating is not None:
+            x[row, rating_at] = (match.left_rating - match.right_rating) / RATING_SCALE
         y[row] = 1.0 if match.left_won else 0.0
         if theme_id is not None and match.theme_id != theme_id:
             w[row] = CROSS_THEME_WEIGHT
@@ -142,7 +188,8 @@ def fit(matches: list[Match], theme_id: int | None = None) -> Fit:
     x, y, w, heroes, players = design(matches, theme_id)
     penalty = np.full(x.shape[1], 1.0 / SIGMA_THETA**2)
     penalty[0] = 1.0 / SIGMA_BETA**2
-    penalty[1 + len(heroes) :] = 1.0 / SIGMA_PHI**2
+    penalty[1 + len(heroes) : -1] = 1.0 / SIGMA_PHI**2
+    penalty[-1] = 1.0 / SIGMA_RATING**2
 
     beta = np.zeros(x.shape[1])
     hessian = np.diag(penalty)
@@ -188,7 +235,102 @@ class Prediction:
         return "left" if self.p_mid >= 0.5 else "right"
 
 
-def predict(fitted: Fit, left: list[str], right: list[str]) -> Prediction:
+# How much collected evidence it takes for a band to move halfway off the stated prior.
+# 20 matches: enough that one lucky run does not rewrite a band, few enough that a band
+# with real traffic converges on its own truth within an evening of collecting.
+BAND_PRIOR_STRENGTH = 20.0
+
+
+def band_of(gap: int) -> int:
+    """Which rating band an absolute gap falls in."""
+    size = abs(gap)
+    return next(threshold for threshold, _ in RATING_NUDGE if size >= threshold)
+
+
+def band_evidence(
+    matches: list[Match], event_id: int | None = None
+) -> dict[int, tuple[int, int]]:
+    """Per band: (matches seen, times the HIGHER-rated side won).
+
+    Scoped PER EVENT and pooled across themes within it. Both halves matter: a rating
+    means the same thing whichever theme is running, so splitting the evidence by theme
+    would starve every band for no reason - but ratings RESET between events, and the
+    game resets rank points on each theme change too, so a gap from a different event is
+    a different scale entirely and must not be pooled.
+
+    Only matches carrying both ratings count, which is every match recorded from
+    2026-07-28 onward and none before it.
+    """
+    tally: dict[int, list[int]] = {}
+    for match in matches:
+        if match.left_rating is None or match.right_rating is None:
+            continue
+        if event_id is not None and match.event_id != event_id:
+            continue
+        gap = match.left_rating - match.right_rating
+        if gap == 0:
+            continue
+        entry = tally.setdefault(band_of(gap), [0, 0])
+        entry[0] += 1
+        higher_won = (gap > 0) == match.left_won
+        entry[1] += int(higher_won)
+    return {band: (seen, won) for band, (seen, won) in tally.items()}
+
+
+def blended_nudge(band: int, evidence: dict[int, tuple[int, int]] | None) -> float:
+    """The band's nudge, pulled from the stated prior toward what was observed.
+
+    Shrinkage rather than replacement: with no matches the prior stands unchanged, and
+    each result moves the band a little. A band that has never been seen never moves,
+    which is why bands are coarse - fine bands would each starve.
+    """
+    prior = next(points for threshold, points in RATING_NUDGE if band >= threshold)
+    if not evidence or band not in evidence:
+        return prior
+    seen, higher_won = evidence[band]
+    if seen == 0:
+        return prior
+    observed = higher_won / seen - 0.5  # as points off even, same units as the table
+    weight = seen / (seen + BAND_PRIOR_STRENGTH)
+    return (1.0 - weight) * prior + weight * observed
+
+
+def rating_offset(
+    left_rating: int | None,
+    right_rating: int | None,
+    evidence: dict[int, tuple[int, int]] | None = None,
+) -> float:
+    """The stated prior as a log-odds offset, signed toward the better-rated side.
+
+    Percentage points are what a person can reason about; log-odds are what the model
+    adds. Converting here keeps the table readable and the arithmetic correct - adding
+    percentages to a probability is not the same as combining evidence, and would let a
+    big gap plus a strong comp exceed 100%.
+    """
+    if left_rating is None or right_rating is None:
+        return 0.0
+    gap = left_rating - right_rating
+    if gap == 0:
+        return 0.0
+    nudge = blended_nudge(band_of(gap), evidence)
+    if nudge <= 0.0:
+        return 0.0
+    # Capped below certainty. A 50-point nudge on top of 50% is exactly 100%, which as
+    # log-odds is infinite - and no rating gap alone justifies "cannot lose". The cap is
+    # also what keeps a 400-point gap from making the comp irrelevant.
+    probability = min(0.5 + nudge, MAX_RATING_PROBABILITY)
+    offset = float(np.log(probability / (1.0 - probability)))
+    return offset if gap > 0 else -offset
+
+
+def predict(
+    fitted: Fit,
+    left: list[str],
+    right: list[str],
+    left_rating: int | None = None,
+    right_rating: int | None = None,
+    evidence: dict[int, tuple[int, int]] | None = None,
+) -> Prediction:
     """P(left wins), with an 80% interval.
 
     Unknown heroes - never seen in the data - contribute NOTHING rather than a guess.
@@ -209,7 +351,15 @@ def predict(fitted: Fit, left: list[str], right: list[str]) -> Prediction:
             z[column] -= 1.0
             known += 1
 
+    # The rating gap. While USE_RATING_PRIOR holds, the stated table supplies it as a
+    # fixed offset and the fitted coefficient is left out of the sum - mixing a prior
+    # with a coefficient fitted on the same signal would count it twice.
+    if not USE_RATING_PRIOR and left_rating is not None and right_rating is not None:
+        z[-1] = (left_rating - right_rating) / RATING_SCALE
+
     eta = float(z @ fitted.beta)
+    if USE_RATING_PRIOR:
+        eta += rating_offset(left_rating, right_rating, evidence)
     variance = float(z @ np.linalg.solve(fitted.hessian, z))
     standard_error = float(np.sqrt(max(variance, 0.0)))
 
@@ -239,7 +389,12 @@ def predict(fitted: Fit, left: list[str], right: list[str]) -> Prediction:
 _RULE = "=" * 46
 
 
-def format_odds(prediction: Prediction, locked: int, gate: str | None) -> list[str]:
+def format_odds(
+    prediction: Prediction,
+    locked: int,
+    gate: str | None,
+    source: str = "model",
+) -> list[str]:
     """The odds block, as lines to log. `gate` is why it is NOT actionable, or None.
 
     Never a bare percentage. A number without its interval invites acting on a coin
@@ -251,7 +406,12 @@ def format_odds(prediction: Prediction, locked: int, gate: str | None) -> list[s
 
     left = prediction.p_mid * 100.0
     right = 100.0 - left
-    header = "ODDS" if VALIDATED else "ODDS (UNPROVEN - not yet better than a coin flip)"
+    if source == "rating":
+        header = "ODDS (from the rating gap - a stated prior, not yet measured)"
+    elif VALIDATED:
+        header = "ODDS"
+    else:
+        header = "ODDS (UNPROVEN - not yet better than a coin flip)"
     band = f"{prediction.p_low * 100:.0f}-{prediction.p_high * 100:.0f}%"
     trust = (
         "high"
@@ -286,14 +446,28 @@ def load_matches(rows: list[tuple]) -> list[Match]:
     model that two heroes beat three.
     """
     grouped: dict[int, dict] = {}
-    for match_id, outcome, theme_id, left_player, right_player, side, slug in rows:
+    for (
+        match_id,
+        outcome,
+        theme_id,
+        event_id,
+        left_player,
+        right_player,
+        left_rating,
+        right_rating,
+        side,
+        slug,
+    ) in rows:
         entry = grouped.setdefault(
             match_id,
             {
                 "outcome": outcome,
                 "theme_id": theme_id,
+                "event_id": event_id,
                 "left_player": left_player,
                 "right_player": right_player,
+                "left_rating": left_rating,
+                "right_rating": right_rating,
                 "left": [],
                 "right": [],
             },
@@ -313,6 +487,9 @@ def load_matches(rows: list[tuple]) -> list[Match]:
                 theme_id=entry["theme_id"],
                 left_player=entry["left_player"],
                 right_player=entry["right_player"],
+                left_rating=entry["left_rating"],
+                right_rating=entry["right_rating"],
+                event_id=entry["event_id"],
             )
         )
     return out
@@ -328,7 +505,10 @@ VALIDATED = False
 
 
 def gate_reason(
-    fitted: Fit | None, locked: int, theme_matches: int
+    fitted: Fit | None,
+    locked: int,
+    theme_matches: int,
+    has_ratings: bool = False,
 ) -> str | None:
     """Why the odds must NOT be shown, or None if they may be.
 
@@ -336,6 +516,11 @@ def gate_reason(
     """
     if locked < MIN_LOCKED_FOR_ODDS:
         return f"{locked}/6 picks locked, need {MIN_LOCKED_FOR_ODDS}"
+    if has_ratings:
+        # The rating prior is informative on its own and does not depend on collected
+        # matches at all, so a thin hero model is no reason to withhold the number. What
+        # it IS is a stated belief rather than a measurement, which the label says.
+        return None
     if fitted is None or fitted.matches == 0:
         return "no matches collected yet"
     if theme_matches < MIN_MATCHES_FOR_ODDS:

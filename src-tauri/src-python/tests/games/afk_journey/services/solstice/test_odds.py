@@ -177,3 +177,67 @@ def test_the_player_machinery_still_works_when_switched_on():
         assert fitted.beta[column] > 0.0
     finally:
         odds_module.USE_PLAYER_TERMS = False
+
+
+def test_rating_bands_follow_the_stated_table_with_no_evidence():
+    """The table is a stated prior, so with nothing recorded it must stand unchanged."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        blended_nudge,
+    )
+
+    assert blended_nudge(150, {}) == 0.22
+    assert blended_nudge(400, None) == 0.50
+
+
+def test_a_band_moves_toward_what_was_actually_observed():
+    """Shrinkage, not replacement: ten results nudge, sixty largely decide."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        blended_nudge,
+    )
+
+    prior = blended_nudge(150, {})
+    thin = blended_nudge(150, {150: (10, 5)})     # 50% - the band means nothing
+    thick = blended_nudge(150, {150: (60, 30)})
+    assert thin < prior, "evidence against the prior must pull it down"
+    assert thick < thin, "more evidence pulls further"
+
+
+def test_rank_evidence_pools_across_themes_but_never_across_events():
+    """Ratings reset between events, and rank points reset on every theme change - so a
+    gap from another event is a different scale, while another theme is the same one."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import band_evidence
+
+    same_event = [
+        Match(("a",), ("b",), True, theme_id=t, left_rating=4300, right_rating=4100,
+              event_id=1)
+        for t in (3, 4, 5)
+    ]
+    other_event = [
+        Match(("a",), ("b",), True, theme_id=3, left_rating=4300, right_rating=4100,
+              event_id=2)
+    ]
+    pooled = band_evidence(same_event + other_event, event_id=1)
+    assert pooled[200] == (3, 3), "three themes of one event must pool"
+
+
+def test_a_gap_of_zero_is_not_evidence_about_anything():
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        band_evidence,
+        rating_offset,
+    )
+
+    assert rating_offset(4100, 4100) == 0.0
+    assert band_evidence(
+        [Match(("a",), ("b",), True, left_rating=4100, right_rating=4100, event_id=1)],
+        event_id=1,
+    ) == {}
+
+
+def test_no_rating_gap_alone_reaches_certainty():
+    """A 900-point gap is heavily favoured, never proof."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        MAX_RATING_PROBABILITY,
+    )
+
+    p = predict(fit([]), ["a", "b", "c"], ["d", "e", "f"], 5000, 4100)
+    assert p.p_mid <= MAX_RATING_PROBABILITY + 1e-9

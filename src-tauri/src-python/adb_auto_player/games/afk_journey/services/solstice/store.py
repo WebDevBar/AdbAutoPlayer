@@ -470,7 +470,10 @@ class MatchStore:
         """
         with self._connect() as con:
             rows = con.execute(
-                "SELECT id, natural_key, source, captured_at, theme, outcome,"
+                # Every match column is qualified: joining match_odds made a bare `id`
+                # ambiguous, and SQLite reports that as a failed sync rather than a
+                # crash - so it retried and lost every push until someone read the log.
+                "SELECT match.id, natural_key, source, captured_at, theme, outcome,"
                 " left_player, left_rating, left_rank,"
                 " right_player, right_rating, right_rank,"
                 # Pushed so calibration can be scored across contributors rather than
@@ -486,7 +489,7 @@ class MatchStore:
                 "   ORDER BY sampled_at DESC, id DESC LIMIT 1)"
                 " WHERE origin='local' AND natural_key IS NOT NULL"
                 "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"
-                " ORDER BY id LIMIT ?",
+                " ORDER BY match.id LIMIT ?",
                 (limit,),
             ).fetchall()
             out = []
@@ -508,6 +511,17 @@ class MatchStore:
                         "outcome": r[5],
                         "left_player": r[6], "left_rating": r[7], "left_rank": r[8],
                         "right_player": r[9], "right_rating": r[10], "right_rank": r[11],
+                        # Our pre-fight prediction, scored server-side against the
+                        # result and paired with client_version.
+                        "predicted_left": r[12],
+                        "predicted_source": r[13],
+                        "predicted_locked": r[14],
+                        # The GAME's betting market, from the newest sample.
+                        "left_pool": r[15],
+                        "right_pool": r[16],
+                        "left_odds": r[17],
+                        "right_odds": r[18],
+                        "spectators": r[19],
                         "heroes": [
                             {
                                 "side": h[0], "slot": h[1], "hero_slug": h[2],

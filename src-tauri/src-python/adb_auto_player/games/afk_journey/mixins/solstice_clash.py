@@ -1589,6 +1589,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             _event, theme_id, _how = self._store.resolve_theme(now)
             fitted = fit_odds(matches, theme_id=theme_id)
             same_theme = sum(1 for m in matches if m.theme_id == theme_id)
+            # The gate counts the EVENT, not the theme. A theme applies modifiers that hit
+            # every hero equally, so matches from a sibling theme are evidence about the
+            # same heroes - and gating on the theme would have blanked the display at every
+            # rotation while hundreds of usable matches sat in the database. `same_theme` is
+            # still computed and logged so the assumption stays visible and checkable.
+            same_event = sum(1 for m in matches if m.event_id == _event)
             # Rank evidence pools across themes but never across events: rank points
             # reset on every theme change and the ladder resets between events, so a gap
             # from another event is a different scale entirely.
@@ -1596,12 +1602,13 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             rated = sum(seen for seen, _ in self._band_evidence.values())
             logging.info(
                 f"[SC-72] odds model: {len(matches)} matches "
-                f"({same_theme} this theme, {rated} with ratings), "
+                f"({same_event} this event, {same_theme} this theme, "
+                f"{rated} with ratings), "
                 f"{len(fitted.heroes)} heroes"
             )
             self._odds_fit = fitted
-            self._theme_matches = same_theme
-            return fitted, same_theme
+            self._theme_matches = same_event
+            return fitted, same_event
         except Exception as exc:  # noqa: BLE001 - odds are never worth a match
             logging.warning(f"[SC-73] odds model could not be fitted: {exc}")
             self._band_evidence = {}

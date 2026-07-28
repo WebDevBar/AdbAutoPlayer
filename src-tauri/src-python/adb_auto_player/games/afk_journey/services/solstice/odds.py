@@ -84,8 +84,25 @@ MAX_RATING_PROBABILITY = 0.93
 SIGMA_RATING = 0.5
 
 # Matches from another theme in the same event count this much against a match from the
-# theme being predicted. Same game, same heroes, different pool and battlefield rules.
-CROSS_THEME_WEIGHT = 0.35
+# theme being predicted.
+#
+# 1.0 - they count fully. The operator's reading of the game, 2026-07-28: a theme applies
+# modifiers that hit every hero equally, so it shifts how a fight plays out without
+# changing which comp is stronger. A true-damage theme does not benefit every hero
+# identically, but against the measured spread of everything else that effect is small
+# enough to treat as nothing.
+#
+# The cost of being wrong here is small and the cost of the old 0.35 was not. At the theme
+# rotation every match collected so far would have dropped to a third of its weight
+# overnight, starving a model that is already short of data at exactly the moment it has
+# the most.
+#
+# This is a decision to REVISIT, not a fact. `theme_id` is recorded on every match
+# precisely so the question can be answered later: with a few hundred matches in each of
+# two themes, fit with and without theme terms and see whether it matters. Until then the
+# honest position is that there is not enough data to detect a theme effect, so modelling
+# one costs sample size and buys nothing.
+CROSS_THEME_WEIGHT = 1.0
 
 MAX_ITERATIONS = 100
 CONVERGENCE = 1e-8
@@ -636,7 +653,7 @@ VALIDATED = False
 def gate_reason(
     fitted: Fit | None,
     locked: int,
-    theme_matches: int,
+    event_matches: int,
     has_ratings: bool = False,
 ) -> str | None:
     """Why the odds must NOT be shown, or None if they may be.
@@ -652,6 +669,6 @@ def gate_reason(
         return None
     if fitted is None or fitted.matches == 0:
         return "no matches collected yet"
-    if theme_matches < MIN_MATCHES_FOR_ODDS:
-        return f"{theme_matches} matches for this theme, need {MIN_MATCHES_FOR_ODDS}"
+    if event_matches < MIN_MATCHES_FOR_ODDS:
+        return f"{event_matches} matches for this event, need {MIN_MATCHES_FOR_ODDS}"
     return None

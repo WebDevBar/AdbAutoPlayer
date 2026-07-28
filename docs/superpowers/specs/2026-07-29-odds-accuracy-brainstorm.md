@@ -78,6 +78,24 @@ with every column we currently store. Now:
    battlefield modifier - then a decisive number is not achievable and the honest product
    is a confident "too close to call" most of the time. Say so if you think so.
 
+## Transferability is a first-class criterion
+
+Raised by the operator, and it reframes the ranking: **a signal that survives an event
+boundary is worth much more than one that must be relearned.**
+
+Bradley-Terry knows nothing at the start of a new event. It took roughly 300 matches to
+become useful this time - days of collection - and every new event resets it to useless.
+A signal learned as meta-knowledge rather than as per-hero win records would arrive on day
+one already informative, which is exactly when a fresh model has nothing to say.
+
+Rank-weighted popularity is the clearest case: "which heroes do strong players choose"
+is a claim about the game, not about this event's outcomes, so it should carry over. If it
+holds up, its value is not the +0.0137 measured here - it is being immediately useful in
+every future event on almost no data.
+
+So for every proposal, state whether it transfers across an event boundary, and rank
+transferable signals above equally-strong local ones.
+
 ## Specific ideas already on the table
 
 Rank these against your own rather than treating them as a list to complete.

@@ -36,6 +36,15 @@ ADD_COLUMNS = [
     ("match", "pushed_at", "TEXT"),
     ("match", "push_rejected_reason", "TEXT"),
     ("match", "theme_id", "INTEGER REFERENCES theme(id)"),
+    # The prediction made BEFORE the fight, kept so it can be scored afterwards. The
+    # point is not the number but the disagreements: a match we called at 80% and lost
+    # is the only evidence that says where the logic is wrong. Without recording it at
+    # the time, that question can never be asked - the fitted model changes as data
+    # arrives, so it cannot be reconstructed later.
+    ("match", "predicted_left", "REAL"),
+    ("match", "predicted_source", "TEXT"),
+    ("match", "predicted_locked", "INTEGER"),
+    ("match", "predicted_at", "TEXT"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),
     ("hero", "wiki_icon", "TEXT"),

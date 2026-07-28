@@ -391,6 +391,39 @@ class MatchStore:
             ).fetchone()
         return str(row[0])
 
+    def record_prediction(
+        self,
+        match_id: int,
+        p_left: float,
+        source: str,
+        locked: int,
+        predicted_at: str,
+    ) -> None:
+        """Store the pre-match prediction, so it can be scored against the result.
+
+        Written once, before the fight. It is never recomputed afterwards: the model
+        changes as matches arrive, so a prediction reconstructed later would be the
+        answer today's model gives, not the one that was acted on.
+        """
+        with self._connect() as con:
+            con.execute(
+                "UPDATE match SET predicted_left=?, predicted_source=?,"
+                " predicted_locked=?, predicted_at=? WHERE id=?",
+                (p_left, source, locked, predicted_at, match_id),
+            )
+
+    def scored_predictions(self) -> list[tuple]:
+        """(predicted_left, outcome, predicted_source, predicted_locked) for review.
+
+        The rows that answer "where was the logic confidently wrong".
+        """
+        with self._connect() as con:
+            return con.execute(
+                "SELECT predicted_left, outcome, predicted_source, predicted_locked"
+                "  FROM match"
+                " WHERE predicted_left IS NOT NULL AND outcome IN ('left','right')"
+            ).fetchall()
+
     def matches_for_fit(self) -> list[tuple]:
         """Every decisive match with a FULL three-a-side read, for the odds model.
 

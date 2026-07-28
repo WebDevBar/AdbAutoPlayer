@@ -272,7 +272,16 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         """
         self.start_up(device_streaming=False)
         self.navigate_to_world()
-        logging.info("[SC-50] Solstice Clash: spectating, logging picks, recording")
+        # ADB_SOLSTICE_MAX_MATCHES bounds a run without touching the CLI, which does not
+        # expose this argument. Testing a change otherwise meant starting an unbounded
+        # run, watching minutes of silence between drafts, and killing it by hand.
+        if max_matches is None:
+            bound = os_module.environ.get("ADB_SOLSTICE_MAX_MATCHES")
+            max_matches = int(bound) if bound and bound.isdigit() else None
+        logging.info(
+            "[SC-50] Solstice Clash: spectating, logging picks, recording"
+            + (f" - stopping after {max_matches} match(es)" if max_matches else "")
+        )
         self._collect_forever(max_matches=max_matches)
 
     @register_command(
@@ -729,6 +738,17 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 1 for r in merged if r.identified and r.slug not in from_locked
             )
             logging.info(format_merged(merged))
+
+            # The prediction as it stood with the final six, BEFORE the fight. Recorded
+            # against the match so it can be scored later: a match called at 80% and
+            # lost is the only evidence that shows where the logic is wrong, and it
+            # cannot be reconstructed afterwards because the model moves as data arrives.
+            # The FINAL odds, with all six known. Shown as well as recorded: the block
+            # during the draft is a running estimate on a partial comp, and this is the
+            # one a person would actually act on - it was being stored and never
+            # displayed, which meant the best number never reached the screen.
+            self._pending_prediction = self._final_prediction(merged)
+            self._log_final_odds(merged)
             # Name the slots that stayed unknown, with their scores. Without this a `?`
             # is unattributable after the fact: covered by the chat widget, a card that
             # had not finished animating in, and a geometry drift all look identical in
@@ -1026,6 +1046,20 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 right_rating=getattr(self, "_draft_ratings", (None, None))[1],
             )
         )
+        pending = getattr(self, "_pending_prediction", None)
+        if pending is not None and match_id:
+            p_left, source, locked = pending
+            self._store.record_prediction(
+                match_id,
+                p_left,
+                source,
+                locked,
+                datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            )
+            logging.info(
+                f"[SC-75] recorded prediction {p_left * 100:.0f}% left ({source})"
+            )
+        self._pending_prediction = None
         self._draft_ratings = (None, None)
 
         slots: list[HeroSlot] = []
@@ -1319,6 +1353,55 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         )
         return last_frame
 
+    def _log_final_odds(self, merged) -> None:
+        """Print the odds block for the completed six-hero draft."""
+        try:
+            fitted = getattr(self, "_odds_fit", None)
+            if fitted is None:
+                return
+            left = [r.slug for r in merged if r.side == "left" and r.slug]
+            right = [r.slug for r in merged if r.side == "right" and r.slug]
+            ratings = getattr(self, "_draft_ratings", (None, None))
+            has_ratings = ratings[0] is not None and ratings[1] is not None
+            prediction = predict_odds(
+                fitted,
+                left,
+                right,
+                ratings[0],
+                ratings[1],
+                getattr(self, "_band_evidence", None),
+            )
+            gate = gate_reason(fitted, MIN_LOCKED_FOR_ODDS, 0, has_ratings)
+            source = "rating" if has_ratings else "model"
+            logging.info("[SC-76] FINAL - all picks locked")
+            for line in format_odds(prediction, len(left) + len(right), gate, source):
+                logging.info(line)
+        except Exception as exc:  # noqa: BLE001 - never worth a match
+            logging.debug(f"[SC-76] final odds could not be shown: {exc}")
+
+    def _final_prediction(self, merged) -> tuple[float, str, int] | None:
+        """(p_left, source, picks known) for the locked six, or None if not predictable."""
+        try:
+            fitted = getattr(self, "_odds_fit", None)
+            if fitted is None:
+                return None
+            left = [r.slug for r in merged if r.side == "left" and r.slug]
+            right = [r.slug for r in merged if r.side == "right" and r.slug]
+            ratings = getattr(self, "_draft_ratings", (None, None))
+            prediction = predict_odds(
+                fitted,
+                left,
+                right,
+                ratings[0],
+                ratings[1],
+                getattr(self, "_band_evidence", None),
+            )
+            source = "rating" if ratings[0] and ratings[1] else "model"
+            return prediction.p_mid, source, len(left) + len(right)
+        except Exception as exc:  # noqa: BLE001 - never worth a match
+            logging.debug(f"[SC-75] final prediction failed: {exc}")
+            return None
+
     def _fit_odds(self):
         """Fit the model on everything collected. Returns (fit, matches for this theme).
 
@@ -1344,6 +1427,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 f"({same_theme} this theme, {rated} with ratings), "
                 f"{len(fitted.heroes)} heroes"
             )
+            self._odds_fit = fitted
             return fitted, same_theme
         except Exception as exc:  # noqa: BLE001 - odds are never worth a match
             logging.warning(f"[SC-73] odds model could not be fitted: {exc}")

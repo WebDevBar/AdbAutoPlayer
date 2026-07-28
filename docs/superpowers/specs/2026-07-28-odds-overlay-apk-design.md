@@ -58,6 +58,21 @@ That choice is worth more than the 54px it costs:
 54px allows roughly 40px glyphs. `BLUE 34%  |  RED 66%` fits at full width; the interval,
 the pick count and the signal list do not, and stay in the log.
 
+### The gesture bar
+
+Measured on the live device: `base=1080x1920` but `app=1080x1883`, with
+`navigation_mode=2`. The bottom 37px belong to the system gesture bar, which is a higher
+window layer than `TYPE_APPLICATION_OVERLAY` - an overlay cannot draw above it.
+
+That would leave 17px of guaranteed space, which is unusable. It does not, because the
+game runs immersive: `NavigationBar0` reports `isVisible=false` while AFK Journey is in
+the foreground, so the full strip is available in practice.
+
+The consequence is bounded and acceptable: a gesture swipe during a draft briefly covers
+the bottom of the strip and nothing else. `FLAG_LAYOUT_NO_LIMITS` is what allows the
+window to extend past the app area into that region at all, and is required for this
+position.
+
 ## Components
 
 Three pieces, each usable and testable without the others.

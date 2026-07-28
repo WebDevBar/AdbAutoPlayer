@@ -532,6 +532,37 @@ This is a monitoring surface, not the gate: section 8's refit validation decides
 display opens, and these logs confirm afterwards that live behaviour matches it. It costs
 nothing to record and it is the only way to notice the model drifting once it is live.
 
+## 13a. Rating gap: a stated prior that learns, per event
+
+Added 2026-07-28, after measurement showed the hero model has no demonstrable edge at
+277 matches (0.6967 against a 0.6993 baseline; 3.0 matches per hero parameter, where
+free per-hero strengths need roughly 1500-3000).
+
+The four-digit ladder rating is read by OCR from the DRAFT screen, where it is visible
+while betting is open, and stored on the match. The gap maps to a probability nudge
+through a stated table (<50 points noise, 150 about 72/28, 400+ capped at 93%), because
+with no historical ratings there was nothing to fit and a considered prior beats a
+coefficient fitted on zero observations.
+
+Each recorded match with both ratings counts toward its band, and the band shrinks from
+the prior toward what was observed at weight `n/(n+20)`. Evidence pools across themes -
+a rating means the same thing whichever theme is running - but never across events,
+because rank points reset on every theme change and the ladder resets between events.
+
+### Where this goes next: a global curve across events
+
+Today every event starts from the same hardcoded table and its learning dies with it.
+That does not compound. The structure that does is hierarchical:
+
+- each event's bands shrink toward a GLOBAL curve rather than toward the hardcoded one,
+- the global curve is updated from every completed event,
+- the hardcoded table is the seed for the first event only.
+
+After three or four events the starting curve is measured rather than stated, while any
+single event can still deviate where its meta genuinely differs. Not built yet - there
+is exactly one event's data, so there is nothing for a global curve to learn from. Build
+it when the second event ends, not before.
+
 ## 14. Open items
 
 - **Draw handling** (section 2) - v1 documents the conditional; recording draws with comps

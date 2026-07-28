@@ -472,7 +472,11 @@ class MatchStore:
             rows = con.execute(
                 "SELECT id, natural_key, source, captured_at, theme, outcome,"
                 " left_player, left_rating, left_rank,"
-                " right_player, right_rating, right_rank"
+                " right_player, right_rating, right_rank,"
+                # Pushed so calibration can be scored across contributors rather than
+                # one machine at a time. The server pairs it with client_version,
+                # without which an older build's number means something different.
+                " predicted_left, predicted_source, predicted_locked"
                 " FROM match"
                 " WHERE origin='local' AND natural_key IS NOT NULL"
                 "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"

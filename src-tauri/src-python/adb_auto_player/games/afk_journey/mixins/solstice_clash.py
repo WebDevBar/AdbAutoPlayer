@@ -1519,6 +1519,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             right = [r.slug for r in merged if r.side == "right" and r.slug]
             ratings = getattr(self, "_draft_ratings", (None, None))
             has_ratings = ratings[0] is not None and ratings[1] is not None
+            market = getattr(self, "_pool_read", None)
             prediction = predict_odds(
                 fitted,
                 left,
@@ -1526,6 +1527,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 ratings[0],
                 ratings[1],
                 getattr(self, "_band_evidence", None),
+                market.crowd_probability if market else None,
+                getattr(self, "_spectators", None),
+                ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
             )
             gate = gate_reason(fitted, MIN_LOCKED_FOR_ODDS, 0, has_ratings)
             source = "rating" if has_ratings else "model"
@@ -1544,6 +1548,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             left = [r.slug for r in merged if r.side == "left" and r.slug]
             right = [r.slug for r in merged if r.side == "right" and r.slug]
             ratings = getattr(self, "_draft_ratings", (None, None))
+            market = getattr(self, "_pool_read", None)
             prediction = predict_odds(
                 fitted,
                 left,
@@ -1551,6 +1556,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 ratings[0],
                 ratings[1],
                 getattr(self, "_band_evidence", None),
+                market.crowd_probability if market else None,
+                getattr(self, "_spectators", None),
+                ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
             )
             source = "rating" if ratings[0] and ratings[1] else "model"
             return prediction.p_mid, source, len(left) + len(right)
@@ -1598,6 +1606,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ratings = getattr(self, "_draft_ratings", (None, None))
             has_ratings = ratings[0] is not None and ratings[1] is not None
             gate = gate_reason(fitted, len(settled), theme_matches, has_ratings)
+            market = getattr(self, "_pool_read", None)
             prediction = (
                 predict_odds(
                     fitted,
@@ -1606,6 +1615,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     ratings[0],
                     ratings[1],
                     getattr(self, "_band_evidence", None),
+                    market.crowd_probability if market else None,
+                    getattr(self, "_spectators", None),
+                    ((market.left_pool or 0) + (market.right_pool or 0))
+                    if market
+                    else None,
                 )
                 if fitted is not None
                 else None

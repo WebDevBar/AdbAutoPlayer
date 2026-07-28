@@ -241,3 +241,59 @@ def test_no_rating_gap_alone_reaches_certainty():
 
     p = predict(fit([]), ["a", "b", "c"], ["d", "e", "f"], 5000, 4100)
     assert p.p_mid <= MAX_RATING_PROBABILITY + 1e-9
+
+
+# --- combining rating, crowd and heroes ------------------------------------
+
+def test_a_thin_market_nudges_and_does_not_decide():
+    """The case that prompted the weighting: 21 spectators screamed 92% and lost."""
+    fitted = fit([])
+    thin = predict(fitted, ["a", "b", "c"], ["d", "e", "f"],
+                   4240, 4335, None, 0.92, 21, 128_492)
+    assert 0.45 < thin.p_mid < 0.60, f"a 21-spectator market moved it to {thin.p_mid:.2f}"
+
+
+def test_the_same_market_decides_much_more_with_a_crowd_behind_it():
+    fitted = fit([])
+    thin = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 21, 200_000)
+    thick = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 221, 200_000)
+    assert thick.p_mid > thin.p_mid + 0.10
+
+
+def test_signals_that_disagree_pull_toward_even():
+    """Log-odds addition, not averaging: disagreement cancels rather than compounds."""
+    fitted = fit([])
+    agree = predict(fitted, ["a"], ["b"], 4400, 4200, None, 0.75, 200, 500_000)
+    disagree = predict(fitted, ["a"], ["b"], 4400, 4200, None, 0.25, 200, 500_000)
+    assert agree.p_mid > 0.7
+    assert abs(disagree.p_mid - 0.5) < 0.15
+
+
+def test_heroes_count_more_as_they_are_seen_more():
+    """A hero seen twice must not carry the weight of one seen fifty times."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import hero_evidence
+
+    fitted = fit(_dominant(n=40))
+    known = hero_evidence(fitted, ["star", "h0", "h1"])
+    unknown = hero_evidence(fitted, ["nobody", "nobody2", "nobody3"])
+    assert known > 0.6
+    assert unknown == 0.0
+
+
+def test_crowd_reliability_matches_the_observed_bands():
+    """20 spectators is nothing, 100 about half, 200+ full."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        crowd_reliability,
+    )
+
+    assert crowd_reliability(20, 100_000) < 0.15
+    assert 0.3 < crowd_reliability(100, 200_000) < 0.6
+    assert crowd_reliability(220, 500_000) > 0.85
+
+
+def test_a_missing_spectator_count_caps_trust_at_half():
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        crowd_reliability,
+    )
+
+    assert crowd_reliability(None, 1_000_000) <= 0.5

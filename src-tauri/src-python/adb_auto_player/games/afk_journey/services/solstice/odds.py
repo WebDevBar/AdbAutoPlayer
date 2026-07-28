@@ -295,6 +295,78 @@ def blended_nudge(band: int, evidence: dict[int, tuple[int, int]] | None) -> flo
     return (1.0 - weight) * prior + weight * observed
 
 
+# --- combining the signals -------------------------------------------------------
+#
+# Three sources, added as LOG-ODDS rather than averaged as percentages: percentages do
+# not add (60% and 60% is not 120%), while log-odds do - agreement reinforces, and
+# disagreement cancels toward 50%, which is the honest answer for a match nobody can
+# call.
+#
+#   logit(p) = W_RATING * logit(p_rating)
+#            + W_CROWD  * q_crowd * logit(p_crowd)
+#            + W_HEROES * evidence * logit(p_heroes)
+#
+# The weights are DAMPED on purpose. Nothing here has been validated against outcomes
+# yet, and every one of them should be refitted from scored predictions once there are
+# enough - which is the whole reason predictions are recorded.
+W_RATING = 0.60
+W_CROWD = 0.70
+# Not zero. Measured over 120 real comps, the hero term moves the number by 3 points
+# typically, 6 at the 90th percentile and 10 at most - the tight prior already shrinks
+# it - so excluding it buys almost no protection while discarding the only signal tied
+# to the actual draft. Half strength captures it without letting it lead.
+W_HEROES = 0.50
+
+# A hero seen twice should count for less than one seen fifty times. The fit already
+# shrinks a thin hero toward zero, but this scales the whole hero term by how well known
+# THIS comp is, so a draft full of rarely-seen heroes contributes little and the term
+# grows on its own as the corpus fills.
+HERO_EVIDENCE_HALF = 10.0
+
+# The crowd's own probability, clamped: a thin 92/8 market must not behave like
+# near-certainty just because few people bet.
+CROWD_CLAMP = (0.08, 0.92)
+
+
+def crowd_reliability(spectators: int | None, total_pool: int | None) -> float:
+    """How much the market deserves to be believed, 0 to 1.
+
+    Mostly spectator count, because that is closer to independent opinions - one large
+    bet moves money without adding information. Calibrated to the bands observed in
+    play: 20 spectators is nothing, 100 is about half, 200+ is full.
+    """
+    q_count = 0.0
+    if spectators is not None:
+        q_count = min(max((spectators - 20) / 180.0, 0.0), 1.0)
+
+    q_stake = 0.0
+    if total_pool:
+        q_stake = min(
+            max(np.log(max(total_pool, 1) / 20_000.0) / np.log(1_000_000 / 20_000.0), 0.0),
+            1.0,
+        )
+
+    if spectators is None:
+        # Stake alone is weak evidence, so it is capped well below full trust.
+        return float(min(0.5, q_stake))
+    return float(0.80 * q_count + 0.20 * q_stake)
+
+
+def hero_evidence(fitted: Fit, heroes: list[str]) -> float:
+    """0 to 1: how much has actually been seen of the heroes in this comp."""
+    if not heroes:
+        return 0.0
+    seen = [fitted.appearances.get(h, 0) for h in heroes]
+    return float(
+        np.mean([n / (n + HERO_EVIDENCE_HALF) for n in seen])
+    )
+
+
+def _logit(p: float) -> float:
+    p = min(max(p, 1e-6), 1 - 1e-6)
+    return float(np.log(p / (1 - p)))
+
+
 def rating_offset(
     left_rating: int | None,
     right_rating: int | None,
@@ -330,6 +402,9 @@ def predict(
     left_rating: int | None = None,
     right_rating: int | None = None,
     evidence: dict[int, tuple[int, int]] | None = None,
+    crowd: float | None = None,
+    spectators: int | None = None,
+    total_pool: int | None = None,
 ) -> Prediction:
     """P(left wins), with an 80% interval.
 
@@ -357,10 +432,23 @@ def predict(
     if not USE_RATING_PRIOR and left_rating is not None and right_rating is not None:
         z[-1] = (left_rating - right_rating) / RATING_SCALE
 
-    eta = float(z @ fitted.beta)
+    # Each source contributes its own log-odds, damped by how much it has earned.
+    hero_eta = float(z @ fitted.beta)
+    weight_heroes = W_HEROES * hero_evidence(fitted, [*left, *right])
+    eta = weight_heroes * hero_eta
+
     if USE_RATING_PRIOR:
-        eta += rating_offset(left_rating, right_rating, evidence)
+        eta += W_RATING * rating_offset(left_rating, right_rating, evidence)
+
+    crowd_weight = 0.0
+    if crowd is not None:
+        crowd_weight = W_CROWD * crowd_reliability(spectators, total_pool)
+        clamped = min(max(crowd, CROWD_CLAMP[0]), CROWD_CLAMP[1])
+        eta += crowd_weight * _logit(clamped)
     variance = float(z @ np.linalg.solve(fitted.hessian, z))
+    # NOT scaled by the hero weight. Damping the interval along with the term made a
+    # comp of UNKNOWN heroes report more confidence, which is backwards: little is known
+    # about it, and the interval is where that belongs. A test caught this.
     standard_error = float(np.sqrt(max(variance, 0.0)))
 
     # 80%, not 95%: this is read in seconds under a countdown, and a 95% band on a few

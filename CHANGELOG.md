@@ -4,6 +4,31 @@
 
 ### Added
 
+- **AFK Journey - Solstice Clash: live odds during the draft.** A regularised
+  Bradley-Terry model over collected matches - one strength per hero, an intercept for
+  any structural side advantage - fitted once when the draft is confirmed and predicted
+  after every pick from the FOURTH onward, while betting is still open. Shown as its own
+  block in the log, framed by rules and blank lines, because a log is a stream of
+  one-line statuses and a number worth acting on has to stop looking like one.
+  - **Labelled UNPROVEN, and that is a measurement rather than modesty.** Validated out
+    of sample on the first 245 matches (25 shuffle splits, 80/20) against "predict the
+    base win rate": the best variant scored 0.6967 against a 0.6993 baseline and won 15
+    of 25 splits, where the design asks for a 0.01 margin and 80% of splits. Every
+    displayed number says so until that changes.
+  - Hero prior tightened to 0.15 from the design's 0.30, because at 0.30 the model was
+    measurably WORSE than the base rate on this much data.
+  - Player terms are off: 162 distinct players over 245 matches meant most appeared
+    once, and including them moved logloss by less than 0.0001 while adding 162
+    parameters. The machinery stays, switched off, with a test that it still works.
+  - Cross-theme matches count at 0.35 rather than being excluded - another theme changes
+    the pool and battlefield, but early in a theme those matches are most of what exists.
+  - Matches without a full three-a-side read are dropped, never padded: a 2v3 comp would
+    teach the model that two heroes beat three.
+
+- **Upstream 12.9.25 merged**: multi-display targeting for screenshots, input and device
+  streaming, plus a Qwen2-VL crash fix. Our Waydroid continuous-streaming patch and
+  upstream's `screenrecord` change now coexist in `device_stream.py`.
+
 - **AFK Journey - Solstice Clash Mode C, phase 1 (`WDB: Watch Draft Picks`)**: logs each
   pick as it locks while you spectate, in draft order, then the locked six. It predicts
   nothing and stores nothing - it exists to establish whether the draft screen can be read

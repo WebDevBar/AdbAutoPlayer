@@ -1099,6 +1099,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 right_rating=getattr(self, "_draft_ratings", (None, None))[1],
             )
         )
+        self._claim_draft_frame(match_id)
         # The last market reading before the picks locked, stored against the match.
         # `record_odds` and the table it writes to have existed since the schema was
         # written and were never used - the pools were visible on screen the whole time.
@@ -1517,6 +1518,24 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         except Exception as exc:  # noqa: BLE001 - the match is already lost
             logging.debug(f"[SC-79] could not report the failure: {exc}")
 
+    def _claim_draft_frame(self, match_id: int | None) -> None:
+        """Rename this match's saved frame to carry its match id.
+
+        Without this the frame is `draft-pending-20260729-014412.png` and the only way
+        back to its match is a timestamp join - the kind that silently pairs the wrong
+        rows and is discovered months later. The id is not known until the row is
+        written, which is why the file is named twice rather than once.
+        """
+        pending = getattr(self, "_pending_frame", None)
+        self._pending_frame = None
+        if pending is None or not match_id:
+            return
+        try:
+            if pending.exists():
+                pending.rename(pending.with_name(f"draft-{match_id}.png"))
+        except OSError as exc:
+            logging.debug(f"[SC-83] could not name the frame for match {match_id}: {exc}")
+
     def _save_draft_frame(self, frame) -> None:
         """Keep this draft's screenshot, if the user asked for that.
 
@@ -1540,8 +1559,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 return
             target = draft_frame_dir(wdb.draft_frame_dir)
             stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-            path = target / f"draft-{stamp}.png"
+            path = target / f"draft-pending-{stamp}.png"
             cv2.imwrite(str(path), frame)
+            # Named `pending` until the match is recorded and can claim it. A frame that
+            # keeps this name is one whose match was never stored - a failed read, or a
+            # run killed mid-match - and it is meant to stand out as unusable.
+            self._pending_frame = path
             logging.debug(f"[SC-83] draft frame saved to {path}")
         except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")

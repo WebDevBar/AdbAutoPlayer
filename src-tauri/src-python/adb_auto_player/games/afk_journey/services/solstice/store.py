@@ -476,8 +476,14 @@ class MatchStore:
                 # Pushed so calibration can be scored across contributors rather than
                 # one machine at a time. The server pairs it with client_version,
                 # without which an older build's number means something different.
-                " predicted_left, predicted_source, predicted_locked"
+                " predicted_left, predicted_source, predicted_locked,"
+                # The crowd's money, from the newest sample. LEFT JOIN because most
+                # matches have none - joined mid-draft, or an older client.
+                " o.left_pool, o.right_pool, o.left_odds, o.right_odds, o.spectators"
                 " FROM match"
+                " LEFT JOIN match_odds o ON o.id = ("
+                "   SELECT id FROM match_odds WHERE match_id = match.id"
+                "   ORDER BY sampled_at DESC, id DESC LIMIT 1)"
                 " WHERE origin='local' AND natural_key IS NOT NULL"
                 "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"
                 " ORDER BY id LIMIT ?",

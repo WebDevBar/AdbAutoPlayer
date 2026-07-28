@@ -57,13 +57,20 @@ from ..services.solstice.odds import (
     predict as predict_odds,
 )
 from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
+from ..services.solstice.pools import read_pools, read_spectators
 from ..services.solstice.ratings import read_ratings
 from ..services.solstice.screens import (
     is_draft_screen,
     is_locked_screen,
     load_templates,
 )
-from ..services.solstice.store import AuditRow, HeroSlot, MatchRecord, MatchStore
+from ..services.solstice.store import (
+    AuditRow,
+    HeroSlot,
+    MatchRecord,
+    MatchStore,
+    OddsSample,
+)
 from ..services.solstice.summary import CELL_TYPE, SummaryHero, read_summary
 from ..services.solstice.vision import extract_cell, identify_with_pool
 from ..services.solstice.sync import SyncClient
@@ -120,7 +127,18 @@ DRAFT_CELL_TYPES = ("draft_pick",)
 LOCKED_CELL_TYPES = ("prematch_pick",)
 # The locked screen animates in. Wait, then re-confirm we are still on it, and only
 # then read - a read during the animation is what left the last slot unknown.
-LOCKED_SETTLE_SECONDS = 1.5
+# 2s. A run failed its second confirmation while the locked screen was, by observation,
+# still plainly up - so the miss was a transition or an animation frame, not brevity.
+# Two seconds is long enough for the cards to arrive without lingering.
+LOCKED_SETTLE_SECONDS = 2.0
+# One frame can lie: it can catch a fade, a popup, or a stream artefact. A few looks,
+# half a second apart, distinguish "not the locked screen" from "one bad frame" - which
+# is the same lesson the draft-end detection already learned the hard way.
+LOCKED_CONFIRM_LOOKS = 4
+# Read the spectator count once this many picks are in: it costs ~305ms and grows
+# through the draft, so late is both cheaper and more accurate.
+SPECTATOR_READ_AFTER_PICKS = 4
+LOCKED_LOOK_INTERVAL = 0.5
 # Two confirmations in total: the detection that ends the draft watch, then ONE look
 # this long afterwards. Kept short deliberately - the locked screen itself may not last
 # long, so a longer settle risks missing it entirely. Raise toward 2s only if reads keep
@@ -666,21 +684,42 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # If it does not confirm, the locked read is abandoned for this match. A
             # guess from an unsettled screen is worse than no reading at all.
             time_module.sleep(LOCKED_SETTLE_SECONDS)
-            try:
-                settled_frame = self.get_screenshot()
-            except Exception as exc:  # noqa: BLE001
-                settled_frame = None
-                logging.debug(f"[SC-45] settle screenshot failed: {exc}")
+            settled_frame = None
+            for look in range(LOCKED_CONFIRM_LOOKS):
+                try:
+                    candidate = self.get_screenshot()
+                except Exception as exc:  # noqa: BLE001
+                    logging.debug(f"[SC-45] settle screenshot failed: {exc}")
+                    time_module.sleep(LOCKED_LOOK_INTERVAL)
+                    continue
+                if is_locked_screen(candidate, self._screens):
+                    settled_frame = candidate
+                    break
+                logging.debug(f"[SC-68] look {look + 1} was not the locked screen")
+                time_module.sleep(LOCKED_LOOK_INTERVAL)
 
-            if settled_frame is None or not is_locked_screen(
-                settled_frame, self._screens
-            ):
-                logging.warning(
-                    "[SC-68] locked screen did not confirm 1.5s later - not reading it. "
-                    "The draft's own picks still stand."
-                )
-                self._last_draft_reads = []
-                confirmed = False
+            if settled_frame is None:
+                # Fall back to the frame that ENDED the draft watch. It already
+                # confirmed as the locked screen, so the risk is that it is early in the
+                # animation - which costs a hero or two - where discarding it costs the
+                # sixth pick and the final odds outright. A live run lost exactly that.
+                fallback = getattr(self, "_first_locked_frame", None)
+                if fallback is not None:
+                    logging.warning(
+                        f"[SC-68] locked screen did not re-confirm after "
+                        f"{LOCKED_SETTLE_SECONDS:.1f}s - reading the frame that ended "
+                        f"the draft instead, which did confirm"
+                    )
+                    prematch_frame = fallback
+                    confirmed = True
+                else:
+                    logging.warning(
+                        f"[SC-68] locked screen did not confirm after "
+                        f"{LOCKED_SETTLE_SECONDS:.1f}s and no earlier frame was kept - "
+                        f"not reading it. The draft's own picks still stand."
+                    )
+                    self._last_draft_reads = []
+                    confirmed = False
             else:
                 prematch_frame = settled_frame
                 confirmed = True
@@ -821,15 +860,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 overworld_seen = 0
             raise _UndesiredResultError()
 
-        found = self._execute_or_timeout(
-            _match_end,
-            delay=RESULT_POLL_DELAY,
-            timeout=MATCH_TIMEOUT,
-            timeout_message=(
-                "[SC-03] match did not end in time: no result screen appeared and we "
-                "never settled on the overworld"
-            ),
-        )
+        try:
+            found = self._execute_or_timeout(
+                _match_end,
+                delay=RESULT_POLL_DELAY,
+                timeout=MATCH_TIMEOUT,
+                timeout_message=(
+                    "[SC-03] match did not end in time: no result screen appeared and "
+                    "we never settled on the overworld"
+                ),
+            )
+        except GameTimeoutError:
+            # Say WHAT was on screen, not just that nothing matched. [SC-03] costs the
+            # outcome, burns a retry, and cascades: recovery taps back repeatedly and
+            # the framework ends up restarting the game. Chasing it without evidence
+            # means guessing which of three detectors drifted - the two result templates
+            # or the overworld check - which is exactly how the draft anchor wasted a
+            # day. Frames go to ADB_SOLSTICE_FAIL_FRAMES when set.
+            self._report_match_end_failure()
+            raise
         if found is None:
             logging.info(
                 "[SC-10] no result screen and the overworld confirmed twice - draw, "
@@ -1046,6 +1095,37 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 right_rating=getattr(self, "_draft_ratings", (None, None))[1],
             )
         )
+        # The last market reading before the picks locked, stored against the match.
+        # `record_odds` and the table it writes to have existed since the schema was
+        # written and were never used - the pools were visible on screen the whole time.
+        sample = getattr(self, "_pool_read", None)
+        if sample is not None and match_id:
+            try:
+                self._store.record_odds(
+                    match_id,
+                    OddsSample(
+                        sampled_at=datetime.now(UTC)
+                        .isoformat(timespec="seconds")
+                        .replace("+00:00", "Z"),
+                        left_pool=sample.left_pool,
+                        right_pool=sample.right_pool,
+                        left_odds=sample.left_odds,
+                        right_odds=sample.right_odds,
+                        spectators=getattr(self, "_spectators", None),
+                    ),
+                )
+                crowd = sample.crowd_probability
+                logging.info(
+                    f"[SC-78] market recorded: {crowd * 100:.0f}% left"
+                    f" from {(sample.left_pool or 0) + (sample.right_pool or 0)} staked"
+                    if crowd is not None
+                    else "[SC-78] market recorded"
+                )
+            except Exception as exc:  # noqa: BLE001 - never worth a match
+                logging.warning(f"[SC-78] market could not be recorded: {exc}")
+        self._pool_read = None
+        self._spectators = None
+
         pending = getattr(self, "_pending_prediction", None)
         if pending is not None and match_id:
             p_left, source, locked = pending
@@ -1061,6 +1141,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
         self._pending_prediction = None
         self._draft_ratings = (None, None)
+        self._first_locked_frame = None
 
         slots: list[HeroSlot] = []
         for hero in read.heroes:
@@ -1210,7 +1291,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     "[SC-60] no stream frame in 3s - stopping before the chunked "
                     "fallback can churn the encoder; reading with screencap instead"
                 )
-                self._start_device_streaming(False)
+                self.stop_stream()
             else:
                 logging.info("[SC-61] device stream up - reads should be ~2s faster")
 
@@ -1248,6 +1329,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # so waiting through the gap can only help.
                 if saw_draft and is_locked_screen(frame, screens):
                     logging.info("[SC-55] draft over - locked screen is up")
+                    # Kept as the fallback for the read: this frame HAS confirmed as the
+                    # locked screen, so if the settle re-check later disagrees, reading
+                    # it beats reading nothing.
+                    self._first_locked_frame = frame
                     break
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
@@ -1298,6 +1383,37 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # over.
             fresh = self._read_draft_picks(frame, None, skip_slots=set(settled))
             newly = newly_locked(seen, fresh)
+            if newly:
+                # Sample the betting market when a pick LANDS, not every poll: the read
+                # costs ~436ms against a ~20s draft where the six-cell hero read already
+                # takes ~2s. The pools move on picks anyway, and the value that matters
+                # is the last one before lock - so each success replaces the previous
+                # and an occluded frame simply leaves the earlier reading standing.
+                try:
+                    sample = read_pools(frame, self._ocr)
+                    if sample.crowd_probability is not None:
+                        self._pool_read = sample
+                        logging.info(
+                            f"[SC-77] crowd {sample.crowd_probability * 100:.0f}% left"
+                            f" (pools {sample.left_pool}/{sample.right_pool})"
+                        )
+                    # The spectator count, once, late in the draft. It reads only on
+                    # THIS screen - on the locked screen it is greyed out and OCR finds
+                    # nothing - and it grows as the draft runs, so a late reading is the
+                    # honest one. It matters because it, not the pool size, says how
+                    # many people are behind the split: under about 50 the pools are a
+                    # handful of bettors.
+                    if len(settled) >= SPECTATOR_READ_AFTER_PICKS:
+                        # Re-read on every later pick, not once: the count is still
+                        # climbing while the draft runs, and the number that matters is
+                        # the one at lock - same reasoning as the pools, which are also
+                        # replaced rather than averaged.
+                        count = read_spectators(frame, self._ocr)
+                        if count is not None:
+                            self._spectators = count
+                            logging.info(f"[SC-80] {count} spectators")
+                except Exception as exc:  # noqa: BLE001 - never worth a match
+                    logging.debug(f"[SC-77] pool read failed: {exc}")
             for pick in newly:
                 logging.info(format_pick(pick))
                 settled[pick.slot] = pick
@@ -1317,7 +1433,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # Back to screencap before the summary: Mode A reads that screen with OCR and
         # the stream degrades stylised text, which is why the collect mode asks for
         # screencap in the first place.
-        self._start_device_streaming(False)
+        #
+        # stop_stream(), NOT _start_device_streaming(False). The latter stops the stream
+        # but leaves `self._stream` set, and get_screenshot returns the stream's LAST
+        # FRAME whenever that attribute exists - so every screenshot for the rest of the
+        # match was the frozen final draft frame. The result screen could never appear,
+        # Details never opened, and every match burned the full four-minute timeout
+        # before [SC-03]. Introduced tonight along with draft streaming.
+        self.stop_stream()
 
         if not saw_draft:
             # Loud, because silence here reads exactly like "no draft was on screen".
@@ -1352,6 +1475,39 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"interval"
         )
         return last_frame
+
+    def _report_match_end_failure(self) -> None:
+        """Score every match-end detector against the current screen, and keep a frame.
+
+        Diagnostics must never make the failure worse, so the whole thing is wrapped:
+        this runs at the moment a match has already been lost.
+        """
+        try:
+            frame = self.get_screenshot()
+            scores = []
+            for name in (
+                "event/solstice_clash/result_chart",
+                "event/solstice_clash/result_back",
+                "event/solstice_clash/draft_anchor",
+                "event/solstice_clash/prematch_anchor",
+            ):
+                hit = self.game_find_template_match(template=name, screenshot=frame)
+                scores.append(f"{name.rsplit('/', 1)[1]}={'HIT' if hit else 'miss'}")
+            overworld = self._is_in_overview(screenshot=frame)
+            logging.warning(
+                f"[SC-79] at timeout: {' '.join(scores)} overworld="
+                f"{'yes' if overworld else 'no'}"
+            )
+
+            where = os_module.environ.get("ADB_SOLSTICE_FAIL_FRAMES")
+            if where:
+                target = Path(where)
+                target.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now(UTC).strftime("%H%M%S")
+                cv2.imwrite(str(target / f"sc03_{stamp}.png"), frame)
+                logging.warning(f"[SC-79] frame saved to {target}")
+        except Exception as exc:  # noqa: BLE001 - the match is already lost
+            logging.debug(f"[SC-79] could not report the failure: {exc}")
 
     def _log_final_odds(self, merged) -> None:
         """Print the odds block for the completed six-hero draft."""

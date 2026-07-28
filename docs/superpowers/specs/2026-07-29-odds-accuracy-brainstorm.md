@@ -96,6 +96,28 @@ every future event on almost no data.
 So for every proposal, state whether it transfers across an event boundary, and rank
 transferable signals above equally-strong local ones.
 
+### Weights should depend on how much local data exists
+
+The operator's second point, and it follows from the first: **a transferable signal is
+most valuable exactly when local data is thinnest.**
+
+Today every weight is a constant. That is wrong in both directions - it under-weights meta
+knowledge on day one of an event, when the local model knows nothing, and over-weights it
+at match 1,000, when the local model knows more.
+
+The mechanism already exists in the codebase, pointing the other way: `hero_evidence`
+scales the hero term by how well known this particular comp is. The same shape inverted
+gives a prior weight that starts high and decays:
+
+```text
+w_meta  = 1 / (1 + n_local / k)        high when n_local is small
+w_local = n_local / (n_local + k)      the complement
+```
+
+So a proposal should say not just whether a signal transfers, but what its weight should
+be AS A FUNCTION of local evidence. A signal that is worth 0.6 on day one and 0.05 at
+match 1,000 is a better product than one worth 0.2 forever.
+
 ## Specific ideas already on the table
 
 Rank these against your own rather than treating them as a list to complete.

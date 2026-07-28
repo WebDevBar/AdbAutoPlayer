@@ -259,20 +259,33 @@ def test_a_thin_market_nudges_and_does_not_decide():
     assert 0.45 < thin.p_mid < 0.60, f"a 21-spectator market moved it to {thin.p_mid:.2f}"
 
 
-def test_the_same_market_decides_much_more_with_a_crowd_behind_it():
+def test_the_crowd_no_longer_moves_the_number_however_many_are_watching():
+    """W_CROWD is 0 since 2026-07-29. Measured over 54 scored predictions: the crowd is
+    flat across its own confidence and a noisy echo of the rating gap, and at weight 0.70
+    it supplied nearly all the displayed spread - which is why confident calls kept
+    landing the wrong way.
+
+    The reading is still taken and still recorded; it is only barred from the number, so
+    this stays a weight to revisit rather than a deletion."""
     fitted = fit([])
     thin = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 21, 200_000)
     thick = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 221, 200_000)
-    assert thick.p_mid > thin.p_mid + 0.10
+    assert thick.p_mid == thin.p_mid
+    assert abs(thick.p_mid - 0.5) < 1e-9   # equal ratings, no heroes: nothing to say
 
 
 def test_signals_that_disagree_pull_toward_even():
-    """Log-odds addition, not averaging: disagreement cancels rather than compounds."""
-    fitted = fit([])
-    agree = predict(fitted, ["a"], ["b"], 4400, 4200, None, 0.75, 200, 500_000)
-    disagree = predict(fitted, ["a"], ["b"], 4400, 4200, None, 0.25, 200, 500_000)
-    assert agree.p_mid > 0.7
-    assert abs(disagree.p_mid - 0.5) < 0.15
+    """Log-odds addition, not averaging: disagreement cancels rather than compounds.
+
+    Demonstrated on the two signals that still carry weight - a rating gap and a hero
+    model - since the crowd no longer contributes to the sum."""
+    fitted = fit(_dominant(n=40))
+    # Rating favours left; "star" is the dominant hero and is also on the left.
+    agree = predict(fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"], 4600, 4200)
+    # Same rating edge, but the dominant hero is now on the RIGHT.
+    disagree = predict(fitted, ["h2", "h3", "h4"], ["star", "h0", "h1"], 4600, 4200)
+    assert agree.p_mid > disagree.p_mid
+    assert agree.p_mid > 0.5
 
 
 def test_heroes_count_more_as_they_are_seen_more():
@@ -317,9 +330,12 @@ def test_the_block_names_the_signals_that_built_the_number():
         left_rating=4400, right_rating=4100,
         crowd=0.30, spectators=250, total_pool=500_000,
     )
-    assert p.signals == ("rating", "crowd", "heroes")
+    # The crowd is present in the inputs and absent from the label, because W_CROWD is 0
+    # and the label describes what actually moved the number rather than what was read.
+    assert p.signals == ("rating", "heroes")
     header = format_odds(p, 6, None)[2]
-    assert "rating + crowd + heroes" in header
+    assert "rating + heroes" in header
+    assert "crowd" not in header
 
 
 def test_a_signal_that_did_not_move_the_number_is_not_named():
@@ -333,13 +349,16 @@ def test_a_signal_that_did_not_move_the_number_is_not_named():
         left_rating=4400, right_rating=4400,
         crowd=0.30, spectators=250, total_pool=500_000,
     )
-    assert p.signals == ("crowd",)
-    assert "from crowd " in format_odds(p, 6, None)[2]
+    # Equal ratings contribute nothing, unseen heroes contribute nothing, and the crowd
+    # is switched off - so there is nothing honest to name.
+    assert p.signals == ()
+    assert "nothing measurable" in format_odds(p, 6, None)[2]
 
 
 def test_a_thin_market_is_not_named_either():
-    """Twelve spectators earns a weight near zero - it is in the arithmetic, but
-    claiming the crowd built this number would be a lie about a 12-person market."""
+    """Twelve spectators earned a weight near zero even when the crowd counted, and it
+    counts for nothing at all now. Kept because `crowd_reliability` still exists and is
+    the thing that would gate the crowd's return."""
     fitted = fit(_dominant(n=40))
     p = predict(
         fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
@@ -358,7 +377,7 @@ def test_the_stored_source_records_the_composition():
         left_rating=4400, right_rating=4100,
         crowd=0.30, spectators=250, total_pool=500_000,
     )
-    assert p.source_code == "r+c+h"
+    assert p.source_code == "r+h"
     # The server column is 16 characters and silently truncates past it.
     assert len(p.source_code) <= 16
 

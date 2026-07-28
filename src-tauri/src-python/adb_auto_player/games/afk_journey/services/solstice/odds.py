@@ -30,11 +30,14 @@ import numpy as np
 # Prior SDs, from the design. Not tunables to reach for: they set how much evidence it
 # takes to move a hero away from "average", and loosening them is how a model starts
 # reporting certainty it has not earned.
-# 0.15, not the design's 0.30. Measured out of sample on the first 245 collected
-# matches (25 shuffle splits, 80/20): 0.30 scored 0.7006 against a 0.6993 baseline -
-# WORSE than predicting the base rate - and 0.15 scored 0.6967. Thin data wants a
-# tighter prior; revisit when there are thousands of matches rather than hundreds.
-SIGMA_THETA = 0.15  # hero strength
+# 0.20 since 2026-07-29, at 340 matches. It was 0.15, chosen when 0.30 measured WORSE
+# than the base rate on the first 245 matches (0.7006 against 0.6993) - and that comment
+# said thin data wants a tighter prior and to revisit. The optimum has drifted up exactly
+# as predicted: two independent sweeps agree 0.20 beats 0.15 (+0.0016 paired, and better
+# on walk-forward validation). They diverge above it - Codex prefers 0.30, Fable measures
+# 0.25 as missing the splits bar - so 0.20 is the value both support.
+# Re-sweep at each rough doubling of the data. This constant is not converged.
+SIGMA_THETA = 0.20  # hero strength
 SIGMA_PHI = 0.50  # player skill
 SIGMA_BETA = 1.0  # intercept
 
@@ -357,12 +360,33 @@ W_RATING = 0.60
 # does not correct for it: weighting by spectator count assumes participants are
 # independent, which is the assumption in doubt. Refit this against scored outcomes before
 # trusting it. See section 14 of the odds design spec.
-W_CROWD = 0.70
+# 0.0 since 2026-07-29. Measured, not suspected: across 54 scored predictions the crowd is
+# flat across its own confidence, scores 0.83 logloss standalone against a 0.69 constant,
+# and is a noisy echo of the rating gap - correlation 0.475, same pick 40 times in 51, and
+# on the 11 disagreements the rating is right 8 and the crowd 3. At 0.70 it outvoted every
+# signal that works and supplied almost all of the displayed spread, which is precisely why
+# confident calls kept landing the wrong way.
+#
+# NOT negative: the fitted slope is -0.0145 with a standard error of 0.235, indistinguishable
+# from zero. Zero means "stop paying for it", not "bet against it".
+#
+# The pools and spectator count are still read, recorded and synced on every match, so this
+# stays testable without any code change. A market usually beats a model, so re-test when
+# the player base or the pool sizes move. The admission test is incremental: does
+# gap + crowd beat gap alone, out of sample.
+W_CROWD = 0.0
 # Not zero. Measured over 120 real comps, the hero term moves the number by 3 points
 # typically, 6 at the 90th percentile and 10 at most - the tight prior already shrinks
 # it - so excluding it buys almost no protection while discarding the only signal tied
 # to the actual draft. Half strength captures it without letting it lead.
-W_HEROES = 0.50
+# 1.0 since 2026-07-29, up from 0.50. The half-strength scale was set when the hero model
+# had no measured edge - true at 245 matches, and no longer true. At 340 it clears the
+# pre-registered bar in two rounds, on shuffle splits AND walk-forward validation, in three
+# independent implementations. It is now the only term in the displayed number.
+#
+# The `hero_evidence` factor below is kept: damping a comp of heroes nobody has seen toward
+# 50% is principled, where the 0.50 was arbitrary.
+W_HEROES = 1.0
 
 # A hero seen twice should count for less than one seen fifty times. The fit already
 # shrinks a thin hero toward zero, but this scales the whole hero term by how well known

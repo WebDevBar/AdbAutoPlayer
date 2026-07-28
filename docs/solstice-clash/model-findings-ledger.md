@@ -57,6 +57,37 @@ Tanks absorb it, Supports heal - so the numbers mostly say what kind of hero som
 picked, and role composition is the worst-performing family tested. Class-normalising them
 ("does more than peers in the same role") is also null.
 
+## Round 2: the best combination is no combination
+
+2026-07-29, frozen at 340 matches, both reviewers independently. Every stack of features
+onto Bradley-Terry scored WORSE than Bradley-Terry alone, and the full combination scored
+worse than the base rate. 340 matches cannot estimate stacking weights.
+
+| candidate | vs base (shuffle) | splits | forward blocks |
+|---|---|---|---|
+| BT alone, sigma 0.20 | +0.0086 | 19/25 | 8/9 |
+| BT alone, sigma 0.15 | +0.0070 | 20/25 | 8/9 |
+| BT + popularity | +0.0044 | 15/25 | 6/9 |
+| BT + rating gap | +0.0004 | 16/25 | 4/9 |
+| BT + slot | -0.0029 | 11/25 | 5/9 |
+| everything combined | -0.0036 | 13/25 | 4/9 |
+
+**The stats question is closed.** The shrinkage-target route - the last untried mechanism,
+and the only one that put them where BT is weakest - returned an exact null: -0.0000,
+SE 0.0006, 12/25. The map from stats to hero strength exists and predicts approximately
+zero. Both additive and prior mechanisms are now exhausted; do not re-run under ~1,000
+matches.
+
+**Popularity is subsumed rather than wrong.** It predicts on its own and survives temporal
+validation, but adding it to BT degrades BT on both protocols. It is a low-resolution
+proxy for what BT already knows.
+
+**Applied from this round:** `SIGMA_THETA` 0.15 to 0.20, `W_CROWD` 0.70 to 0.0,
+`W_HEROES` 0.50 to 1.0. The two reviewers diverge on sigma above 0.20 - Codex prefers
+0.30, Fable measures 0.25 as missing the splits bar - so 0.20 is the value both support.
+Re-sweep at each rough doubling of the data; the optimum has been drifting up as the
+corpus grows and is not converged.
+
 ## Promising, not established
 
 | finding | measured | when | needs |
@@ -64,6 +95,7 @@ picked, and role composition is the worst-performing family tested. Class-normal
 | **Hero pick popularity** | clears the bar alone; BT+popularity is the best model tested (-0.0102). But the solo edge falls to -0.0023, 5/9 under temporal validation | 2026-07-29, n=335 | honest temporal validation in combination. Part of the shuffle-split edge is hindsight about what became popular |
 | **Draft slot** | 0.6940 vs 0.6952, 18/25 - marginal | 2026-07-29, n=335 | more data; spends ~248 sparse parameters for 0.0012 |
 | **Rating gap** | -0.0007 to -0.0091 depending on form. BT+rating was round 1's second best | 2026-07-29, n=56 rated | ratings only exist from 2026-07-28. This is the thinnest evidence in the file |
+| **Rank-weighted popularity** - how often a hero is picked *by highly rated players*, rather than picked at all | not yet tested (operator's idea, 2026-07-29). Distinct from raw popularity: a quality signal rather than a bandwagon count, which may be why plain popularity carried nothing BT did not already have | - | ratings exist on only 61 matches; starts data-starved. Revisit at ~200 rated matches |
 | **Damage ÷ opposing tanking** (ratio, not sum) | +0.0032, gain exceeds SE, but 16/25 - below the bar | 2026-07-29, n=333 | the only additive-stat variant showing anything. Ratio form matters: as a sum it is worthless |
 
 ## Settled by measurement, not opinion

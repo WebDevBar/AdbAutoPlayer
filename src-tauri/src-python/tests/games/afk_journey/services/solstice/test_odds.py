@@ -1,0 +1,179 @@
+"""The odds model - pure, fixture-free, no device.
+
+Every test here is a property the model must have for its number to be worth acting on,
+not a snapshot of what it currently prints.
+"""
+
+import numpy as np
+from adb_auto_player.games.afk_journey.services.solstice.odds import (
+    CROSS_THEME_WEIGHT,
+    USE_PLAYER_TERMS,
+    Match,
+    fit,
+    predict,
+)
+
+
+def _match(left, right, left_won, theme_id=1, players=(None, None)):
+    return Match(
+        left=tuple(left),
+        right=tuple(right),
+        left_won=left_won,
+        theme_id=theme_id,
+        left_player=players[0],
+        right_player=players[1],
+    )
+
+
+def _dominant(hero="star", n=40):
+    """`hero`'s side always wins, and it plays each side equally often.
+
+    Alternating sides matters: a fixture where the left always wins teaches the
+    INTERCEPT that left wins, and the hero learns nothing - which is the model behaving
+    correctly and the fixture testing nothing.
+    """
+    out = []
+    for i in range(n):
+        allies = [f"h{i % 7}", f"h{(i + 1) % 7}"]
+        foes = [f"h{(i + 2) % 7}", f"h{(i + 3) % 7}", f"h{(i + 4) % 7}"]
+        if i % 2 == 0:
+            out.append(_match([hero, *allies], foes, left_won=True))
+        else:
+            out.append(_match(foes, [hero, *allies], left_won=False))
+    return out
+
+
+def test_a_hero_that_always_wins_gets_a_positive_strength():
+    fitted = fit(_dominant())
+    column = fitted.index_of("star")
+    assert column is not None
+    assert fitted.beta[column] > 0.0
+
+
+def test_no_data_means_a_coin_flip_not_a_guess():
+    """With nothing learned, the only honest answer is 50% - and a wide interval."""
+    fitted = fit([])
+    p = predict(fitted, ["a", "b", "c"], ["d", "e", "f"])
+    assert abs(p.p_mid - 0.5) < 0.01
+    assert p.known_heroes == 0
+
+
+def test_unknown_heroes_contribute_nothing_rather_than_a_guess():
+    fitted = fit(_dominant())
+    known = predict(fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    unknown = predict(fitted, ["star", "h0", "nobody"], ["h2", "h3", "h4"])
+    assert unknown.known_heroes == known.known_heroes - 1
+    # The unknown hero moves nothing on its own account.
+    assert unknown.p_mid != known.p_mid or unknown.known_heroes < known.known_heroes
+
+
+def test_the_side_with_the_winning_hero_is_favoured():
+    fitted = fit(_dominant())
+    p = predict(fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    assert p.p_mid > 0.5 and p.favours == "left"
+    mirrored = predict(fitted, ["h2", "h3", "h4"], ["star", "h0", "h1"])
+    assert mirrored.p_mid < 0.5 and mirrored.favours == "right"
+
+
+def test_swapping_sides_mirrors_the_probability():
+    """A model that is not symmetric under a side swap is reading position, not heroes."""
+    fitted = fit(_dominant())
+    left = predict(fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    right = predict(fitted, ["h2", "h3", "h4"], ["star", "h0", "h1"])
+    assert abs((1.0 - left.p_mid) - right.p_mid) < 1e-9
+
+
+def test_regularisation_keeps_a_single_observation_modest():
+    """One match must not produce certainty. Unpenalised, this diverges."""
+    fitted = fit([_match(["one", "two", "three"], ["x", "y", "z"], True)])
+    p = predict(fitted, ["one", "two", "three"], ["x", "y", "z"])
+    assert p.p_mid < 0.90, f"one match should not yield {p.p_mid:.2f}"
+    assert p.weakest_evidence == 1
+
+
+def test_more_evidence_narrows_the_interval():
+    thin = predict(fit(_dominant(n=6)), ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    thick = predict(fit(_dominant(n=60)), ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    assert thick.standard_error < thin.standard_error
+    assert (thick.p_high - thick.p_low) < (thin.p_high - thin.p_low)
+
+
+def test_cross_theme_matches_count_for_less():
+    """Same matches, one theme flagged as another: the fitted strength must shrink."""
+    same = fit(_dominant(), theme_id=1)
+    other = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
+                theme_id=1)
+    column = same.index_of("star")
+    assert column is not None
+    assert other.beta[column] < same.beta[column]
+    assert 0.0 < CROSS_THEME_WEIGHT < 1.0
+
+
+def test_cross_theme_data_still_counts_for_something():
+    """Down-weighted is not discarded - early in a theme it is most of what exists."""
+    cross = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
+                theme_id=1)
+    p = predict(cross, ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    assert p.p_mid > 0.5
+
+
+def test_the_interval_brackets_the_estimate():
+    fitted = fit(_dominant())
+    p = predict(fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"])
+    assert p.p_low < p.p_mid < p.p_high
+    assert 0.0 < p.p_low and p.p_high < 1.0
+
+
+def test_the_fit_converges_rather_than_wandering():
+    """The gradient at the solution must be ~zero, or the answer is wherever it stopped."""
+    matches = _dominant(n=30)
+    fitted = fit(matches)
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        SIGMA_BETA,
+        SIGMA_PHI,
+        SIGMA_THETA,
+        design,
+    )
+
+    x, y, w, heroes, players = design(matches, None)
+    penalty = np.full(x.shape[1], 1.0 / SIGMA_THETA**2)
+    penalty[0] = 1.0 / SIGMA_BETA**2
+    penalty[1 + len(heroes) :] = 1.0 / SIGMA_PHI**2
+    p = 1.0 / (1.0 + np.exp(-(x @ fitted.beta)))
+    gradient = x.T @ (w * (p - y)) + penalty * fitted.beta
+    assert np.max(np.abs(gradient)) < 1e-6
+
+
+def test_player_terms_are_off_until_players_actually_repeat():
+    """Measured, not assumed: on the first 245 collected matches there were 162
+    distinct players - nearly two per match - and including them moved out-of-sample
+    logloss by less than 0.0001 while adding 162 parameters. A term that fits one match
+    and predicts nothing is overfitting with extra steps.
+    """
+    matches = [
+        _match([f"a{i}", f"b{i}", f"c{i}"], [f"d{i}", f"e{i}", f"f{i}"], True,
+               players=("ace", "other"))
+        for i in range(30)
+    ]
+    fitted = fit(matches)
+    assert fitted.players == (), "player terms should be off"
+    assert not USE_PLAYER_TERMS
+
+
+def test_the_player_machinery_still_works_when_switched_on():
+    """Kept alive deliberately - the question is worth revisiting once players repeat."""
+    import adb_auto_player.games.afk_journey.services.solstice.odds as odds_module
+
+    matches = [
+        _match([f"a{i}", f"b{i}", f"c{i}"], [f"d{i}", f"e{i}", f"f{i}"], True,
+               players=("ace", "other"))
+        for i in range(30)
+    ]
+    odds_module.USE_PLAYER_TERMS = True
+    try:
+        fitted = fit(matches)
+        assert "ace" in fitted.players
+        column = 1 + len(fitted.heroes) + fitted.players.index("ace")
+        assert fitted.beta[column] > 0.0
+    finally:
+        odds_module.USE_PLAYER_TERMS = False

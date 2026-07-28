@@ -391,6 +391,27 @@ class MatchStore:
             ).fetchone()
         return str(row[0])
 
+    def matches_for_fit(self) -> list[tuple]:
+        """Every decisive match with a FULL three-a-side read, for the odds model.
+
+        The completeness filter is not tidiness. Builds before wdb-12.9.24-7 shipped no
+        hero art, so on any machine but the developer's every cell read `unknown` and
+        matches were stored with an outcome, a theme and NO heroes. Those rows cannot
+        sync - they never earn a natural_key - but a naive COUNT(*) would still count
+        them toward the display gate, opening it on evidence that does not exist.
+
+        Returns (match_id, outcome, theme_id, left_player, right_player, side, slug)
+        joined, because a three-a-side check needs the heroes anyway.
+        """
+        with self._connect() as con:
+            return con.execute(
+                "SELECT m.id, m.outcome, m.theme_id, m.left_player, m.right_player,"
+                "       h.side, h.hero_slug"
+                "  FROM match m JOIN match_hero h ON h.match_id = m.id"
+                " WHERE m.outcome IN ('left','right') AND h.hero_slug IS NOT NULL"
+                " ORDER BY m.id, h.side, h.slot"
+            ).fetchall()
+
     def pull_cursor(self) -> int:
         with self._connect() as con:
             row = con.execute("SELECT pull_cursor FROM install WHERE id=1").fetchone()

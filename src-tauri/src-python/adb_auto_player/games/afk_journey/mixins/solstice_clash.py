@@ -47,6 +47,14 @@ from ..services.solstice.details_screen import (
 from ..services.solstice.icons import IconLibrary
 from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
+from ..services.solstice.odds import (
+    MIN_LOCKED_FOR_ODDS,
+    fit as fit_odds,
+    format_odds,
+    gate_reason,
+    load_matches,
+    predict as predict_odds,
+)
 from ..services.solstice.paths import solstice_db_path, solstice_icon_dir
 from ..services.solstice.screens import (
     is_draft_screen,
@@ -1218,6 +1226,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     frame = self.get_screenshot()
                 except Exception as exc:  # noqa: BLE001
                     logging.debug(f"[SC-45] screenshot after the chat drag: {exc}")
+
+                # Fit ONCE per draft, here. The fit takes ~2s over a few hundred
+                # matches and nothing it learns changes while the picks land, so doing
+                # it per pick would spend the draft re-deriving the same numbers.
+                fitted, theme_matches = self._fit_odds()
             saw_draft = True
             last_frame = frame
             # No pool read. Narrowing six identifications by first identifying twenty
@@ -1228,9 +1241,16 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # measure 1.49s on a real draft frame, which fits the window several times
             # over.
             fresh = self._read_draft_picks(frame, None, skip_slots=set(settled))
-            for pick in newly_locked(seen, fresh):
+            newly = newly_locked(seen, fresh)
+            for pick in newly:
                 logging.info(format_pick(pick))
                 settled[pick.slot] = pick
+
+            # Odds after every pick from the fourth onward - the point at which enough
+            # of the draft exists for the number to mean anything, and while betting is
+            # still open. Prediction itself is microseconds; the fit already happened.
+            if newly and len(settled) >= MIN_LOCKED_FOR_ODDS:
+                self._log_odds(fitted, settled, theme_matches)
             # Everything the draft knows: the settled picks, plus this poll's cells that
             # have still not resolved, so [SC-57] can print their scores.
             last_reads = list(settled.values()) + [r for r in fresh if not r.identified]
@@ -1276,6 +1296,46 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"interval"
         )
         return last_frame
+
+    def _fit_odds(self):
+        """Fit the model on everything collected. Returns (fit, matches for this theme).
+
+        Never fatal: a model that will not fit costs the odds display, not the match.
+        """
+        try:
+            matches = load_matches(self._store.matches_for_fit())
+            # The theme in force RIGHT NOW, resolved by date exactly as a recorded match
+            # is - not an attribute someone remembered to set. Reading a stale or unset
+            # one made every match look cross-theme and the gate said "0 for this theme"
+            # while the database held hundreds.
+            now = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+            _event, theme_id, _how = self._store.resolve_theme(now)
+            fitted = fit_odds(matches, theme_id=theme_id)
+            same_theme = sum(1 for m in matches if m.theme_id == theme_id)
+            logging.info(
+                f"[SC-72] odds model: {len(matches)} matches "
+                f"({same_theme} this theme), {len(fitted.heroes)} heroes"
+            )
+            return fitted, same_theme
+        except Exception as exc:  # noqa: BLE001 - odds are never worth a match
+            logging.warning(f"[SC-73] odds model could not be fitted: {exc}")
+            return None, 0
+
+    def _log_odds(self, fitted, settled: dict, theme_matches: int) -> None:
+        """Print the odds block for the picks locked so far."""
+        try:
+            left = [p.slug for p in settled.values() if p.side == "left" and p.slug]
+            right = [p.slug for p in settled.values() if p.side == "right" and p.slug]
+            gate = gate_reason(fitted, len(settled), theme_matches)
+            prediction = (
+                predict_odds(fitted, left, right) if fitted is not None else None
+            )
+            if prediction is None:
+                return
+            for line in format_odds(prediction, len(settled), gate):
+                logging.info(line)
+        except Exception as exc:  # noqa: BLE001
+            logging.warning(f"[SC-73] odds could not be computed: {exc}")
 
     def _read_draft_picks(
         self,

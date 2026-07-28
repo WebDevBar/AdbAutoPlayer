@@ -39,6 +39,8 @@ SIDE_LABELS = {"left": "Blue", "right": "Red"}
 # carries this per cell; it is repeated here only so the log can be ordered before any
 # cell has been read.
 DRAFT_ORDER = (1, 2, 3, 4, 5, 6)
+# Three heroes a side, always.
+MAX_PICKS_PER_SIDE = 3
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,77 @@ def format_final(reads: list[PickRead]) -> str:
     """The locked screen, as one line per side, in draft order."""
     by_side: dict[str, list[str]] = {"left": [], "right": []}
     for read in sorted(reads, key=lambda r: r.slot):
+        if read.side in by_side:
+            by_side[read.side].append(read.name or read.slug or "?")
+    left = ", ".join(by_side["left"]) or "-"
+    right = ", ".join(by_side["right"]) or "-"
+    return f"locked - {SIDE_LABELS['left']}: {left} | {SIDE_LABELS['right']}: {right}"
+
+
+def side_positions(reads: list[PickRead]) -> dict[tuple[str, int], PickRead]:
+    """Key reads by side and position within that side.
+
+    The two screens number their cells differently and merging on the raw slot silently
+    mixes the sides: the draft numbers 1-6 across both teams in snake order (1 left,
+    2 right, 3 right, 4 left, 5 left, 6 right) while the locked screen numbers 1-3 per
+    side. Keyed on slot alone, draft slot 2 (a red pick) lands on top of locked left-1,
+    and a real run printed four heroes on Blue and two on Red with one lost entirely.
+
+    Position within a side is the one thing both schemes agree on.
+    """
+    keyed: dict[tuple[str, int], PickRead] = {}
+    for side in ("left", "right"):
+        ordered = sorted((r for r in reads if r.side == side), key=lambda r: r.slot)
+        for position, read in enumerate(ordered, start=1):
+            keyed[(side, position)] = read
+    return keyed
+
+
+def merge_screens(draft: list[PickRead], locked: list[PickRead]) -> list[PickRead]:
+    """The three heroes each side ended up with, from both screens.
+
+    A UNION per side, not an alignment by position. Two earlier attempts failed here:
+    merging on the raw slot mixed the sides, because the draft numbers 1-6 across both
+    teams and the locked screen numbers 1-3 within each; merging on position within a
+    side then printed `Red: Lorsan, Lorsan` on a live run, because the screens do not
+    order a side's picks identically either.
+
+    A side is a set of three distinct heroes, and that is the only structure both
+    screens agree on. The locked screen leads because it sees the finished draft; the
+    draft fills what the locked read missed. Duplicates are impossible by construction:
+    a slug already present is never added twice.
+    """
+    out: list[PickRead] = []
+    for side in ("left", "right"):
+        chosen: dict[str, PickRead] = {}
+        for read in [r for r in locked if r.side == side] + [
+            r for r in draft if r.side == side
+        ]:
+            if not read.identified or read.slug in chosen:
+                continue
+            chosen[read.slug] = read
+        out.extend(chosen.values())
+        # Keep the unread positions visible rather than silently shortening the side.
+        missing = MAX_PICKS_PER_SIDE - len(chosen)
+        out.extend(
+            PickRead(
+                slot=0,
+                side=side,
+                cell_type="none",
+                slug=None,
+                name=None,
+                score=0.0,
+                margin=0.0,
+            )
+            for _ in range(max(0, missing))
+        )
+    return out
+
+
+def format_merged(reads: list[PickRead]) -> str:
+    """The locked six, three per side, unknowns shown as `?`."""
+    by_side: dict[str, list[str]] = {"left": [], "right": []}
+    for read in reads:
         if read.side in by_side:
             by_side[read.side].append(read.name or read.slug or "?")
     left = ", ".join(by_side["left"]) or "-"

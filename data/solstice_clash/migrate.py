@@ -294,14 +294,27 @@ def main() -> None:
     # boundary was never observed - an unknown boundary must not masquerade as a
     # known one. Fill them in as they are confirmed; that is the whole point of
     # keeping this in a table.
+    # PROVENANCE: the theme names and effects come from the wiki API, not from the
+    # screen - see docs/solstice-clash/README.md section 2, with the raw page saved as
+    # data/solstice_clash/solstice_clash_wiki.txt. Dates come from the in-game Themes
+    # screen, which shows the current theme and a "Starts in Nh" countdown for the next.
+    #
+    # Transcribing that list by hand cost us one: the wiki lists FIVE themes and this
+    # table seeded four - "Tranquil Grounds" was simply missed, and a match played under
+    # it would have resolved to Unknown / Default.
     themes = [
         # slug,               name,                starts_at, ends_at,    default
         ("unknown",           "Unknown / Default", None,      None,       1),
+        ("tranquil-grounds",  "Tranquil Grounds",  None,      None,       0),
         ("fierce-duel",       "Fierce Duel",       None,      None,       0),
         # Rotates 02:00 Europe/Skopje on 2026-07-29, which is exactly midnight UTC -
         # and therefore also an hour-bucket boundary, so no match straddles it.
         ("converging-paths",  "Converging Paths",  None,      "2026-07-29T00:00:00Z", 0),
-        ("flourishing-wilds", "Flourishing Wilds", None,      None,       0),
+        # Confirmed on the in-game Themes screen 2026-07-28 15:46 UTC: "Starts in 8h",
+        # which lands on the same midnight boundary Converging Paths ends at. `ends_at`
+        # stays NULL because that boundary has not been observed - an unknown boundary
+        # must never masquerade as a known one.
+        ("flourishing-wilds", "Flourishing Wilds", "2026-07-29T00:00:00Z", None, 0),
         ("tactical-grounds",  "Tactical Grounds",  None,      None,       0),
     ]
     for slug, name, starts, ends, is_default in themes:
@@ -310,6 +323,21 @@ def main() -> None:
             "(event_id,slug,name,starts_at,ends_at,is_default) VALUES(?,?,?,?,?,?)",
             (event_id, slug, name, starts, ends, is_default),
         )
+        # A boundary confirmed later must reach a database that already has the row.
+        # INSERT OR IGNORE alone silently kept the old NULL, so filling in a rotation
+        # date here changed nothing where it mattered - the install already collecting.
+        # Only NULL is filled: a recorded boundary is never overwritten, because that
+        # would silently re-file matches already attributed to a theme.
+        if starts:
+            con.execute(
+                "UPDATE theme SET starts_at=? WHERE slug=? AND starts_at IS NULL",
+                (starts, slug),
+            )
+        if ends:
+            con.execute(
+                "UPDATE theme SET ends_at=? WHERE slug=? AND ends_at IS NULL",
+                (ends, slug),
+            )
 
     # Backfill matches recorded before the tables existed. Matched on the raw OCR
     # name, which is all those rows have; from here on theme_id is set at capture.

@@ -83,3 +83,37 @@ def test_the_spectate_prematch_reads_with_its_own_geometry(library):
     frame = cv2.imread(str(DATA / "spectate_prematch.png"))
     assert _identified(frame, "prematch_pick", cfg, lib) == 6
     assert _identified(frame, "locked_pick", cfg, lib) < 6
+
+
+def test_a_real_mid_draft_frame_reads_five_of_six(library):
+    """Captured live on 2026-07-27 with five picks locked and the sixth empty.
+
+    This is the frame that settled it. Mode C had logged nothing for two runs and the
+    geometry was suspected; against this frame `draft_pick` identifies every locked
+    pick at 0.94-0.98 and correctly refuses the empty slot. The fault was never the
+    geometry - it was that a 7-second pool read left time for one poll, and that poll
+    happened before any pick had landed.
+    """
+    cfg, lib = library
+    frame = cv2.imread(str(DATA / "spectate_draft_locked5.png"))
+    assert _identified(frame, "draft_pick", cfg, lib) == 5
+    assert _identified(frame, "draft_locked_pick", cfg, lib) <= 5
+
+
+def test_a_real_locked_screen_reads_all_six(library):
+    """Captured live the same match, chat widget NOT moved out of the way."""
+    cfg, lib = library
+    frame = cv2.imread(str(DATA / "spectate_locked_six.png"))
+    assert _identified(frame, "prematch_pick", cfg, lib) == 6
+
+
+def test_six_cells_fit_inside_the_draft_window(library):
+    """The budget that matters: a draft is ~20s and this must run several times."""
+    import time
+
+    cfg, lib = library
+    frame = cv2.imread(str(DATA / "spectate_draft_locked5.png"))
+    started = time.perf_counter()
+    _identified(frame, "draft_pick", cfg, lib)
+    elapsed = time.perf_counter() - started
+    assert elapsed < 4.0, f"a single six-cell read took {elapsed:.2f}s"

@@ -4,8 +4,11 @@ from adb_auto_player.games.afk_journey.services.solstice.draftlog import (
     PickRead,
     better,
     format_final,
+    format_merged,
     format_pick,
+    merge_screens,
     newly_locked,
+    side_positions,
 )
 
 
@@ -103,3 +106,50 @@ def test_the_final_line_groups_by_side_in_draft_order():
     )
     assert "Blue: Lorsan, Thoran, Eironn" in line
     assert "Red: Smokey, Lily-May, Reinier" in line
+
+
+def test_a_side_is_a_set_of_three_distinct_heroes():
+    """Two live bugs in one test.
+
+    Merging on the raw slot printed four heroes on Blue and two on Red, because the
+    draft numbers 1-6 across both teams and the locked screen numbers 1-3 per side.
+    Merging on position within a side then printed `Red: Lorsan, Lorsan`, because the
+    screens do not order a side identically either.
+    """
+    draft = [
+        _read(1, "left", "indris"),
+        _read(2, "right", "galahad"),
+        _read(3, "right", "lorsan"),
+        _read(4, "left", "reinier"),
+    ]
+    locked = [
+        _read(1, "left", "indris", cell_type="prematch_pick"),
+        _read(1, "right", "lorsan", cell_type="prematch_pick"),
+        _read(2, "left", "kafra", cell_type="prematch_pick"),
+    ]
+    merged = merge_screens(draft, locked)
+    line = format_merged(merged)
+
+    left = [r.slug for r in merged if r.side == "left"]
+    right = [r.slug for r in merged if r.side == "right"]
+    assert len(left) == 3 and len(right) == 3, line
+    assert len([s for s in right if s]) == len({s for s in right if s}), (
+        f"a hero appears twice on one side: {line}"
+    )
+    assert "galahad" in right, "a pick only the draft saw must survive the merge"
+
+
+def test_the_locked_screen_leads_and_the_draft_fills_the_gaps():
+    draft = [_read(1, "left", "dionel"), _read(4, "left", "sonja")]
+    locked = [_read(1, "left", "dionel", cell_type="prematch_pick")]
+    merged = merge_screens(draft, locked)
+    left = [r.slug for r in merged if r.side == "left"]
+    assert "dionel" in left and "sonja" in left
+    assert left.count("dionel") == 1
+
+
+def test_unread_positions_stay_visible_as_unknown():
+    """Three a side always - a short line would hide that something was missed."""
+    merged = merge_screens([_read(1, "left", "dionel")], [])
+    assert len([r for r in merged if r.side == "left"]) == 3
+    assert "?" in format_merged(merged)

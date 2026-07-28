@@ -74,34 +74,78 @@ Three pieces, each usable and testable without the others.
 
 ### 1. `android/odds-overlay/` - the APK
 
-Kotlin. A foreground service holding one `SYSTEM_ALERT_WINDOW` view and one broadcast
-receiver. No activity, no UI framework, no dependencies beyond androidx-core.
+Kotlin. A foreground service holding one `SYSTEM_ALERT_WINDOW` view. No activity, no
+broadcast receiver, no UI framework, no dependencies beyond androidx-core.
+
+**The manifest is load-bearing and every line of it is a way this fails silently:**
+
+```xml
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<service android:name=".OverlayService" android:exported="true"/>
+```
+
+`android:exported="true"` is required or the shell cannot start it: components without an
+intent filter default to private on Android 12+, and `am start-foreground-service` from
+adb would fail with a permission denial. The `SYSTEM_ALERT_WINDOW` permission must be
+declared even though the grant is done by `appops` - the app-op is the grant, the manifest
+entry is the request, and neither substitutes for the other. `Settings.canDrawOverlays()`
+is checked before `addView` and the service stops itself if it is false, rather than
+throwing.
+
+`targetSdk` is 33. Android 34 requires every foreground service to declare a
+`foregroundServiceType`, and there is no type that honestly describes this one.
+
+Window parameters, in full - the defaults are wrong in two ways that matter:
 
 ```text
-TYPE_APPLICATION_OVERLAY
-FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCHABLE | FLAG_LAYOUT_NO_LIMITS
+type     = TYPE_APPLICATION_OVERLAY
+flags    = FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCHABLE | FLAG_LAYOUT_NO_LIMITS
+format   = PixelFormat.TRANSLUCENT      // default is OPAQUE - see below
 gravity  = TOP | START
 x, y     = 0, 1866
 width    = MATCH_PARENT
 height   = 54
+setFitInsetsTypes(0)                    // default fits all system bars
+layoutInDisplayCutoutMode = ALWAYS
+view background = Color.TRANSPARENT
 ```
 
-Driven entirely over adb, so the mode drives it and the user never types a command:
+`setFitInsetsTypes(0)` is what makes y=1866 mean 1866 in the same coordinate space
+`screencap` returns. The API 30+ default fits the window inside the system bars, so
+without it the origin is the top of the app area rather than the top of the display and
+the strip lands somewhere else. `FLAG_LAYOUT_NO_LIMITS` permits extending past that area;
+it does not by itself define the origin.
+
+`format` defaulting to `OPAQUE` would paint a black bar across the bottom of every
+captured frame even with no text - the exact failure this position was chosen to avoid.
+
+### One command for start and update
 
 ```bash
 adb install -r odds-overlay.apk
 adb shell appops set <pkg> SYSTEM_ALERT_WINDOW allow
-adb shell am start-foreground-service <pkg>/.OverlayService
-adb shell am broadcast -a <pkg>.ODDS --es text "BLUE 34%   |   RED 66%"
-adb shell am broadcast -a <pkg>.ODDS --es text ""     # clear
+adb shell am start-foreground-service <pkg>/.OverlayService --es text "BLUE 34%  |  RED 66%"
+adb shell am start-foreground-service <pkg>/.OverlayService --es text ""   # clear
 adb shell am force-stop <pkg>
 ```
 
-An empty string paints nothing, so a captured frame is byte-identical to having no
-overlay. That is the state it holds between drafts and after the picks lock.
+**Every update is a `start-foreground-service`, not a broadcast.** A broadcast reaches a
+runtime-registered receiver only while the process is alive, so it cannot revive a service
+the OS has killed - and an action-only `am broadcast` is an implicit broadcast, which
+API 26+ will not deliver to a manifest receiver anyway. Routing updates through
+`onStartCommand` means the same command starts the service when it is dead and delivers
+text when it is alive, which is also what makes "the next pick restarts it" true rather
+than hopeful.
 
-The service must post its own foreground notification to satisfy Android 13; that
-notification is on a MIN-importance channel and is not the display.
+An empty string **removes the view** from the window manager rather than setting empty
+text. A translucent attached surface should be invisible, but "should be" is not good
+enough here: detaching is the only state that is provably identical to never having
+installed the overlay, and that is the state it holds between drafts and after the picks
+lock.
+
+The service posts its own foreground notification to satisfy Android 13, on a
+MIN-importance channel. That notification is not the display.
 
 ### 2. `services/solstice/overlay.py` - the controller
 
@@ -112,7 +156,8 @@ which is what makes it fully unit-testable.
 ```python
 def display_text(prediction: Prediction) -> str: ...
 def install_plan(installed_version: int | None, packaged_version: int) -> list[list[str]]: ...
-def update_command(text: str) -> list[str]: ...
+def update_command(text: str) -> list[str]: ...   # start-foreground-service --es text
+def clear_command() -> list[str]: ...             # the same, with an empty string
 ```
 
 The APK resolves through the same ladder as `bundled_db()` and `solstice_icon_dir()`:
@@ -174,9 +219,10 @@ The overlay is a display. Nothing it does may cost a match.
 |---|---|
 | APK not found in resources | logged once, run continues without it |
 | `install` fails | logged once, run continues |
-| `appops` grant denied | logged once, run continues; the overlay simply never appears |
-| broadcast fails mid-draft | the previous number stays up; it is cleared at lock regardless |
-| service killed by the OS | the next pick's broadcast restarts it |
+| `appops` grant denied | logged once, run continues; the service stops itself rather than throwing |
+| an update fails mid-draft | the previous number stays up; it is cleared at lock regardless |
+| service killed by the OS | the next pick's `start-foreground-service` brings it back with the current text |
+| APK installed with a different signature | `install -r` fails; the controller falls back to `pm uninstall` then install, which is the only recovery and loses the app-op grant, so the grant is re-issued unconditionally after any install |
 | device is not Waydroid | no difference - every call is adb, nothing assumes the host |
 
 Every adb call returns a bool and is wrapped. The mode never branches on overlay state,
@@ -189,6 +235,17 @@ frame without it. Run the six-cell identification, the ratings read, the pool re
 spectator read on both, and assert every score matches. Committed as a fixture pair under
 `tests/games/afk_journey/services/solstice/data/`, not performed as a manual check - the
 whole point is that it keeps being true after someone moves the strip by 20px.
+
+**The geometry assertion.** The window parameters are a request, not a guarantee: the
+system may reposition or resize a `TYPE_APPLICATION_OVERLAY` window, and an inset default
+would move it silently. So the first paint of a session is verified against reality -
+`screencap` with a known marker painted, find its bounding box, assert it lands at
+y 1866-1920 across the full width. A mismatch disables the overlay for the run and logs
+the measured box, rather than quietly covering a read band.
+
+**The transparent-when-cleared assertion.** Capture with the overlay installed but
+cleared, and diff against a capture with the service stopped. They must be identical. This
+is what catches an `OPAQUE` format or a stray background colour.
 
 The Kotlin side gets no unit tests: it is one view and one receiver, and the behaviour
 worth testing is whether it lands in the right pixels, which only the fixture pair above

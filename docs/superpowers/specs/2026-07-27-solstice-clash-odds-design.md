@@ -573,6 +573,20 @@ it when the second event ends, not before.
 - **Whether the useful window is long enough to act in.** Section 7 shows a number can only
   appear once four of six picks are locked. Whether that leaves enough time before betting
   closes is a timing question the first live run answers.
+- **Whether the crowd carries too much weight at 0.70** (raised by the operator,
+  2026-07-28). A parimutuel pool is not a set of independent opinions: bettors can see the
+  split before they bet, so money on one side attracts more money to that side. The pool is
+  partly a measurement of itself, and a snowball can look exactly like consensus while
+  carrying no more information than the first few bets did.
+  If that is happening, `crowd_reliability` is the wrong correction for it. Weighting by
+  spectator count assumes more participants means more independent views, which is the
+  assumption in question - a 300-person avalanche would score as maximally reliable.
+  Testable once scored predictions exist, and worth testing before trusting the weight:
+  fit the crowd coefficient against outcomes directly, and separately check whether early
+  pool splits predict results better than late ones. If a late split is systematically
+  more extreme than an early one without being more accurate, that is the snowball, and
+  the answer is either a lower weight, a shrink toward 50% that grows with how lopsided
+  the pool is, or reading the pools early rather than last.
 
 Player-name reliability and draft-screen readability were open items in the first draft of
 this spec and have been promoted to prerequisites P1 and P2 in section 0. They are not

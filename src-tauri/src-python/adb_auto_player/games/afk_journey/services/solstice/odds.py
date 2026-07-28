@@ -334,6 +334,12 @@ def blended_nudge(band: int, evidence: dict[int, tuple[int, int]] | None) -> flo
 # yet, and every one of them should be refitted from scored predictions once there are
 # enough - which is the whole reason predictions are recorded.
 W_RATING = 0.60
+# 0.70 is provisional and possibly too high. A parimutuel pool is not a set of independent
+# opinions - bettors see the split before they bet, so money on one side attracts more
+# money to that side, and a snowball looks exactly like consensus. `crowd_reliability`
+# does not correct for it: weighting by spectator count assumes participants are
+# independent, which is the assumption in doubt. Refit this against scored outcomes before
+# trusting it. See section 14 of the odds design spec.
 W_CROWD = 0.70
 # Not zero. Measured over 120 real comps, the hero term moves the number by 3 points
 # typically, 6 at the 90th percentile and 10 at most - the tight prior already shrinks

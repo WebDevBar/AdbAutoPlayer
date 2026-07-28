@@ -1532,9 +1532,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
             )
             gate = gate_reason(fitted, MIN_LOCKED_FOR_ODDS, 0, has_ratings)
-            source = "rating" if has_ratings else "model"
             logging.info("[SC-76] FINAL - all picks locked")
-            for line in format_odds(prediction, len(left) + len(right), gate, source):
+            for line in format_odds(prediction, len(left) + len(right), gate):
                 logging.info(line)
         except Exception as exc:  # noqa: BLE001 - never worth a match
             logging.debug(f"[SC-76] final odds could not be shown: {exc}")
@@ -1560,8 +1559,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 getattr(self, "_spectators", None),
                 ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
             )
-            source = "rating" if ratings[0] and ratings[1] else "model"
-            return prediction.p_mid, source, len(left) + len(right)
+            return prediction.p_mid, prediction.source_code, len(left) + len(right)
         except Exception as exc:  # noqa: BLE001 - never worth a match
             logging.debug(f"[SC-75] final prediction failed: {exc}")
             return None
@@ -1626,8 +1624,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
             if prediction is None:
                 return
-            source = "rating" if has_ratings else "model"
-            for line in format_odds(prediction, len(settled), gate, source):
+            for line in format_odds(prediction, len(settled), gate):
                 logging.info(line)
         except Exception as exc:  # noqa: BLE001
             logging.warning(f"[SC-73] odds could not be computed: {exc}")

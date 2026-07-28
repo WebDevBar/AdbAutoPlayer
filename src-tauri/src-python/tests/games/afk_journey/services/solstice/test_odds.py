@@ -297,3 +297,61 @@ def test_a_missing_spectator_count_caps_trust_at_half():
     )
 
     assert crowd_reliability(None, 1_000_000) <= 0.5
+
+
+def test_the_block_names_the_signals_that_built_the_number():
+    """The header used to say "from the rating gap" on a number the crowd had already
+    moved by twenty points. A person reading it has to know the crowd is in there -
+    otherwise they treat it as independent confirmation of what the screen shows."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import format_odds
+
+    fitted = fit(_dominant(n=40))
+    p = predict(
+        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
+        left_rating=4400, right_rating=4100,
+        crowd=0.30, spectators=250, total_pool=500_000,
+    )
+    assert p.signals == ("rating", "crowd", "heroes")
+    header = format_odds(p, 6, None)[2]
+    assert "rating + crowd + heroes" in header
+
+
+def test_a_signal_that_did_not_move_the_number_is_not_named():
+    """Equal ratings contribute nothing, and a comp of unseen heroes contributes
+    nothing. Naming either would describe a number that does not exist."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import format_odds
+
+    fitted = fit(_dominant(n=40))
+    p = predict(
+        fitted, ["nobody1", "nobody2", "nobody3"], ["nobody4", "nobody5", "nobody6"],
+        left_rating=4400, right_rating=4400,
+        crowd=0.30, spectators=250, total_pool=500_000,
+    )
+    assert p.signals == ("crowd",)
+    assert "from crowd " in format_odds(p, 6, None)[2]
+
+
+def test_a_thin_market_is_not_named_either():
+    """Twelve spectators earns a weight near zero - it is in the arithmetic, but
+    claiming the crowd built this number would be a lie about a 12-person market."""
+    fitted = fit(_dominant(n=40))
+    p = predict(
+        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
+        left_rating=4400, right_rating=4400,
+        crowd=0.90, spectators=12, total_pool=3_000,
+    )
+    assert "crowd" not in p.signals
+
+
+def test_the_stored_source_records_the_composition():
+    """Scored predictions get split by composition later; rating-only and
+    rating-plus-crowd are different models and must not pool their calibration."""
+    fitted = fit(_dominant(n=40))
+    p = predict(
+        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
+        left_rating=4400, right_rating=4100,
+        crowd=0.30, spectators=250, total_pool=500_000,
+    )
+    assert p.source_code == "r+c+h"
+    # The server column is 16 characters and silently truncates past it.
+    assert len(p.source_code) <= 16

@@ -229,10 +229,34 @@ class Prediction:
     standard_error: float
     known_heroes: int
     weakest_evidence: int
+    # Which of the three signals actually moved this number, in the order they are
+    # combined. NOT what was available: a crowd read off 12 spectators, or a comp of
+    # heroes nobody has seen, contributes a weight of nearly nothing, and naming it
+    # would misdescribe the number to whoever is about to act on it.
+    signals: tuple[str, ...] = ()
 
     @property
     def favours(self) -> str:
         return "left" if self.p_mid >= 0.5 else "right"
+
+    @property
+    def source_code(self) -> str:
+        """A compact record of the composition, stored alongside the prediction.
+
+        Short because the server column is 16 characters - and worth storing at all
+        because scored predictions have to be split BY composition later. A
+        rating-only call and a rating-plus-crowd call are different models, and
+        pooling their calibration would hide whichever of them is wrong.
+        """
+        return "+".join(s[0] for s in self.signals) or "none"
+
+
+# Under this weight a signal moved the result by less than the displayed percentage
+# rounds to, so naming it would overstate what is in the number.
+MIN_REPORTABLE_WEIGHT = 0.02
+
+# Named in the order the formula adds them, so the header reads the way the model works.
+_SIGNAL_ORDER = ("rating", "crowd", "heroes")
 
 
 # How much collected evidence it takes for a band to move halfway off the stated prior.
@@ -436,15 +460,23 @@ def predict(
     hero_eta = float(z @ fitted.beta)
     weight_heroes = W_HEROES * hero_evidence(fitted, [*left, *right])
     eta = weight_heroes * hero_eta
+    signals: list[str] = []
+    if known and weight_heroes >= MIN_REPORTABLE_WEIGHT:
+        signals.append("heroes")
 
     if USE_RATING_PRIOR:
-        eta += W_RATING * rating_offset(left_rating, right_rating, evidence)
+        offset = rating_offset(left_rating, right_rating, evidence)
+        eta += W_RATING * offset
+        if offset != 0.0:
+            signals.append("rating")
 
     crowd_weight = 0.0
     if crowd is not None:
         crowd_weight = W_CROWD * crowd_reliability(spectators, total_pool)
         clamped = min(max(crowd, CROWD_CLAMP[0]), CROWD_CLAMP[1])
         eta += crowd_weight * _logit(clamped)
+        if crowd_weight >= MIN_REPORTABLE_WEIGHT:
+            signals.append("crowd")
     variance = float(z @ np.linalg.solve(fitted.hessian, z))
     # NOT scaled by the hero weight. Damping the interval along with the term made a
     # comp of UNKNOWN heroes report more confidence, which is backwards: little is known
@@ -467,6 +499,7 @@ def predict(
         standard_error=standard_error,
         known_heroes=known,
         weakest_evidence=min(seen) if seen else 0,
+        signals=tuple(sorted(signals, key=_SIGNAL_ORDER.index)),
     )
 
 
@@ -481,7 +514,6 @@ def format_odds(
     prediction: Prediction,
     locked: int,
     gate: str | None,
-    source: str = "model",
 ) -> list[str]:
     """The odds block, as lines to log. `gate` is why it is NOT actionable, or None.
 
@@ -494,12 +526,15 @@ def format_odds(
 
     left = prediction.p_mid * 100.0
     right = 100.0 - left
-    if source == "rating":
-        header = "ODDS (from the rating gap - a stated prior, not yet measured)"
-    elif VALIDATED:
+    if VALIDATED:
         header = "ODDS"
     else:
-        header = "ODDS (UNPROVEN - not yet better than a coin flip)"
+        # Naming the ingredients is the honest version of a disclaimer nobody reads.
+        # "rating + crowd" tells the person watching that the crowd is already inside
+        # this number - which is what they need to judge whether it tells them anything
+        # they did not have from the screen.
+        made_of = " + ".join(prediction.signals) or "nothing measurable"
+        header = f"ODDS from {made_of} (UNPROVEN - not yet checked against results)"
     band = f"{prediction.p_low * 100:.0f}-{prediction.p_high * 100:.0f}%"
     trust = (
         "high"

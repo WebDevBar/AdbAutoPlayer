@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Solstice Clash: the odds block names what built the number.** The header said "from
+  the rating gap" on a figure the crowd had already moved by twenty points - a match
+  with a 9-point rating gap (a coin flip on ratings alone) displayed 34%, which was the
+  betting pools talking. It now reads `ODDS from rating + crowd + heroes`, and a signal
+  is named only if it actually moved the result: equal ratings, a comp of heroes nobody
+  has seen, or a twelve-spectator market are all in the arithmetic at a weight near zero
+  and none of them are claimed. The stored `predicted_source` records the same
+  composition compactly (`r+c+h`), because a rating-only call and a rating-plus-crowd
+  call are different models and pooling their calibration would hide whichever is wrong.
+
 - **AFK Journey - Solstice Clash: live odds during the draft.** A regularised
   Bradley-Terry model over collected matches - one strength per hero, an intercept for
   any structural side advantage - fitted once when the draft is confirmed and predicted

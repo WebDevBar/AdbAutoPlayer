@@ -497,3 +497,69 @@ def test_instance_uuid_keeps_an_existing_identity(tmp_db):
         )
 
     assert MatchStore(tmp_db).instance_uuid() == "mine"
+
+
+def test_adopting_a_pooled_window_never_overwrites_one_already_recorded(tmp_path):
+    """This install may have observed a rotation the pool has not been told about, and
+    overwriting a recorded boundary would silently re-file matches already attributed."""
+    import sqlite3
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+
+    db = tmp_path / "t.sqlite"
+    con = sqlite3.connect(db)
+    con.executescript(
+        "CREATE TABLE event(id INTEGER PRIMARY KEY, slug TEXT);"
+        "CREATE TABLE theme(id INTEGER PRIMARY KEY, event_id INT, slug TEXT,"
+        " name TEXT, starts_at TEXT, ends_at TEXT, is_default INT DEFAULT 0,"
+        " UNIQUE(event_id, slug));"
+        "INSERT INTO event(id,slug) VALUES(1,'solstice-clash');"
+        "INSERT INTO theme(event_id,slug,name,starts_at,ends_at)"
+        " VALUES(1,'a','A','2026-01-01T00:00:00Z',NULL);"
+    )
+    con.commit()
+    con.close()
+
+    store = MatchStore(db)
+    filled = store.adopt_theme_windows([
+        {"event_slug": "solstice-clash", "slug": "a", "name": "A",
+         "starts_at": "2026-06-06T00:00:00+00:00", "ends_at": "2026-02-02T00:00:00+00:00"},
+    ])
+    con = sqlite3.connect(db)
+    starts, ends = con.execute(
+        "SELECT starts_at, ends_at FROM theme WHERE slug='a'"
+    ).fetchone()
+    con.close()
+    assert starts == "2026-01-01T00:00:00Z", "a recorded boundary is never overwritten"
+    # The offset form is normalised to Z: the window comparison is a STRING comparison,
+    # so mixing the two would compare wrongly at exactly the boundary it exists to mark.
+    assert ends == "2026-02-02T00:00:00Z"
+    assert filled == 1
+
+
+def test_a_theme_the_pool_knows_and_we_do_not_is_inserted(tmp_path):
+    """A theme arriving mid-event must not have to wait for a release."""
+    import sqlite3
+
+    from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+
+    db = tmp_path / "t.sqlite"
+    con = sqlite3.connect(db)
+    con.executescript(
+        "CREATE TABLE event(id INTEGER PRIMARY KEY, slug TEXT);"
+        "CREATE TABLE theme(id INTEGER PRIMARY KEY, event_id INT, slug TEXT,"
+        " name TEXT, starts_at TEXT, ends_at TEXT, is_default INT DEFAULT 0,"
+        " UNIQUE(event_id, slug));"
+        "INSERT INTO event(id,slug) VALUES(1,'solstice-clash');"
+    )
+    con.commit()
+    con.close()
+
+    MatchStore(db).adopt_theme_windows([
+        {"event_slug": "solstice-clash", "slug": "brand-new", "name": "Brand New",
+         "starts_at": "2026-09-09T00:00:00Z", "ends_at": None},
+    ])
+    con = sqlite3.connect(db)
+    row = con.execute("SELECT slug, starts_at FROM theme WHERE slug='brand-new'").fetchone()
+    con.close()
+    assert row == ("brand-new", "2026-09-09T00:00:00Z")

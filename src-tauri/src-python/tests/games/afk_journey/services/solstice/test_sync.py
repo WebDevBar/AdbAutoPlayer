@@ -48,8 +48,15 @@ class FakeServer:
         self.fail_push = self.fail_pull = False
         self.reject_reason = None
         self.rows = []
+        self.themes = []
 
     def __call__(self, method, path, body=None):
+        if path.endswith("/themes"):
+            # Distinguished by PATH, not method: both this and the match pull are GETs,
+            # and recording them under one name hides the order they happen in - which is
+            # the thing the sync test exists to pin.
+            self.calls.append("themes")
+            return {"themes": self.themes}
         if method == "POST":
             self.calls.append("push")
             self.batches.append(body["matches"])
@@ -255,11 +262,18 @@ def test_synced_rows_are_never_pushed_back(store, client):
 
 # --- manual trigger --------------------------------------------------------
 
-def test_manual_sync_pushes_then_pulls(store, client):
-    """Order matters: our rows reach the pool before we read it back."""
+def test_manual_sync_learns_the_themes_then_pushes_then_pulls(store, client):
+    """Order matters twice over.
+
+    Our rows reach the pool before we read it back - and the theme windows are learned
+    before either, because a match pushed without them is filed under the event default
+    on the SERVER too and stays that way. That is not hypothetical: the first rotation
+    put every match pushed after it onto "unknown".
+    """
     _seed_pushable(store, 1)
     client.sync_now()
-    assert client._server.calls[:2] == ["push", "pull"]
+    calls = [c for c in client._server.calls if c in ("themes", "push", "pull")]
+    assert calls[:3] == ["themes", "push", "pull"]
 
 
 # --- helpers ---------------------------------------------------------------

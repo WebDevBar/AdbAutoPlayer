@@ -266,6 +266,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         if not sync.enabled:
             logging.warning("[SC-36] sync is disabled - nothing to do")
             return
+        # Themes first: a match pushed before the window is known is filed under the
+        # default on the SERVER too, and stays that way.
+        sync.pull_themes()
         pushed, duplicate, rejected = sync.push()
         pulled = sync.pull()
         logging.info(
@@ -337,6 +340,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         stream on for itself and off again, where speed matters and OCR does not.
         """
         self.start_up(device_streaming=False)
+        # Before anything is recorded: a match stored under the wrong theme is a match no
+        # model will use, and the window is knowable only from the pool.
+        self._sync_theme_windows()
         self.navigate_to_world()
         self._overlay_prepare()
         # ADB_SOLSTICE_MAX_MATCHES bounds a run without touching the CLI, which does not
@@ -376,6 +382,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         stopped.
         """
         replay = load_replay_template(self.template_dir)
+        # Same reason as the spectate mode: a match recorded under the wrong theme is a
+        # match no model will use, and this mode records real ranked matches.
+        self._sync_theme_windows()
         sync = SyncClient(self._store)
         logging.info(
             f"[SC-35] sync {'enabled' if sync.enabled else 'disabled'}; "
@@ -690,6 +699,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # Poll the draft rather than grabbing one frame at the end of it. The chat drag
         # happens inside, the moment the draft is confirmed, and the last draft frame
         # comes back so everything downstream is unchanged.
+        self._left_on_locked_screen = False
         draft_frame = self._watch_draft()
 
         # No wait for the "Last chance!" banner: it flashes in the final seconds of the
@@ -702,7 +712,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # The locked-picks screen, read from its own geometry. It is the last look at
         # the six before the battle, and the only one where nothing can still change.
         confirmed = False
-        if draft_frame is not None:
+        # Gated on HOW the watch exited, not on whether it returned a frame. It returns
+        # one either way, so this used to announce the locked screen immediately after
+        # SC-62 reported that it never appeared - and then read six cells off a draft
+        # frame as though they were locked.
+        if draft_frame is not None and self._left_on_locked_screen:
             logging.info("[SC-58] locked picks screen")
 
             burst_dir = os_module.environ.get("ADB_SOLSTICE_LOCK_FRAMES")
@@ -1402,6 +1416,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # so waiting through the gap can only help.
                 if saw_draft and is_locked_screen(frame, screens):
                     logging.info("[SC-55] draft over - locked screen is up")
+                    # The ONLY exit that means the locked screen is actually up. The
+                    # timeout path returns a frame too, so a caller that infers "locked
+                    # screen" from a non-None return logs it after SC-62 has just said
+                    # the opposite - and then reads six cells off a draft frame.
+                    self._left_on_locked_screen = True
                     # Kept as the fallback for the read: this frame HAS confirmed as the
                     # locked screen, so if the settle re-check later disagrees, reading
                     # it beats reading nothing.
@@ -1634,6 +1653,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")
 
+    def _sync_theme_windows(self) -> None:
+        """Adopt the pool's theme boundaries, and re-file anything they now cover.
+
+        Themes rotate on a schedule the server knows and a client does not, and a client
+        that does not know a window files its matches under the event default - which the
+        model then discards entirely, because cross-theme matches count for nothing. That
+        is not hypothetical: the first rotation put 14 matches on "unknown" here and
+        every match pushed to the pool after it.
+
+        Never fatal. No network, no sync key, a server that is down - all of them mean
+        the run proceeds on whatever boundaries this install already had.
+        """
+        try:
+            sync = SyncClient(self._store)
+            if sync.enabled:
+                sync.pull_themes()
+        except Exception as exc:  # noqa: BLE001 - never worth a run
+            logging.debug(f"[SC-37] could not sync theme windows: {exc}")
+
     def _overlay_prepare(self, install_if_absent: bool = False) -> None:
         """Get the overlay ready, ONCE, before the collection loop.
 
@@ -1807,11 +1845,16 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # from another event is a different scale entirely.
             self._band_evidence = band_evidence(matches, event_id=_event)
             rated = sum(seen for seen, _ in self._band_evidence.values())
+            # Every number here used to carry a different scope, printed side by side as
+            # though they matched: the headline counted rows the fit DISCARDS, the hero
+            # count included heroes only ever seen in discarded matches, and the ratings
+            # count was per-event and silently excluded zero-gap matches. Say what each
+            # one measures, and lead with the one that decides whether the model works.
             logging.info(
-                f"[SC-72] odds model: {len(matches)} matches "
-                f"({same_event} this event, {same_theme} this theme, "
-                f"{rated} with ratings), "
-                f"{len(fitted.heroes)} heroes"
+                f"[SC-72] odds model: fitted on {same_theme} matches from this theme "
+                f"({len(fitted.appearances)} heroes seen in them); "
+                f"{len(matches)} stored, {same_event} this event, "
+                f"{rated} rated with a non-zero gap this event"
             )
             self._odds_fit = fitted
             self._theme_matches = same_theme

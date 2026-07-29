@@ -625,7 +625,7 @@ def format_odds(
         f"  {header}",
         f"  BLUE {left:.0f}%   |   RED {right:.0f}%",
         f"  80% interval {band}   trust: {trust}",
-        f"  {locked}/6 picks locked",
+        f"  {locked}/6 heroes identified",
         _RULE,
         "",
     ]
@@ -705,16 +705,23 @@ VALIDATED = False
 
 def gate_reason(
     fitted: Fit | None,
-    locked: int,
+    identified: int,
     theme_matches: int,
     has_ratings: bool = False,
 ) -> str | None:
     """Why the odds must NOT be shown, or None if they may be.
 
     Order matters only for the message; any one of these is disqualifying.
+
+    `identified` is how many heroes were READ, not how many are locked. On the locked
+    screen all six are locked by definition, so a single unreadable cell used to gate a
+    complete draft with "3/6 picks locked, need 4" - a message that was false twice over.
+    Gating on what was read is right; describing it as locked was not.
     """
-    if locked < MIN_LOCKED_FOR_ODDS:
-        return f"{locked}/6 picks locked, need {MIN_LOCKED_FOR_ODDS}"
+    if identified < MIN_LOCKED_FOR_ODDS:
+        return (
+            f"{identified}/6 heroes identified, need {MIN_LOCKED_FOR_ODDS}"
+        )
     if has_ratings:
         # The rating prior is informative on its own and does not depend on collected
         # matches at all, so a thin hero model is no reason to withhold the number. What

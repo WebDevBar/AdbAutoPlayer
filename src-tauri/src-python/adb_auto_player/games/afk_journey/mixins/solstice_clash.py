@@ -305,6 +305,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         """Remove it. Nobody should need an adb incantation to undo what a mode did."""
         self.start_up(device_streaming=False)
         try:
+            # Hide and stop before removing. Android kills the process on uninstall and
+            # the window manager reaps its windows with it, so a visible overlay cannot
+            # be stranded - but taking it down first means the removal never depends on
+            # that, and the screen is clean a moment earlier either way.
+            overlay.safe_shell(self._device.d, overlay.clear_command())
+            overlay.safe_shell(self._device.d, overlay.stop_command())
             self._device.d.d.uninstall(overlay.PACKAGE)
             logging.info("[SC-82] odds overlay removed")
         except Exception as exc:  # noqa: BLE001

@@ -60,3 +60,10 @@ data/solstice_clash/__pycache__/
 *.rpm
 AdbAutoPlayer-latest.rpm
 _forkkey.py
+
+# Android overlay build output. The APK that ships is committed at
+# data/solstice_clash/odds-overlay.apk; everything under here is regenerable.
+android/odds-overlay/.gradle/
+android/odds-overlay/build/
+android/odds-overlay/app/build/
+android/odds-overlay/local.properties

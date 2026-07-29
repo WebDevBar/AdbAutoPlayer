@@ -97,6 +97,16 @@ cfg["bundle"]["linux"]["rpm"]["release"] = sys.argv[1]
 p.write_text(json.dumps(cfg, indent=2) + "\n")
 PYEOF
   echo "== RPM release set from wdb_version.py: $WDB_RELEASE =="
+
+  # The frontend carries its own copy, because the GUI logs the version before Python is
+  # reachable. Two copies can drift silently and would ship a log line that lies about
+  # which build is running, so this refuses to build rather than let that out.
+  UI_RELEASE="$(sed -n 's/^export const WDB_RELEASE = "\(.*\)";/\1/p' src/lib/wdb-version.ts)"
+  if [ "$UI_RELEASE" != "$WDB_RELEASE" ]; then
+    echo "FAILED: WDB release mismatch - python says $WDB_RELEASE, frontend says $UI_RELEASE" >&2
+    echo "        update src/lib/wdb-version.ts to match wdb_version.py" >&2
+    exit 1
+  fi
 fi
 
 pnpm bundle-templates

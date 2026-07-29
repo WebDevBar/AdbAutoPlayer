@@ -2,6 +2,7 @@
   import "../app.css";
 
   import { onMount, onDestroy } from "svelte";
+  import { wdbVersion } from "$lib/wdb-version";
   import { setupExternalLinkHandler } from "$lib/utils/external-links";
   import { applySettingsFromFile, applySettings } from "$lib/utils/settings";
   import { invoke } from "@tauri-apps/api/core";
@@ -65,7 +66,12 @@
 
     const version = await getVersion();
     settings.setVersion(version);
-    await logInfo(`App Version: ${version}`);
+    // Both, because they answer different questions: the upstream version says which
+    // AdbAutoPlayer release these patches sit on, the WDB one says which of our builds
+    // is running - which is what somebody reading a log actually needs.
+    await logInfo(
+      `App Version: ${version}   WDB Version: ${wdbVersion(version)}`,
+    );
     initPostHog(version);
   }
 

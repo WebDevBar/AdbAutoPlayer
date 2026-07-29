@@ -22,6 +22,7 @@ sys.excepthook = _write_crash_log
 import asyncio
 import logging
 import multiprocessing
+import os
 import queue
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
@@ -542,6 +543,17 @@ class SaveLogFileBody(BaseModel):
 
 @commands.command()
 async def save_log_file(body: SaveLogFileBody) -> str:
+    """Write the export and LOG where it went.
+
+    There is no file picker - the write is silent, and the destination is not always
+    Downloads (a machine without that folder gets the temp directory instead). Saying
+    nothing left the user hunting for a file that might be in either place, on any
+    platform. The frontend used to reveal it in the file manager instead, which on
+    Linux prompted "open with..." rather than showing the folder.
+
+    The path is logged home-relative on POSIX because that is the form the log panel
+    turns into a clickable link; Windows paths are already matched absolute.
+    """
     downloads = Path.home() / "Downloads"
     save_dir = (
         downloads
@@ -550,6 +562,14 @@ async def save_log_file(body: SaveLogFileBody) -> str:
     )
     save_path = save_dir / body.filename
     save_path.write_text(body.content, encoding="utf-8")
+
+    display = str(save_path)
+    if os.name != "nt":
+        try:
+            display = f"~/{save_path.relative_to(Path.home())}"
+        except ValueError:
+            pass
+    logging.info(f"log exported to {display}")
     return str(save_path)
 
 

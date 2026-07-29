@@ -4,6 +4,14 @@
 
 ### Added
 
+- **The log export says where it saved, and no longer opens a dialog.** There is no file
+  picker - the export writes to `Downloads`, or the temp directory on a machine without
+  one - and nothing said which. The frontend used to reveal the file in the file manager
+  afterwards, which on Linux prompted "open with..." rather than showing the folder, so
+  the export appeared to do the wrong thing. It now logs `log exported to <path>`, and
+  the log panel renders that as a clickable link, so the destination is visible when
+  wanted and silent when not. Applies to both the filtered export and the WDB session log.
+
 - **AFK Journey - Solstice Clash: a hero-vs-hero record is now queryable.** The new
   `hero_matchup` view gives one row per unordered hero pair per theme - `a_wins`,
   `b_wins`, `tally`, `draws` and `observations` - keyed canonically (`hero_a < hero_b`)

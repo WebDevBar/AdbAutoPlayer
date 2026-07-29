@@ -164,8 +164,11 @@
       .join("\n");
     const filename = `adbautoplayer-log-profile-${profileIndex}-${new Date().toISOString().slice(0, 10)}.txt`;
     try {
-      const savedPath = await saveLogFile({ content: logText, filename });
-      await revealItemInDir(savedPath);
+      // Deliberately NOT revealed in the file manager. On Linux that call prompted
+      // "open with..." rather than showing the folder, so the export appeared to do
+      // the wrong thing. The backend logs the destination instead, and the log panel
+      // turns it into a clickable path - visible when wanted, silent when not.
+      await saveLogFile({ content: logText, filename });
     } catch (e) {
       console.error("Failed to export log:", e);
     }
@@ -177,8 +180,7 @@
     try {
       const content = await readWdbLog();
       const filename = `wdb-session-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
-      const savedPath = await saveLogFile({ content, filename });
-      await revealItemInDir(savedPath);
+      await saveLogFile({ content, filename });
     } catch (e) {
       console.error("Failed to export the WDB log:", e);
     }

@@ -56,6 +56,7 @@ from ..services.solstice.odds import (
     load_matches,
     predict as predict_odds,
 )
+from ..services.solstice import overlay
 from ..services.solstice.paths import (
     draft_frame_dir,
     solstice_db_path,
@@ -273,6 +274,43 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         )
 
     @register_command(
+        name="SolsticeClashInstallOverlay",
+        gui=GUIMetadata(
+            label="WDB: Install Odds Overlay",
+            category=AFKJCategory.EVENTS_AND_OTHER,
+            tooltip="Install the in-game odds bubble and grant it permission",
+        ),
+    )
+    def install_odds_overlay(self) -> None:
+        """Install and grant, without starting a collection run.
+
+        A collection run does this itself. This exists so that a thing installed on
+        someone's device is visible where they can see it and remove it, rather than
+        being a side effect of something else.
+        """
+        self.start_up(device_streaming=False)
+        self._overlay_prepare()
+        if not getattr(self, "_overlay_ok", False):
+            logging.warning("[SC-82] the odds overlay could not be installed")
+
+    @register_command(
+        name="SolsticeClashUninstallOverlay",
+        gui=GUIMetadata(
+            label="WDB: Uninstall Odds Overlay",
+            category=AFKJCategory.EVENTS_AND_OTHER,
+            tooltip="Remove the in-game odds bubble from the device",
+        ),
+    )
+    def uninstall_odds_overlay(self) -> None:
+        """Remove it. Nobody should need an adb incantation to undo what a mode did."""
+        self.start_up(device_streaming=False)
+        try:
+            self._device.d.d.uninstall(overlay.PACKAGE)
+            logging.info("[SC-82] odds overlay removed")
+        except Exception as exc:  # noqa: BLE001
+            logging.warning(f"[SC-82] could not remove the overlay: {exc}")
+
+    @register_command(
         name="SolsticeClashCollect",
         gui=GUIMetadata(
             label="WDB: Collect Solstice Clash Data",
@@ -294,6 +332,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         """
         self.start_up(device_streaming=False)
         self.navigate_to_world()
+        self._overlay_prepare()
         # ADB_SOLSTICE_MAX_MATCHES bounds a run without touching the CLI, which does not
         # expose this argument. Testing a change otherwise meant starting an unbounded
         # run, watching minutes of silence between drafts, and killing it by hand.
@@ -957,6 +996,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             self._draw_this_cycle = False
             if max_matches is not None and recorded >= max_matches:
                 logging.info(f"recorded {recorded} match(es), stopping as requested")
+                self._overlay_stop()
                 return
             try:
                 if self._run_one_match():
@@ -1328,6 +1368,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 last_draft_frame = frame
             if not saw_draft and on_draft:
                 logging.info("[SC-54] draft screen")
+                self._overlay_hide()
 
             if not on_draft:
                 # The ONLY normal exit is the next screen arriving. Absence of the draft
@@ -1569,6 +1610,69 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")
 
+    def _overlay_prepare(self) -> None:
+        """Install, grant and quieten the overlay. ONCE, before the collection loop.
+
+        Never on the draft path. A draft is ~20 seconds and the first pick reads already
+        compete with the model fit and the ratings OCR; an install there would cost pick
+        reads and push the first number past the moment a bet is possible, which is the
+        one thing this feature exists to prevent.
+        """
+        self._overlay_ok = False
+        try:
+            apk = overlay.apk_path()
+            if apk is None:
+                logging.debug("[SC-82] no overlay APK bundled - running without it")
+                return
+            device = self._device.d
+            installed = overlay.parse_version(
+                overlay.safe_shell(device, overlay.version_command()) or ""
+            )
+            if overlay.needs_install(installed, overlay.OVERLAY_VERSION):
+                logging.info(f"[SC-82] installing the odds overlay ({apk.name})")
+                self._device.d.d.sync.push(str(apk), overlay.STAGED_APK)
+                # Waydroid's dex2oat hangs - installd killed it after 570 SECONDS on a 4KB
+                # dex, wedging every install. Skipping compilation installs in ~25s. The
+                # property does not survive a reboot, so it is set on every install rather
+                # than once by hand: the mode has to work on a machine nobody prepared.
+                overlay.safe_shell(device, overlay.dexopt_skip_command())
+                result = overlay.safe_shell(device, overlay.install_command()) or ""
+                if "Success" not in result:
+                    logging.info(f"[SC-82] overlay install failed, continuing: {result}")
+                    return
+            # Unconditionally: an uninstall/install cycle loses the grant, and re-granting
+            # one already in place costs nothing.
+            overlay.safe_shell(device, overlay.grant_command())
+            overlay.safe_shell(device, overlay.snooze_notice_command())
+            self._overlay_ok = True
+            logging.info("[SC-82] odds overlay ready")
+        except Exception as exc:  # noqa: BLE001 - a display is never worth a run
+            logging.info(f"[SC-82] overlay unavailable, continuing without it: {exc}")
+
+    def _overlay_show(self, prediction, gate: str | None) -> None:
+        """Paint the current call, or hide the bubble when there is no favourite."""
+        if not getattr(self, "_overlay_ok", False):
+            return
+        mode, percent = overlay.bubble_for(prediction, gate)
+        overlay.safe_shell(self._device.d, overlay.update_command(mode, percent))
+
+    def _overlay_hide(self) -> None:
+        """Hide it.
+
+        Also called when a draft is confirmed, as a retry: a hide that failed at the end
+        of the last match would otherwise leave its number on screen through the next
+        draft, presenting a stale call as a current one.
+        """
+        if not getattr(self, "_overlay_ok", False):
+            return
+        overlay.safe_shell(self._device.d, overlay.clear_command())
+
+    def _overlay_stop(self) -> None:
+        """The overlay does not outlive the run that started it."""
+        if not getattr(self, "_overlay_ok", False):
+            return
+        overlay.safe_shell(self._device.d, overlay.stop_command())
+
     def _log_final_odds(self, merged) -> None:
         """Print the odds block for the completed six-hero draft."""
         try:
@@ -1605,6 +1709,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             logging.info("[SC-76] FINAL - all picks locked")
             for line in format_odds(prediction, len(left) + len(right), gate):
                 logging.info(line)
+            # Shown, not hidden. Betting stays open through the last-chance countdown on
+            # the locked screen - MATCH_TIMEOUT is measured from the prematch screen for
+            # exactly that reason - so the complete six-hero call arrives while a bet is
+            # still possible.
+            self._overlay_show(prediction, gate)
         except Exception as exc:  # noqa: BLE001 - never worth a match
             logging.debug(f"[SC-76] final odds could not be shown: {exc}")
 
@@ -1704,6 +1813,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 return
             for line in format_odds(prediction, len(settled), gate):
                 logging.info(line)
+            self._overlay_show(prediction, gate)
         except Exception as exc:  # noqa: BLE001
             logging.warning(f"[SC-73] odds could not be computed: {exc}")
 

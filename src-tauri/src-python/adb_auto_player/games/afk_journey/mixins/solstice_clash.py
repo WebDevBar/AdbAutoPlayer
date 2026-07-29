@@ -909,6 +909,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 overworld_seen = 0
             raise _UndesiredResultError()
 
+        # The fight is starting, so betting is closed and the number is history. Hiding it
+        # here rather than at the next draft means the overlay is absent for the minutes
+        # a match takes, which is most of a run - and an absent bubble is the state that
+        # is provably identical to not having the overlay at all.
+        self._overlay_hide()
+
         try:
             found = self._execute_or_timeout(
                 _match_end,

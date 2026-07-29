@@ -141,7 +141,9 @@ corpus grows and is not converged.
   Aurora was pickable in a live Flourishing Wilds match while the Converging Paths roster
   snapshot had her banned, and the in-game Themes screen distinguishes "Standard terrain"
   from "Special terrain". Roster and map both change, so hero value does not carry.
-  `CROSS_THEME_WEIGHT` is 0.35 and the display gate counts the theme. The cost is accepted:
+  `CROSS_THEME_WEIGHT` went 0.35 then 0.0 on the operator's read of the first rotation -
+  the borrowed evidence hurt more than the thin data it was meant to cushion. Another
+  theme's matches are now DISCARDED, not discounted. The display gate counts the theme. The cost is accepted:
   the model is thin again at every rotation, which is the honest position when the thing
   being modelled genuinely changed.
 

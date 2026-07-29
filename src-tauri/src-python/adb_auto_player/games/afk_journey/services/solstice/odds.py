@@ -115,9 +115,17 @@ SIGMA_RATING = 0.5
 # So a match from a sibling theme is evidence about the same heroes under different rules.
 # Not worthless - early in a theme it is most of what exists - but not equivalent either.
 #
-# The cost is real and accepted: at every rotation the model is thin again. That is the
-# honest position when the thing being modelled genuinely changed.
-CROSS_THEME_WEIGHT = 0.35
+# 0.0 since 2026-07-29: another theme's matches are DISCARDED, not merely discounted.
+# 0.35 was a compromise between "same heroes" and "different rules", and the operator's
+# read of the first rotation is that the borrowed evidence hurts more than the thin data
+# it was meant to cushion - which is consistent with a roster and a battlefield that both
+# change.
+#
+# The cost is real and accepted: at every rotation the model starts from nothing and is
+# useless until the new theme fills in. That is the honest position when the thing being
+# modelled genuinely changed, and it is a weight to revisit once two themes each hold a
+# few hundred matches and the question can be answered rather than judged.
+CROSS_THEME_WEIGHT = 0.0
 
 MAX_ITERATIONS = 100
 CONVERGENCE = 1e-8

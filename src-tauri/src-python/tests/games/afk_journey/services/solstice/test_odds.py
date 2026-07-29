@@ -98,29 +98,38 @@ def test_more_evidence_narrows_the_interval():
     assert (thick.p_high - thick.p_low) < (thin.p_high - thin.p_low)
 
 
-def test_a_sibling_theme_counts_for_less():
+def test_another_theme_counts_for_nothing():
     """Themes change the roster and the battlefield, so a match from another theme is
     evidence about the same heroes under different rules.
 
     Established the hard way on 2026-07-29: Aurora was pickable in a live Flourishing
     Wilds match while our Converging Paths roster had her banned, and the in-game Themes
-    screen distinguishes standard from special terrain. A hero that cannot be picked in
-    one theme has no strength to carry into the next."""
+    screen distinguishes standard from special terrain. Discounted to 0.35 first, then
+    dropped to zero when the borrowed evidence proved worse than the thin data it was
+    meant to cushion."""
     same = fit(_dominant(), theme_id=1)
     other = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
                 theme_id=1)
     column = same.index_of("star")
     assert column is not None
-    assert other.beta[column] < same.beta[column]
-    assert 0.0 < CROSS_THEME_WEIGHT < 1.0
+    # Learned nothing at all from the sibling theme: the strength stays at its prior.
+    assert abs(other.beta[column]) < 1e-6
+    assert CROSS_THEME_WEIGHT == 0.0
 
 
-def test_cross_theme_data_still_counts_for_something():
-    """Down-weighted is not discarded - early in a theme it is most of what exists."""
-    cross = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
-                theme_id=1)
-    p = predict(cross, ["star", "h0", "h1"], ["h2", "h3", "h4"])
-    assert p.p_mid > 0.5
+def test_a_thin_theme_is_gated_rather_than_padded():
+    """The consequence of discarding: right after a rotation there is nothing to predict
+    from, and the gate must say so instead of the model borrowing last theme's answers."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        MIN_MATCHES_FOR_ODDS,
+        gate_reason,
+    )
+
+    fitted = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
+                 theme_id=1)
+    reason = gate_reason(fitted, 6, 0, has_ratings=False)
+    assert reason is not None
+    assert str(MIN_MATCHES_FOR_ODDS) in reason
 
 
 def test_the_interval_brackets_the_estimate():

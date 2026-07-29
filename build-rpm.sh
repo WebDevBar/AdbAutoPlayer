@@ -82,6 +82,23 @@ PYTAURI_STANDALONE=1 uv pip install --exact --compile-bytecode \
 echo "== 5/6 build env (rpath to embedded python) + bundle templates =="
 export PYO3_PYTHON="$(realpath ./src-tauri/pyembed/python/bin/python3)"
 export RUSTFLAGS=" -C link-arg=-Wl,-rpath,\$ORIGIN/../lib/${PRODUCT_NAME}/lib -L $(realpath ./src-tauri/pyembed/python/lib)"
+# The fork release number lives in the CODE, because that is where it can be read at
+# runtime - a number kept only in packaging config is invisible in a log. The bundle
+# config follows it rather than the other way round.
+WDB_RELEASE="$(sed -n 's/^WDB_RELEASE = "\(.*\)"/\1/p' \
+    src-tauri/src-python/adb_auto_player/wdb_version.py)"
+if [ -n "$WDB_RELEASE" ]; then
+  python3 - "$WDB_RELEASE" <<'PYEOF'
+import json, sys
+from pathlib import Path
+p = Path("src-tauri/tauri.bundle.linux.json")
+cfg = json.loads(p.read_text())
+cfg["bundle"]["linux"]["rpm"]["release"] = sys.argv[1]
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+PYEOF
+  echo "== RPM release set from wdb_version.py: $WDB_RELEASE =="
+fi
+
 pnpm bundle-templates
 
 echo "== 6/6 build the RPM =="

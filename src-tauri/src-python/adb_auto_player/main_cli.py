@@ -66,6 +66,19 @@ def main() -> None:
         app_config_dir = project_root / "src-tauri" / "settings"
     else:
         app_config_dir = Path(app_config_dir)
+    # Both versions, because they answer different questions. The upstream one says which
+    # AdbAutoPlayer release these patches sit on; the WDB one says which of OUR builds is
+    # running, which is what somebody reading a log actually needs.
+    try:
+        from importlib.metadata import version
+
+        from adb_auto_player.wdb_version import wdb_version
+
+        upstream = version("adb-auto-player")
+        logging.info(f"App Version: {upstream}   WDB Version: {wdb_version(upstream)}")
+    except Exception as exc:  # noqa: BLE001 - a version line is never worth a crash
+        logging.debug(f"could not determine the version: {exc}")
+
     logging.info(f"App Config Dir: {app_config_dir}")
 
     if not resource_dir:

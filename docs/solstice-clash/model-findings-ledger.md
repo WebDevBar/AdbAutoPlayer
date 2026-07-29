@@ -36,6 +36,31 @@ asserts need re-checking as data accumulates:
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
 change when the battlefield does. So unlike the hero model, this survives a rotation.
 
+## Hero strength does NOT survive a theme rotation
+
+2026-07-29, measured across the first real boundary: 365 Converging Paths matches against
+70 Flourishing Wilds ones.
+
+| | logloss | directional |
+|---|---|---|
+| carried strengths, cold | 0.6989 | **33/70 = 47%** |
+| always 50% | 0.6931 | - |
+| the old theme's base rate | 0.6944 | - |
+
+Worse than a coin flip. And as a decayed prior mean - the operator's `w_meta` schedule,
+which is the right shape for a transferable signal - it hurts at every k tried, from 5 to
+1000, by 0.0137 to 0.0164 against local-only.
+
+So the transferable-prior idea is dead for hero strength, and the per-theme scoping is
+vindicated a second time: not only do the roster and the battlefield change, the strengths
+measurably do not carry.
+
+**The consequence is a real product limit, not a bug.** Bradley-Terry needs ~250-300
+matches to say anything, every rotation resets it, and nothing can be carried forward. At
+~18 matches an hour that is roughly the first 16 hours of each 3-day theme spent producing
+a number worth nothing. Anything that fixes cold start has to be a signal that is not
+learned from this theme's outcomes at all.
+
 ## Recorded predictions are not tuning data
 
 **When retuning, ignore `predicted_left` entirely.** What matters is the match outcome and

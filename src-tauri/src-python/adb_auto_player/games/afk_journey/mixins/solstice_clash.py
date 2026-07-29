@@ -223,6 +223,17 @@ LONGPRESS_VERIFICATION = False
 # not reachable. Deliberately NOT y1830 - that sits close enough to the bottom edge to
 # risk the Android gesture area - and NOT the top gap at y170, which does nothing at all.
 POPUP_DISMISS_AT = Point(540, 1700)
+
+# The stake slider on the draft screen, at 1080x1920. The handle parks dead centre
+# between the two All In tiles (x=115 and x=965), so 540 is the midpoint by construction
+# rather than by measurement - and it reads as the white handle body in every saved
+# frame checked, with the dark bar spanning 151..948 at that row. Dragging it off centre both
+# picks the side and sets the amount; the amount climbs fast, which is why the default
+# offset is a few pixels.
+BET_HANDLE_AT = Point(540, 1522)
+
+# Which side a probability favours. Named so the comparison is not a bare literal.
+_EVEN = 0.5
 # Wait before grabbing the draft frame so more pick slots have filled.
 # Delay before grabbing the draft frame, so more pick slots have filled. Kept small: the
 # long-press confirmation it was feeding is shelved, so a late frame buys little today.
@@ -1032,6 +1043,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         while consecutive_failures < max_restarts:
             self._match_recorded_this_cycle = False
             self._draw_this_cycle = False
+            # Reset with the others, or the first bet of the session is the only one.
+            self._bet_this_cycle = False
             if max_matches is not None and recorded >= max_matches:
                 logging.info(f"recorded {recorded} match(es), stopping as requested")
                 self._overlay_stop()
@@ -1790,6 +1803,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # exactly that reason - so the complete six-hero call arrives while a bet is
             # still possible.
             self._overlay_show(prediction, gate)
+            self._auto_bet(prediction, gate)
         except Exception as exc:  # noqa: BLE001 - never worth a match
             logging.debug(f"[SC-76] final odds could not be shown: {exc}")
 
@@ -1898,6 +1912,63 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             self._overlay_show(prediction, gate)
         except Exception as exc:  # noqa: BLE001
             logging.warning(f"[SC-73] odds could not be computed: {exc}")
+
+    def _auto_bet(self, prediction, gate: str | None) -> None:
+        """Stake tokens on the favoured side, if the operator asked for it.
+
+        Deliberately open-loop: drag a fixed distance and never read the amount back.
+        The stake need not be exact, the countdown is short, and a read-adjust loop
+        would have to finish inside it on screenshot capture when the stream is out.
+
+        Called from the FINAL all-locked odds, not the interim ones. That is the best
+        prediction of the match, and betting stays open through the last-chance
+        countdown. The slider geometry is verified on the draft screen; if the locked
+        screen differs the drag lands somewhere harmless and the log says what it tried.
+
+        Three conditions, all required:
+
+        - the operator enabled it - this spends real tokens and is off by default;
+        - the odds are NOT gated - a gated prediction is the model saying it does not
+          know, and staking on that is worse than staking at random;
+        - confidence clears the configured line.
+
+        Once per match. Without the flag, a second odds computation on the same draft
+        would stake again and double the bet for nothing.
+
+        Never raises. A bet is a convenience; losing a recorded match over one would be
+        a bad trade.
+        """
+        try:
+            wdb = getattr(self.settings, "wdb_modes", None)
+            if wdb is None or not getattr(wdb, "auto_bet", False):
+                return
+            if gate is not None or prediction is None:
+                return
+            if getattr(self, "_bet_this_cycle", False):
+                return
+
+            left = prediction.p_mid
+            confidence = max(left, 1.0 - left)
+            threshold = getattr(wdb, "auto_bet_threshold", 58) / 100.0
+            if confidence < threshold:
+                return
+
+            offset = int(getattr(wdb, "auto_bet_offset_px", 5))
+            x, y = BET_HANDLE_AT.x, BET_HANDLE_AT.y
+            if left > _EVEN:
+                side = "blue"
+                self.swipe_left(y=y, sx=x, ex=x - offset, duration=0.4)
+            else:
+                side = "red"
+                self.swipe_right(y=y, sx=x, ex=x + offset, duration=0.4)
+
+            self._bet_this_cycle = True
+            logging.info(
+                f"[SC-94] staked on {side} at {confidence * 100:.0f}% "
+                f"- handle dragged {offset}px from centre"
+            )
+        except Exception as exc:  # a bet is never worth a match
+            logging.warning(f"[SC-94] could not place the bet: {exc}")
 
     def _read_draft_picks(
         self,

@@ -4,6 +4,20 @@
 
 ### Added
 
+- **Auto-Bet (off by default).** Stakes Guess Tokens on the favoured side when the model
+  clears a confidence line, by dragging the stake handle a few pixels off centre. Three
+  settings: the toggle, the confidence threshold (default 58%), and how far to drag
+  (default 5px - the amount climbs fast).
+  - Fires on the FINAL all-locked odds, which is the best prediction of the match and
+    still inside the window where betting is open. Once per match.
+  - Never stakes while the odds are GATED. A gate is the model saying it does not know,
+    and a confident-looking number resting on almost no data is worse to bet than a coin.
+  - Open-loop on purpose: it drags a fixed distance and does not read the amount back.
+    The countdown is short and precision is not what this is for.
+  - **The threshold is a preference, not a promise.** Measured accuracy above 56% is
+    about 61% (95% interval 49-72), and the threshold has not survived its own selection
+    audit. Expect to lose some.
+
 - **The client now upgrades its own database.** A shipped build never ran `migrate.py`,
   and `solstice_db_path` hands back an existing user database untouched - so a database
   kept whatever schema it was seeded with, permanently. A contributor who installed

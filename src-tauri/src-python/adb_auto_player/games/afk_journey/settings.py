@@ -188,6 +188,43 @@ class WDBModesSettings(BaseModel):
             "Clash database."
         ),
     )
+    auto_bet: bool = Field(
+        default=False,
+        alias="Auto-Bet",
+        title="Auto-Bet",
+        description=(
+            "Stake Guess Tokens on the favoured side when the model is confident. OFF "
+            "by default, and it spends real tokens - the model is right about 6 times "
+            "in 10 on the calls it flags, not 8, so expect to lose some. Nothing is "
+            "staked while the odds are gated, or when neither side is favoured."
+        ),
+    )
+    auto_bet_threshold: int = Field(
+        default=58,
+        ge=50,
+        le=95,
+        alias="Auto-Bet Confidence %",
+        title="Auto-Bet Confidence %",
+        description=(
+            "Minimum confidence before anything is staked. Measured accuracy above 56% "
+            "is roughly 61% (95% interval 49-72), so treat this as a preference, not a "
+            "guarantee - the threshold has not survived its own selection audit."
+        ),
+    )
+    auto_bet_offset_px: int = Field(
+        default=18,
+        ge=1,
+        le=200,
+        alias="Auto-Bet Slider Offset",
+        title="Auto-Bet Slider Offset",
+        description=(
+            "How far to drag the stake handle from centre, in pixels at 1080x1920. "
+            "Measured live at a ~25k token balance: 5px staked 293, 9px staked 476, "
+            "12px staked 739, 20px staked 1209 - roughly 55-60 tokens per pixel, "
+            "near-linear. The default of 18 targets a little over 1000. The rate "
+            "scales with the balance: the same offset stakes more when there is more."
+        ),
+    )
 
 
 class GuildManagerScanSettings(BaseModel):

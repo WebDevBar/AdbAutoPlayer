@@ -167,6 +167,41 @@ def _scrub_seeded_copy(target: Path) -> None:
         pass
 
 
+def resource_file(relative: Path) -> Path | None:
+    """A file shipped with the application, wherever it happens to live.
+
+    The same ladder `bundled_db` and `solstice_icon_dir` use, and for the same reason: a
+    hardcoded path meant the icon library was silently EMPTY on every install but one,
+    and an empty library is indistinguishable from a bad frame at the call site.
+
+    Args:
+        relative: Path under the data directory, e.g. `solstice_clash/odds-overlay.apk`.
+
+    Returns:
+        The file, or None if no candidate exists.
+    """
+    candidates: list[Path] = []
+
+    override = os.environ.get("ADB_SOLSTICE_RESOURCE_DIR")
+    if override:
+        candidates.append(Path(override).expanduser() / relative)
+
+    here = Path(__file__).resolve()
+    for parents_up in (7, 8, 9):
+        if len(here.parents) > parents_up:
+            candidates.append(here.parents[parents_up] / "data" / relative)
+
+    for parent in here.parents:
+        if (parent / "data" / relative).exists():
+            candidates.append(parent / "data" / relative)
+            break
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def draft_frame_dir(configured: str = "") -> Path:
     """Where saved draft screenshots go.
 

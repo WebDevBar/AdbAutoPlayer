@@ -319,12 +319,18 @@ def main() -> None:
         # Rotates 02:00 Europe/Skopje on 2026-07-29, which is exactly midnight UTC -
         # and therefore also an hour-bucket boundary, so no match straddles it.
         ("converging-paths",  "Converging Paths",  None,      "2026-07-29T00:00:00Z", 0),
-        # Confirmed on the in-game Themes screen 2026-07-28 15:46 UTC: "Starts in 8h",
-        # which lands on the same midnight boundary Converging Paths ends at. `ends_at`
-        # stays NULL because that boundary has not been observed - an unknown boundary
-        # must never masquerade as a known one.
-        ("flourishing-wilds", "Flourishing Wilds", "2026-07-29T00:00:00Z", None, 0),
-        ("tactical-grounds",  "Tactical Grounds",  None,      None,       0),
+        # Both boundaries confirmed on the in-game Themes screen 2026-07-29 00:25 UTC:
+        # Flourishing Wilds shown as Current, Tactical Grounds as "Starts in 2d 23h",
+        # which lands on 2026-08-01 midnight UTC - 02:00 Europe/Skopje, the same wall
+        # clock every rotation has used, and an hour-bucket boundary so no match
+        # straddles it. A three-day cadence, matching Converging Paths.
+        ("flourishing-wilds", "Flourishing Wilds", "2026-07-29T00:00:00Z",
+         "2026-08-01T00:00:00Z", 0),
+        ("tactical-grounds",  "Tactical Grounds",  "2026-08-01T00:00:00Z", None, 0),
+        # The operator expects the final theme of the event to run two days rather than
+        # three. That is inference from the event end date, not an observed boundary, so
+        # it is written here and NOT in the table: a guessed window would file matches
+        # under a theme nobody confirmed, which is the failure the NULLs exist to prevent.
     ]
     for slug, name, starts, ends, is_default in themes:
         con.execute(

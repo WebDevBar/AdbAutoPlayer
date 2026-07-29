@@ -98,21 +98,21 @@ def test_more_evidence_narrows_the_interval():
     assert (thick.p_high - thick.p_low) < (thin.p_high - thin.p_low)
 
 
-def test_a_sibling_theme_counts_the_same_as_the_current_one():
-    """A theme applies modifiers that hit every hero equally, so a match from a sibling
-    theme is evidence about the same heroes. Down-weighting it starved the model at every
-    rotation - the moment it had the most data and could use it least.
+def test_a_sibling_theme_counts_for_less():
+    """Themes change the roster and the battlefield, so a match from another theme is
+    evidence about the same heroes under different rules.
 
-    This is the assumption made explicit so it can be retired: `theme_id` is still stored
-    on every match, and when two themes each hold a few hundred matches, fitting with and
-    without theme terms answers the question properly."""
+    Established the hard way on 2026-07-29: Aurora was pickable in a live Flourishing
+    Wilds match while our Converging Paths roster had her banned, and the in-game Themes
+    screen distinguishes standard from special terrain. A hero that cannot be picked in
+    one theme has no strength to carry into the next."""
     same = fit(_dominant(), theme_id=1)
     other = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
                 theme_id=1)
     column = same.index_of("star")
     assert column is not None
-    assert abs(other.beta[column] - same.beta[column]) < 1e-9
-    assert CROSS_THEME_WEIGHT == 1.0
+    assert other.beta[column] < same.beta[column]
+    assert 0.0 < CROSS_THEME_WEIGHT < 1.0
 
 
 def test_cross_theme_data_still_counts_for_something():
@@ -395,4 +395,4 @@ def test_the_gate_reports_the_real_theme_count_not_a_placeholder():
     # No ratings, so the gate cannot short-circuit and must judge on collected matches.
     assert gate_reason(fitted, 6, MIN_MATCHES_FOR_ODDS + 10, has_ratings=False) is None
     thin = gate_reason(fitted, 6, 0, has_ratings=False)
-    assert thin is not None and "0 matches for this event" in thin
+    assert thin is not None and "0 matches for this theme" in thin

@@ -1,0 +1,7 @@
+com.webdevbar.oddsoverlay.app-pngs-0 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/generated/res/pngs/release
+com.webdevbar.oddsoverlay.app-resValues-1 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/generated/res/resValues/release
+com.webdevbar.oddsoverlay.app-packageReleaseResources-2 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.webdevbar.oddsoverlay.app-packageReleaseResources-3 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.webdevbar.oddsoverlay.app-release-4 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.webdevbar.oddsoverlay.app-main-5 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/src/main/res
+com.webdevbar.oddsoverlay.app-release-6 /home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/src/release/res

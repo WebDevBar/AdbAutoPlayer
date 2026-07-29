@@ -122,10 +122,15 @@ corpus grows and is not converged.
   difference, not a strength ratio - which is why the rating predicts as weakly as it does.
 - **The left side wins 44% of 335 matches.** Noise, not a side advantage; the model already
   fits an intercept.
-- **Theme influence is treated as nothing** (operator, 2026-07-28): a theme applies
-  modifiers that hit every hero equally. `CROSS_THEME_WEIGHT` went 0.35 to 1.0 and the
-  display gate counts the event. `theme_id` is still recorded on every match so this can be
-  tested properly once two themes each hold a few hundred matches.
+- **Theme influence is real, and the model is scoped per theme.** Briefly treated as
+  nothing on 2026-07-28 - a theme was thought to apply modifiers hitting every hero
+  equally - and reverted the next evening on two observations from the game itself:
+  Aurora was pickable in a live Flourishing Wilds match while the Converging Paths roster
+  snapshot had her banned, and the in-game Themes screen distinguishes "Standard terrain"
+  from "Special terrain". Roster and map both change, so hero value does not carry.
+  `CROSS_THEME_WEIGHT` is 0.35 and the display gate counts the theme. The cost is accepted:
+  the model is thin again at every rotation, which is the honest position when the thing
+  being modelled genuinely changed.
 
 ## Methodology traps already paid for
 

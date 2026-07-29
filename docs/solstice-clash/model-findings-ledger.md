@@ -23,6 +23,19 @@ as predicted, on far too little data to act on.
 Rated matches accumulate on every run, so this becomes answerable without any new
 collection work. It is the single most promising untested signal.
 
+**The rating step, at ~200 rated matches.** The gap mapping is now "nothing under 100
+points, then a flat +-0.25 log-odds" - measured over 95 rated matches at 7.6x its standard
+error, 23 of 25 splits, against the stated 9-band table's 2.9x and 18/25. Two things it
+asserts need re-checking as data accumulates:
+
+- That gaps under 100 are worth nothing. Well supported: 0-50 favourites won 47%.
+- That past 100, more gap is NOT more edge. Every proportional variant scored at or below
+  the flat step - but only a handful of matches carry gaps above 150, so the far end is
+  effectively unobserved. If big gaps do deserve more weight, this sample cannot see it.
+
+Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
+change when the battlefield does. So unlike the hero model, this survives a rotation.
+
 ## How things are measured
 
 25 seeded shuffle splits, 80/20, mean held-out logloss against the training-fold base

@@ -58,24 +58,38 @@ USE_PLAYER_TERMS = False
 RATING_SCALE = 100.0
 
 # What a rating gap is worth, as percentage points moved off an even 50/50 toward the
-# higher-rated side. This is a STATED PRIOR from watching the event, not a measurement:
-# no collected match carried a rating until 2026-07-28, so there is nothing to fit yet.
-# It is used because a considered prior beats a coefficient fitted on zero observations,
-# and it is a table rather than a formula so that replacing any band with a measured
-# number later is a one-line change.
+# higher-rated side.
 #
-# Read as: a 150-point gap makes the better-rated side about 72%, not 50%.
+# MEASURED, replacing the stated prior it started as. Over 95 rated matches, against the
+# hero model, out of sample on 25 shuffle splits:
+#
+#   mapping                              gain     x SE   splits
+#   hero model alone                   +0.0123    4.5    20/25
+#   the stated 9-band table x0.60      +0.0182    2.9    18/25
+#   THIS: nothing under 100, then flat +0.0215    7.6    23/25
+#   deadband 50, proportional, cap 0.5 +0.0202    4.8    22/25
+#   deadband 100, proportional         +0.0115    3.4    18/25
+#
+# Two findings, and the second is the surprising one:
+#
+#   - Gaps under 100 points are worth NOTHING. The old table nudged 5% at 50 points and
+#     1.5% below that; the data says 0-50 is 47% for the favourite, which is noise.
+#   - Past 100 points, MORE GAP IS NOT MORE EDGE. Every proportional variant scored at or
+#     below this flat step and none was as reliable. What matters is whether the gap
+#     clears the threshold, not how far past it goes.
+#
+# Both fit what the ladder actually is: about +-20 points a match almost regardless of
+# opponent, so 100 points is roughly five net wins - the first amount that means anything
+# and, apparently, most of what it can mean.
+#
+# 0.0622 is 0.25 in log-odds, which is what was measured.
+#
+# CAVEAT: only a handful of matches carry gaps above 150, so if the far end does deserve
+# more weight this sample cannot see it. Re-check at ~200 rated matches.
 RATING_NUDGE = (
     # (gap at least, percentage points off 50)
-    (400, 0.50),
-    (300, 0.40),
-    (250, 0.35),
-    (200, 0.30),
-    (150, 0.22),
-    (125, 0.15),
-    (100, 0.10),
-    (50, 0.05),
-    (0, 0.015),
+    (100, 0.0622),
+    (0, 0.0),
 )
 # Once ratings have been collected for long enough to fit `gamma`, this switches off and
 # the fitted coefficient takes over. Kept as a flag so the changeover is deliberate.
@@ -351,7 +365,9 @@ def blended_nudge(band: int, evidence: dict[int, tuple[int, int]] | None) -> flo
 # The weights are DAMPED on purpose. Nothing here has been validated against outcomes
 # yet, and every one of them should be refitted from scored predictions once there are
 # enough - which is the whole reason predictions are recorded.
-W_RATING = 0.60
+# 1.0: the nudge table is now a measured offset rather than a stated prior, so there is
+# nothing left to damp. The 0.60 existed to hold back a guess.
+W_RATING = 1.0
 # 0.70 is provisional and possibly too high. A parimutuel pool is not a set of independent
 # opinions - bettors see the split before they bet, so money on one side attracts more
 # money to that side, and a snowball looks exactly like consensus. `crowd_reliability`

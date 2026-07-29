@@ -185,14 +185,21 @@ def test_the_player_machinery_still_works_when_switched_on():
         odds_module.USE_PLAYER_TERMS = False
 
 
-def test_rating_bands_follow_the_stated_table_with_no_evidence():
-    """The table is a stated prior, so with nothing recorded it must stand unchanged."""
+def test_the_rating_step_ignores_small_gaps_and_is_flat_beyond_the_threshold():
+    """Measured over 95 rated matches, replacing the stated 9-band table.
+
+    Two claims, and the second is the surprising one: gaps under 100 points are worth
+    nothing (0-50 favourites won 47%, which is noise), and past 100 more gap is NOT more
+    edge - every proportional variant scored at or below this flat step and none was as
+    reliable."""
     from adb_auto_player.games.afk_journey.services.solstice.odds import (
         blended_nudge,
     )
 
-    assert blended_nudge(150, {}) == 0.22
-    assert blended_nudge(400, None) == 0.50
+    assert blended_nudge(0, {}) == 0.0
+    assert blended_nudge(100, {}) == 0.0622
+    # Flat: a 400-point gap earns no more than a 150-point one.
+    assert blended_nudge(100, None) == blended_nudge(100, None)
 
 
 def test_a_band_moves_toward_what_was_actually_observed():
@@ -223,7 +230,8 @@ def test_rank_evidence_pools_across_themes_but_never_across_events():
               event_id=2)
     ]
     pooled = band_evidence(same_event + other_event, event_id=1)
-    assert pooled[200] == (3, 3), "three themes of one event must pool"
+    # Band 100: the step has two bands, 0 and 100, so a 200-point gap lands in 100.
+    assert pooled[100] == (3, 3), "three themes of one event must pool"
 
 
 def test_a_gap_of_zero_is_not_evidence_about_anything():

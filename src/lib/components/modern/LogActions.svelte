@@ -4,13 +4,20 @@
   interface Props {
     onClear: () => void;
     onExport: () => void;
+    onExportWdb: () => void;
   }
 
-  let { onClear, onExport }: Props = $props();
+  let { onClear, onExport, onExportWdb }: Props = $props();
 </script>
 
 <div class="actions">
   <button class="action-btn" onclick={onExport}>{$t("export")}</button>
+  <!-- The live view is filtered; this saves what the run actually said. -->
+  <button
+    class="action-btn"
+    onclick={onExportWdb}
+    title="Save the full WDB session log">wdb log</button
+  >
   <button class="action-btn" onclick={onClear}>{$t("clear")}</button>
 </div>
 

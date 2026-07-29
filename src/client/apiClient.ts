@@ -86,3 +86,9 @@ export async function saveLogFile(
 ): Promise<Commands["save_log_file"]["output"]> {
     return await pyInvoke("save_log_file", body, options);
 }
+
+export async function readWdbLog(
+    options?: InvokeOptions
+): Promise<string> {
+    return await pyInvoke("read_wdb_log", {}, options);
+}

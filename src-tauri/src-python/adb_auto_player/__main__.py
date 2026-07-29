@@ -141,6 +141,13 @@ class TauriQueueHandler(logging.Handler):
         self.profile_index = profile_index
 
     def emit(self, record):
+        # The live view is read over a shoulder while a draft runs, so every line that is
+        # merely true competes with the two or three that are useful. Everything still
+        # reaches the session file; this only decides what is worth watching.
+        from adb_auto_player.log.wdb_log import is_live_worthy
+
+        if not is_live_worthy(record.getMessage()):
+            return
         log_message = LogMessageFactory.create_log_message(
             record=record,
             message=StringHelper.sanitize_path(record.getMessage()),
@@ -212,6 +219,14 @@ def run_task(
 
     log_file = attach_warning_context_file_logging(logger)
     logging.debug(f"warning-context debug log: {log_file}")
+
+    # And the full session log: everything, truncated at startup, so it is always exactly
+    # the run being looked at. The live view above shows a curated few lines; this is
+    # where the rest goes, and where anything worth attaching to a bug report comes from.
+    from adb_auto_player.log.wdb_log import attach_wdb_session_log
+
+    wdb_file = attach_wdb_session_log(logger)
+    logging.info(f"WDB session log: {wdb_file}")
 
     def summary_callback(msg: str | None):
         # We are catching all exceptions here regardless
@@ -536,6 +551,28 @@ async def save_log_file(body: SaveLogFileBody) -> str:
     save_path = save_dir / body.filename
     save_path.write_text(body.content, encoding="utf-8")
     return str(save_path)
+
+
+@commands.command()
+async def read_wdb_log() -> str:
+    """The full WDB session log, for the export button.
+
+    The live view deliberately shows a curated handful of lines; this is everything the
+    run actually said. It is truncated at startup, so it is always exactly one session -
+    which is what makes it worth attaching to a bug report unedited.
+
+    Returns the text, or a one-line explanation if there is nothing to read. Never
+    raises: an export button that throws is worse than one that says why it is empty.
+    """
+    from adb_auto_player.log.wdb_log import wdb_log_path
+
+    path = wdb_log_path()
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return f"No WDB session log yet at {path}"
+    except OSError as exc:
+        return f"Could not read {path}: {exc}"
 
 
 def _model_gen_command_error() -> NoReturn:

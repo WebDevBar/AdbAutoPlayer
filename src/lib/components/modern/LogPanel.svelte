@@ -3,7 +3,7 @@
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
-  import { saveLogFile } from "$pytauri/apiClient";
+  import { readWdbLog, saveLogFile } from "$pytauri/apiClient";
   import { homeDir } from "@tauri-apps/api/path";
   import { profiles, settings, ui } from "$lib/stores.svelte";
   import { EventNames } from "$lib/log/eventNames";
@@ -171,6 +171,19 @@
     }
   }
 
+  async function handleExportWdb() {
+    // Not built from the on-screen entries: the live view is deliberately filtered, so
+    // exporting it would save the curated version rather than what the run said.
+    try {
+      const content = await readWdbLog();
+      const filename = `wdb-session-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
+      const savedPath = await saveLogFile({ content, filename });
+      await revealItemInDir(savedPath);
+    } catch (e) {
+      console.error("Failed to export the WDB log:", e);
+    }
+  }
+
   const isTaskRunning = $derived(!!profiles.states[profileIndex]?.active_task);
 
   async function handleLogClick(event: MouseEvent) {
@@ -206,7 +219,11 @@
 >
   <div class="header">
     <LogFilters linesCount={currentEntries.length} />
-    <LogActions onClear={handleClear} onExport={handleExport} />
+    <LogActions
+      onClear={handleClear}
+      onExport={handleExport}
+      onExportWdb={handleExportWdb}
+    />
   </div>
 
   <!-- svelte-ignore a11y_click_events_have_key_events -->

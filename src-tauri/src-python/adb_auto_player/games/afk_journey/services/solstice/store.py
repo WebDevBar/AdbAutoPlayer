@@ -14,11 +14,15 @@ Two rules that come from real failures:
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
+
+from .paths import resource_file
 
 
 @dataclass(frozen=True)
@@ -206,8 +210,40 @@ class MatchStore:
         "outcome_source",
     )
 
+    # Databases whose views this process has already ensured. Ensuring is idempotent and
+    # costs about a millisecond, but doing it on every connection would run it thousands
+    # of times a session for no benefit.
+    _views_ensured: ClassVar[set[Path]] = set()
+
     def __init__(self, db_path: Path) -> None:
         self._db = Path(db_path)
+        self._ensure_views()
+
+    def _ensure_views(self) -> None:
+        """Create the derived views if this database does not have them yet.
+
+        Needed because a shipped build never runs `migrate.py`, and `solstice_db_path`
+        returns an EXISTING user database untouched. A view added to the schema today
+        would otherwise reach only the machine that ran the migration and no one else.
+        `views.sql` is DROP-then-CREATE throughout, which makes this free to repeat and
+        lets a changed definition reach an install that already has the old one.
+
+        Failure is swallowed on purpose. A view is a convenience over data that is
+        already there, and nothing that records a match depends on one. A mode refusing
+        to start because a read-only helper could not be created would be a far worse
+        bug than the missing helper.
+        """
+        if self._db in MatchStore._views_ensured:
+            return
+        MatchStore._views_ensured.add(self._db)
+        sql = resource_file(Path("solstice_clash") / "views.sql")
+        if sql is None or not sql.is_file():
+            return
+        try:
+            with self._connect() as con:
+                con.executescript(sql.read_text())
+        except (sqlite3.Error, OSError) as exc:
+            logging.debug(f"[SC-93] derived views not created: {exc}")
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self._db)

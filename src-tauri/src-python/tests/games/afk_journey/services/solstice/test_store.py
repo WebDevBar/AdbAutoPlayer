@@ -563,3 +563,124 @@ def test_a_theme_the_pool_knows_and_we_do_not_is_inserted(tmp_path):
     row = con.execute("SELECT slug, starts_at FROM theme WHERE slug='brand-new'").fetchone()
     con.close()
     assert row == ("brand-new", "2026-09-09T00:00:00Z")
+
+
+# ---------------------------------------------------------------- derived views
+
+
+def _record_3v3(store, key, left, right, winner, theme_id=None):
+    """One complete match. Returns its id."""
+    mid = store.record_match(
+        MatchRecord(
+            source="compete",
+            captured_at="2026-07-29T10:00:00",
+            natural_key=key,
+            theme_id=theme_id,
+            outcome=winner,
+        )
+    )
+    store.record_heroes(
+        mid,
+        [HeroSlot("left", i + 1, h, None, "identified") for i, h in enumerate(left)]
+        + [
+            HeroSlot("right", i + 4, h, None, "identified")
+            for i, h in enumerate(right)
+        ],
+    )
+    return mid
+
+
+def test_hero_matchup_view_exists_on_a_database_that_predates_it(tmp_db):
+    """The client must create it: a shipped build never runs migrate.py.
+
+    `solstice_db_path` hands back an existing user database untouched, so a view defined
+    only in schema.sql would reach the machine that ran the migration and nowhere else.
+    """
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("DROP VIEW IF EXISTS hero_matchup")
+    MatchStore(tmp_db)  # constructing the store is what ensures the view
+    with sqlite3.connect(tmp_db) as con:
+        views = con.execute(
+            "SELECT COUNT(*) FROM sqlite_master"
+            " WHERE type='view' AND name='hero_matchup'"
+        ).fetchone()[0]
+    assert views == 1
+
+
+def test_hero_matchup_canonical_ordering_and_tally(tmp_db):
+    """A vs B and B vs A are ONE row, and the tally is oriented onto hero_a."""
+    store = MatchStore(tmp_db)
+    # 'alsa' < 'bryon' alphabetically, so alsa is always hero_a whichever side it took.
+    left = ["alsa", "cecia", "dionel"]
+    right = ["bryon", "eironn", "antandra"]
+    _record_3v3(store, "m1", left, right, "left")
+    # alsa on the RIGHT this time, and its side loses.
+    _record_3v3(
+        store,
+        "m2",
+        ["bryon", "cecia", "dionel"],
+        ["alsa", "eironn", "antandra"],
+        "left",
+    )
+    _record_3v3(store, "m3", left, right, "left")
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT hero_a, hero_b, a_wins, b_wins, tally, observations"
+            "  FROM hero_matchup WHERE hero_a='alsa' AND hero_b='bryon'"
+        ).fetchone()
+    # m1 and m3: alsa's side won. m2: alsa was on the right and lost.
+    assert row == ("alsa", "bryon", 2, 1, 1, 3)
+
+
+def test_hero_matchup_ignores_incomplete_and_mirror_pairs(tmp_db):
+    """The corpus rule must match the odds model's, or the two disagree forever.
+
+    A 2v3 comp would teach that two heroes beat three; a mirror pick is not a matchup.
+    """
+    store = MatchStore(tmp_db)
+    # A 2v3: only two identified heroes on the left.
+    mid = store.record_match(
+        MatchRecord(source="compete", captured_at="2026-07-29T10:00:00",
+                    natural_key="partial", outcome="left")
+    )
+    store.record_heroes(
+        mid,
+        [HeroSlot("left", 1, "alsa", None, "identified"),
+         HeroSlot("left", 2, "cecia", None, "identified"),
+         HeroSlot("left", 3, None, None, "unknown"),
+         HeroSlot("right", 4, "bryon", None, "identified"),
+         HeroSlot("right", 5, "eironn", None, "identified"),
+         HeroSlot("right", 6, "antandra", None, "identified")],
+    )
+    # A complete match where 'cecia' is picked by BOTH sides.
+    _record_3v3(store, "mirror", ["cecia", "alsa", "dionel"],
+                ["cecia", "eironn", "antandra"], "left")
+
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT COUNT(*) FROM hero_matchup WHERE hero_a='alsa' AND hero_b='bryon'"
+        ).fetchone()[0] == 0, "a 2v3 must not contribute"
+        assert con.execute(
+            "SELECT COUNT(*) FROM hero_matchup WHERE hero_a='cecia' AND hero_b='cecia'"
+        ).fetchone()[0] == 0, "a mirror pick is not a matchup"
+
+
+def test_hero_matchup_counts_draws_separately(tmp_db):
+    """Draws are excluded from wins/losses but not thrown away.
+
+    The odds model drops them; keeping the count means a later formula that wants them
+    does not need a schema change to get them.
+    """
+    store = MatchStore(tmp_db)
+    left = ["alsa", "cecia", "dionel"]
+    right = ["bryon", "eironn", "antandra"]
+    _record_3v3(store, "d1", left, right, "draw")
+    _record_3v3(store, "d2", left, right, "left")
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT a_wins, b_wins, tally, draws, observations"
+            "  FROM hero_matchup WHERE hero_a='alsa' AND hero_b='bryon'"
+        ).fetchone()
+    assert row == (1, 0, 1, 1, 1)

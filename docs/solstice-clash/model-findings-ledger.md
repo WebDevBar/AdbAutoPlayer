@@ -325,6 +325,78 @@ Hierarchical pooling across themes is the one idea that would transfer, and the 
 prior experiment above is exactly that idea, falsified for this game. There is no technique
 being withheld by ignorance; the constraint is 435 matches.
 
+## Hero-vs-hero counters, 2026-07-29 - two very different answers
+
+The pairing question had never been asked directly. Class-vs-class counters died in round
+1; hero-vs-hero was untested. It turns out the ANSWER DEPENDS ENTIRELY ON THE ESTIMATOR,
+which is the most useful thing this round produced.
+
+First, what the data can carry. 93 heroes is 4,278 possible pairs against 3,285 cross-pair
+observations, and each observation is one win/loss bit shared across the nine pairs in that
+match:
+
+| pairs seen | Converging Paths | Flourishing Wilds |
+|---|---|---|
+| never | 55% | 83% |
+| exactly once | 1,087 | 602 |
+| 5 or more times | 42 | **0** |
+
+The most-seen pair in 365 matches has met 8 times.
+
+### FITTED counter models are dead, and not marginally
+
+A rank-2k antisymmetric interaction - each hero gets a "threat" vector u and a
+"vulnerability" vector v, counter effect u_i.v_j - u_j.v_i, so 186 parameters at k=1
+instead of 4,278, and a hero can counter one it has never faced. Fitted jointly with the
+strengths so it could not be handed an in-sample eta. Swept over prior width and rank:
+
+| counter term size (mean abs) | vs shipped BT |
+|---|---|
+| 0.00 (crushed by the prior) | identical to BT |
+| 0.65 | -0.0279, 6/25 splits |
+| 2.22 | -0.5583 |
+| 8.93 | -3.7334 |
+
+There is no setting where it helps. It is inert while the prior holds it at zero and
+destroys the model in a straight line the moment it is free to speak - the signature of
+pure overfitting, not of a weak signal. Rank 2 behaves identically to rank 1. **Do not fit
+a counter term at this sample size.**
+
+### The OBSERVED-TALLY estimator is the round's one positive result
+
+Nothing fitted: each pair carries its own record, the nine are summed, the sum is added to
+the Bradley-Terry log-odds. Damped per pair by n/(n+k) so a pair seen once cannot shout
+down one seen eight times. Walk-forward on Converging Paths, tallies built only from
+earlier matches:
+
+| weight | BT + PAIR tally | BT + HERO tally (the control) |
+|---|---|---|
+| 0.05 | +0.0030 | +0.0010 |
+| 0.10 | +0.0051 | +0.0018 |
+| 0.25 | **+0.0064** | +0.0027 |
+| 0.50 | -0.0071 | -0.0006 |
+
+**The control is what makes this interesting.** Both reviewers predicted the tally would
+merely re-measure team strength - all nine pairs move together, so a weak hero on a strong
+team goes positive against everyone - and that objection is right in principle. The test
+for it is to run the identical estimator on per-HERO records instead of per-pair. The pair
+version gains about TWICE the hero version at every weight, so the pairing structure is
+carrying something beyond team strength. For scale, Bradley-Terry's own edge is +0.006 to
++0.010, so this is the same order of magnitude.
+
+**Not established, and the reasons are the usual ones.** The weight and the damping were
+swept and the best cell reported - the exact procedure that made rank-weighted popularity
+look like a 3.2x-SE winner before it turned out to measure nothing. The optimum is narrow
+(good at 0.25, harmful at 0.50). One theme, n=245. It has NOT been through the bar.
+
+Pre-registered for the next round, before looking again: k and weight fixed at k=3,
+weight=0.10 - deliberately NOT the winning cell, since a value chosen off this sweep cannot
+also test it - then 25 shuffle splits with a paired SE, temporal blocks, and a replication
+on Flourishing Wilds. Report accuracy at thresholds as well as logloss.
+
+The `hero_matchup` view (`data/solstice_clash/views.sql`) exposes exactly the per-pair
+record this estimator reads, so the next round needs no new plumbing.
+
 ## Round 2: the best combination is no combination
 
 2026-07-29, frozen at 340 matches, both reviewers independently. Every stack of features

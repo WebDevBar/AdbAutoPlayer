@@ -322,6 +322,9 @@ CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_pool_match ON match_pool(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_odds_match ON match_odds(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_outcome    ON match(outcome);
+-- The hero_matchup view joins match_hero to itself per match and side; without this
+-- each of the two joins is a scan of the whole table.
+CREATE INDEX IF NOT EXISTS idx_match_hero_side ON match_hero(match_id, side, hero_slug);
 
 -- ---------------------------------------------------------------------------
 -- Schema v3: screen registry, identification audit trail, learned transforms.

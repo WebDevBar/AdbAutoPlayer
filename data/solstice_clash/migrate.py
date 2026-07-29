@@ -21,7 +21,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(HERE, "schema.sql")
-SCHEMA_VERSION = 4
+VIEWS = os.path.join(HERE, "views.sql")
+SCHEMA_VERSION = 5
 
 # Columns added after a table's original CREATE. schema.sql has them in the CREATE for
 # fresh databases; these entries upgrade databases that predate them.
@@ -174,6 +175,10 @@ def main() -> None:
     con = sqlite3.connect(db)
 
     con.executescript(open(SCHEMA).read())          # CREATE IF NOT EXISTS throughout
+    # Derived views live in their own file because the CLIENT executes them too - a
+    # shipped build never runs this script. DROP-then-CREATE, so re-running is free
+    # and a changed definition reaches a database that already has the old one.
+    con.executescript(open(VIEWS).read())
 
     added = []
     for table, col, decl in ADD_COLUMNS:

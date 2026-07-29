@@ -4,6 +4,28 @@
 
 ### Added
 
+- **AFK Journey - Solstice Clash: a hero-vs-hero record is now queryable.** The new
+  `hero_matchup` view gives one row per unordered hero pair per theme - `a_wins`,
+  `b_wins`, `tally`, `draws` and `observations` - keyed canonically (`hero_a < hero_b`)
+  so "A vs B" and "B vs A" are the same row and the key is reproducible without a lookup.
+  A single-pair lookup is 0.06ms.
+  - A VIEW rather than a maintained counter table, deliberately. Every number is an
+    aggregate of rows we already keep forever, so the tallies are reconstructable at any
+    time and a second copy would add only the ability to disagree with the first. Matches
+    arrive late from the pool, get re-filed when a theme window is corrected - 14 already
+    have - get relabelled by hand, and get deleted; each of those silently corrupts an
+    incremented counter, undetectably, because nothing is left to compare against.
+  - Both counts are kept alongside the tally on purpose: +1 from one match and +1 from
+    nine at 5-4 mean entirely different things, and any weighting has to damp by how much
+    evidence a pair actually carries.
+  - Its corpus rule is identical to the odds model's - decisive outcome, three identified
+    heroes a side - so the two can never disagree about the same fight. Mirror picks are
+    excluded, since "X vs X" is not a matchup.
+  - Views live in their own `views.sql`, executed by BOTH `migrate.py` and the client at
+    startup. A shipped build never runs the migration and `solstice_db_path` returns an
+    existing database untouched, so a view defined only in the schema would have reached
+    exactly one machine.
+
 - **AFK Journey - Solstice Clash: the odds appear inside the game.** A small rounded
   plate at the bottom of the screen shows the favoured side's probability during a draft,
   so it can be read without looking at another window. Blue or red for which side, one

@@ -67,6 +67,28 @@
 
 ### Fixed
 
+- **Theme windows are pooled, and a client that learns one re-files what it got wrong.**
+  Themes rotate on a schedule the server is told about and a client is not, so at the
+  first rotation every match - local and pushed - was filed under the event default. Not
+  cosmetic: the model conditions on theme and now discards other themes' matches
+  outright, so a match filed under "unknown" is one no model will ever use. `GET
+  /v1/themes` serves the boundaries, all three collection modes adopt them before
+  recording anything, and a self-heal pass re-resolves what had landed on the default. A
+  server migration does the same for what was already pooled.
+
+- **Four claims the code did not honour**, found by auditing for exactly that class after
+  two turned up in one evening:
+  - `[SC-58] locked picks screen` was logged on BOTH exits from the draft watch,
+    including the timeout that had just reported the locked screen never appeared - and
+    then read six cells off a draft frame as though they were locked.
+  - `{n}/6 picks locked` was the count of heroes IDENTIFIED. On the locked screen all six
+    are locked by definition, so one unreadable cell could gate a complete draft with
+    "3/6 picks locked, need 4" - false twice over.
+  - `[SC-72]` printed four numbers with four different scopes side by side, led by one
+    counting matches the fit discards.
+  - `Fit.matches` counted discarded rows too, and `gate_reason` reads it to decide
+    whether anything has been collected - so it claimed evidence the model never saw.
+
 - **The odds block named signals that were not in the number**, and the final block
   invented the counts it passed to the display gate - reporting "0 matches for this theme"
   against hundreds collected whenever a match's ratings OCR failed.

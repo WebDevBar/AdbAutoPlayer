@@ -13,28 +13,21 @@ gains a note.
 
 ## Revisit next
 
-**Rank-weighted hero popularity, at ~200 rated matches.** Score a hero by the mean rating
-of the players who picked it rather than by how often it was picked - a quality signal
-rather than a bandwagon count. On the 61 matches that currently carry ratings it clears
-the bar (+0.0137, 3.2x SE, 18/25) on the same matches where plain popularity fails
-(-0.0111, 12/25), and the sign flips between them. That is the hypothesis behaving exactly
-as predicted, on far too little data to act on.
+**The confidence threshold, once Flourishing Wilds has ~200 of its own matches.** The one
+live question. See the threshold section below - the ordering is real, the line is not yet
+earned, and the check runs itself as the new theme accumulates confident calls. No new
+collection work, no decision needed before then.
 
-Rated matches accumulate on every run, so this becomes answerable without any new
-collection work. It is the single most promising untested signal.
-
-**The rating step, at ~200 rated matches.** The gap mapping is now "nothing under 100
-points, then a flat +-0.25 log-odds" - measured over 95 rated matches at 7.6x its standard
-error, 23 of 25 splits, against the stated 9-band table's 2.9x and 18/25. Two things it
-asserts need re-checking as data accumulates:
-
-- That gaps under 100 are worth nothing. Well supported: 0-50 favourites won 47%.
-- That past 100, more gap is NOT more edge. Every proportional variant scored at or below
-  the flat step - but only a handful of matches carry gaps above 150, so the far end is
-  effectively unobserved. If big gaps do deserve more weight, this sample cannot see it.
+**The rating step against its pre-registered challenger, at ~250 rated matches.** The
+shipped step stopped confirming at 155 (see round 3). The challenger is written down in
+advance so the next look is not another after-the-fact choice: "+0.25 log-odds to the
+higher-rated side at any nonzero gap".
 
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
 change when the battlefield does. So unlike the hero model, this survives a rotation.
+
+~~Rank-weighted hero popularity~~ - closed 2026-07-29 at 155 rated matches. It was the
+entry this file called the most promising untested signal. See round 3.
 
 ## Hero strength does NOT survive a theme rotation
 
@@ -83,13 +76,45 @@ clears the line". Second, the theme-locked fit beats the cross-theme fit at the 
 that matter on the mature theme, which is the transfer result again from a different angle:
 the other theme's matches do not even help the model pick its spots.
 
-**This is 27 matches and a threshold chosen by looking at the same data, which is exactly
-how one finds a line that exists only in this sample.** Do not ship it on this evidence.
-It is under review by both reviewers with three questions: is it real or selected (choose
-the threshold on one theme, evaluate on the other); what distinguishes the matches it reads
-from the ones it cannot, since a CONDITION knowable before the fight would be far more
-robust than a tuned number; and what the honest accuracy and coverage of a threshold
-product would be.
+### The verdict on it: the ordering is real, the line is not yet earned
+
+Reviewed 2026-07-29. Three separate findings, and they do not all point the same way.
+
+**The confidence ordering is real.** The rise is monotone across every threshold, and a
+calibration regression of outcome on out-of-sample log-odds gives a slope of **2.07 (SE
+0.96)** - positive at 2.2 sigma. The model does know which matches it can read. That is the
+part to trust, and it is not a claim about any particular cell.
+
+**The specific line is not.** The 56% cell is n=17 to n=27 depending on protocol - the
+contents are protocol-sensitive, which is what a fragile cell looks like - and after
+accounting for scanning about six thresholds its effective P is nearer 0.03-0.05 than 0.00.
+An in-theme time split validates only weakly: the first half chooses 0.52, and the second
+half scores 59.5% there (P=0.05); higher thresholds are too thin to split at all.
+
+**The cross-theme validation cannot be run yet, for a structural reason worth knowing:
+zero Flourishing Wilds predictions cleared 55% all night.** Evidence damping keeps a cold
+theme pinned near even, so the gate self-abstains on a new theme by construction. That is
+the desired behaviour, and it also means the line can only ever be validated on a mature
+theme. It will validate itself for free as the new theme fills - the predictions are
+already being recorded.
+
+**The gate needs no side-conditions.** This was the more valuable question and the answer
+is negative: nothing recorded predicts which calls land, beyond what the confidence number
+already contains. Confidence correlates with mean hero appearances (+0.54), evidence factor
+(+0.49) and training size (+0.45) - mechanically, since damping is multiplicative - so the
+number already encodes "well-seen comp, mature theme". The only feature with any direct
+correlation to correctness is the appearance count of the least-seen hero in the match
+(+0.138, n=334, ~2.5 sigma), which is weak and largely redundant with confidence. So the
+gate stays a confidence line, not a condition.
+
+**Honest expectation, and what to tell a user:** show nothing below ~54-55%, show the call
+above it, and expect roughly **two in three** - not four in five - until the new theme's own
+confident calls settle it. The 78-80% figure has the widest error bars in the round.
+
+One loose thread, deliberately not acted on: the calibration slope of ~2 suggests the model
+is UNDER-confident, meaning the true readable tail may be larger than the displayed spread
+implies. Multiplying the log-odds by ~2 is an in-sample number and shipping it would be the
+same error as the threshold. Registered, not applied.
 
 **Standing requirement for all future tuning:** report accuracy AT THRESHOLDS, both
 theme-locked and cross-theme, alongside logloss. A candidate that improves the tail is
@@ -162,6 +187,81 @@ diagnosis independently: **their variance is dominated by role.** Mages deal dam
 Tanks absorb it, Supports heal - so the numbers mostly say what kind of hero someone
 picked, and role composition is the worst-performing family tested. Class-normalising them
 ("does more than peers in the same role") is also null.
+
+## Round 3, 2026-07-29, n=435 across two themes
+
+Both reviewers ran it independently and agreed on every material point. This round was
+mostly a graveyard, which is its value: four of the six most promising open ideas are now
+closed, including the one this file called "the single most promising untested signal".
+
+### Rank-weighted popularity is DEAD
+
+Scoring a hero by the mean rating of the players who pick it. At 61 rated matches it
+cleared the bar (+0.0137, 3.2x SE, 18/25) exactly as predicted, on the same matches where
+plain popularity failed. At 155 rated matches: **-0.0078, 6 of 25 splits**, walk-forward
+-0.0092, null on both themes separately, and negative transfer in both directions.
+
+The diagnosis kills it rather than merely failing it: its correlation with the fitted
+Bradley-Terry strength is **0.008**. It was never a strength proxy that needed
+disentangling - the round-1 worry - it was noise that got lucky on 61 matches. Do not
+re-open on sample size alone.
+
+**The lesson costs nothing to learn twice:** this file already records that a null at one
+sample size is not a null. The converse is the same statement and is easier to forget - a
+PASS at one sample size is not a pass. 61 matches produced a 3.2x-SE result from a feature
+now measured to contain nothing.
+
+### The rating step did not confirm
+
+At 95 rated matches the shipped rule - nothing under a 100-point gap, then a flat +-0.25
+log-odds - measured +0.0092 at 7.6x SE, 23 of 25 splits. At 155 rated matches it adds
+**+0.0015, 1.6x SE, 15 of 25**. Codex measured the same thing at +0.0003.
+
+Its premise half-broke too. Round 2 measured sub-100 gaps as worthless (higher-rated side
+won 47%); at 155 the higher-rated side wins 58.6% of them - but almost all of that lives in
+the new theme (64.6%, n=48) against 53.2% (n=62) on the mature one, so it is either
+population drift or 48-match noise. Gaps over 150 are still effectively unobserved (13
+matches).
+
+**Left in place, not changed.** A pre-registered challenger is now on record so the next
+look is not another after-the-fact choice: **"+0.25 log-odds to the higher-rated side at
+any nonzero gap"** - simpler, no band structure. It currently measures better than the
+shipped step (rating-only +0.0170 at 3.1x SE, walk-forward 5/6) but was chosen after seeing
+the band table, which is the exact sin that inflated the step at 95 rated matches. Decide
+at ~250 rated matches, on this pre-registration.
+
+### Four more shapes for the stat data, all null
+
+Team balance / role dispersion; damage against opposing tanking; stats per rating point;
+consistency (variance rather than mean). Best of them is stats-per-rating at 1.5x SE and
+17/25 - short of the bar on both counts. Damage-vs-opposing-tanking, round 2's near-miss,
+moved AWAY from the bar as data arrived, which is what noise does.
+
+With this the stat data is comprehensively closed: roughly 16 shapes across three rounds,
+none clearing the bar.
+
+### Transfer, confirmed a second and third way
+
+Both reviewers reproduced 33/70 = 47% cold. Two additions worth keeping: the **reverse**
+direction is also null (fit the new theme, predict the old: -0.0017), so it is symmetric
+rather than a property of one theme; and the failure is **not** roster mismatch - the old
+fit knew 5.6 of the 6 heroes in an average new-theme match. The strengths are known and
+uncorrelated with what wins. `CROSS_THEME_WEIGHT = 0.0` stands.
+
+### Method trap: never stack a feature onto an in-sample BT eta
+
+Fitting a logistic on [BT eta, new feature] scores catastrophically (~-0.05) because the
+eta is in-sample on the training fold and the stacker inflates its coefficient. Those cells
+say nothing about the feature. Same family as round 2's unestimable stacking weights.
+
+### Literature, briefly
+
+Both reviewers checked. Everything the field uses for draft prediction - pairwise
+synergy/counter matrices, hero embeddings, factorisation machines, GNNs, attention over
+draft order - is a 10k-to-1M-match method; published draft-only accuracy sits near 58%.
+Hierarchical pooling across themes is the one idea that would transfer, and the decayed
+prior experiment above is exactly that idea, falsified for this game. There is no technique
+being withheld by ignorance; the constraint is 435 matches.
 
 ## Round 2: the best combination is no combination
 

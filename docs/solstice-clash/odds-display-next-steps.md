@@ -110,3 +110,29 @@ re-derivable from matches everyone already has.
 A win probability tells you what is about to happen. This tells you what to do about it,
 which is the difference between a scoreboard and an advisor - and it is useful at 55%
 confidence where a win probability is not.
+
+## 4. Colour in the live log
+
+Wanted, and it needs no work in AdbAutoPlayer itself - checked 2026-07-29.
+
+`LogEntry.svelte:23` renders each message with `{@html}`, so a log line can already carry
+inline markup and it will render:
+
+```python
+logging.info('Blue picked: <span class="hero">Lorsan</span>  <b>63%</b>')
+```
+
+Per-LINE colour is also already plumbed: the `LogPreset` enum in
+`adb_auto_player/log/log_presets.py` has `get_html_class()`, and that class travels to the
+frontend on every `LogMessage`. Attaching one is `logging.info(msg, extra={"preset": ...})`.
+
+So the only missing pieces are ours:
+
+- CSS for whatever class names we choose, in `LogEntry.svelte`.
+- A decision about what deserves colour. The obvious candidates are the side a pick
+  belongs to (blue/red, matching the bubble), a hero name, and the favoured side in an
+  odds line - all things the eye currently has to parse out of a sentence.
+
+One caution: the export strips tags with `replace(/<[^>]*>/g, "")`, so markup must not
+carry meaning that is lost when the text is saved. Colour may emphasise; it must not be
+the only thing saying which side won.

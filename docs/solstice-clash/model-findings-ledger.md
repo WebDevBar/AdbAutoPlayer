@@ -36,6 +36,27 @@ asserts need re-checking as data accumulates:
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
 change when the battlefield does. So unlike the hero model, this survives a rotation.
 
+## Recorded predictions are not tuning data
+
+**When retuning, ignore `predicted_left` entirely.** What matters is the match outcome and
+the model being tested: every experiment refits from scratch and predicts out of sample,
+so a stored prediction is an artefact of whatever configuration happened to be running
+when it was made, not evidence about any other one.
+
+The stored predictions answer a different question - was the number we SHOWED people
+calibrated - and that is worth keeping, but it is not the same question as "is this model
+any good".
+
+Which matters because of what happened on 2026-07-29. Between roughly 02:00 and 04:40
+UTC, predictions were produced by a model that was: fitting on effectively zero matches,
+because 14 matches had been filed under "unknown" after the rotation and cross-theme
+weight was zero; and over-trusting the hero term, because `hero_evidence` was counting
+appearances from matches weighted zero. Both are fixed and both fixes are retroactive -
+the matches were re-filed and appearances is recomputed on every fit - so the DATA is
+intact. Only the record of what was displayed in that window is not a fair sample of any
+configuration, and should be excluded when the displayed number's calibration is next
+assessed.
+
 ## How things are measured
 
 25 seeded shuffle splits, 80/20, mean held-out logloss against the training-fold base

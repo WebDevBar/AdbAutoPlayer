@@ -134,6 +134,22 @@ _OUTCOMES = frozenset({"left", "right", "draw"})
 POOL_SIZE = 20  # the draft grid is always 5x4
 
 
+def _as_stamp(value) -> str | None:
+    """Normalise an API timestamp to the form this database stores.
+
+    The API returns offset-aware ISO strings; the theme table stores the Z form, and the
+    window comparison is a STRING comparison in SQLite. Mixing the two would compare
+    "2026-07-29T00:00:00+00:00" against "2026-07-29T00:00:00Z" and get the wrong answer
+    at exactly the boundary the window exists to mark.
+    """
+    if not value:
+        return None
+    text = str(value)
+    if text.endswith("+00:00"):
+        return text[:-6] + "Z"
+    return text
+
+
 class MatchStore:
     _HERO_COLS = (
         "side",
@@ -632,6 +648,85 @@ class MatchStore:
                      h.get("stat_sword"), h.get("stat_heart"), h.get("stat_shield")),
                 )
         return match_id
+
+    def adopt_theme_windows(self, themes: list[dict]) -> int:
+        """Fill in theme boundaries this install does not have. Returns how many.
+
+        Only NULL is filled. A boundary already recorded here is never overwritten,
+        because that would silently re-file matches already attributed to a theme - and
+        this install may have observed a rotation the pool has not been told about yet.
+
+        A theme the pool knows and this install does not is INSERTED, so a new theme
+        arriving mid-event does not have to wait for a release.
+        """
+        filled = 0
+        with self._connect() as con:
+            for row in themes:
+                slug = row.get("slug")
+                if not slug:
+                    continue
+                event = con.execute(
+                    "SELECT id FROM event WHERE slug=?",
+                    (row.get("event_slug") or "solstice-clash",),
+                ).fetchone()
+                if event is None:
+                    continue
+                event_id = int(event[0])
+                con.execute(
+                    "INSERT OR IGNORE INTO theme"
+                    "(event_id,slug,name,starts_at,ends_at,is_default)"
+                    " VALUES(?,?,?,?,?,?)",
+                    (
+                        event_id,
+                        slug,
+                        row.get("name") or slug,
+                        _as_stamp(row.get("starts_at")),
+                        _as_stamp(row.get("ends_at")),
+                        1 if row.get("is_default") else 0,
+                    ),
+                )
+                for column in ("starts_at", "ends_at"):
+                    value = _as_stamp(row.get(column))
+                    if not value:
+                        continue
+                    changed = con.execute(
+                        f"UPDATE theme SET {column}=?"
+                        f" WHERE event_id=? AND slug=? AND {column} IS NULL",
+                        (value, event_id, slug),
+                    ).rowcount
+                    filled += max(changed, 0)
+        return filled
+
+    def refile_default_themes(self) -> int:
+        """Re-resolve matches that landed on the default theme. Returns how many moved.
+
+        A match resolved BY A WINDOW was attributed against a boundary somebody
+        confirmed, and is left alone. A match resolved by default was never attributed at
+        all - it is what a client stores when it does not know the window yet, and once
+        the window arrives it can be filed properly.
+
+        This is the self-heal half of pooling the windows. Without it, learning a
+        boundary fixes only future matches and leaves the gap permanently.
+        """
+        moved = 0
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT m.id, m.captured_at FROM match m"
+                " JOIN theme t ON t.id = m.theme_id"
+                " WHERE m.theme_resolved_by='default' OR t.is_default=1"
+            ).fetchall()
+        for match_id, captured_at in rows:
+            event_id, theme_id, how = self.resolve_theme(captured_at)
+            if not theme_id or how != "window":
+                continue
+            with self._connect() as con:
+                changed = con.execute(
+                    "UPDATE match SET theme_id=?, event_id=?, theme_resolved_by=?"
+                    " WHERE id=? AND theme_id != ?",
+                    (theme_id, event_id, how, match_id, theme_id),
+                ).rowcount
+            moved += max(changed, 0)
+        return moved
 
     def resolve_theme(
         self,

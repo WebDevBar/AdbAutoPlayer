@@ -232,10 +232,48 @@ class SyncClient:
             logging.info(f"[SC-35] sync: pulled {stored} new")
         return stored
 
+    def pull_themes(self) -> tuple[int, int]:
+        """Adopt the pool's theme windows, then re-file matches they now cover.
+
+        Themes rotate on a schedule the server is told about and a client is not. A
+        client that does not know a window files its matches under the event default -
+        which is not cosmetic, because the model conditions on theme and now discards
+        other themes' matches outright rather than discounting them. A match filed under
+        "unknown" is a match no model will ever use.
+
+        That is not hypothetical: at the first rotation this install put 14 matches on
+        "unknown", and so did every match pushed to the pool after it. Two seeds, one of
+        them stale, is what caused it - so the windows are pooled like the matches are.
+
+        Only NULL boundaries are filled. A boundary this install already recorded is
+        never overwritten, because that would silently re-file matches already attributed
+        to a theme.
+
+        Returns:
+            (boundaries filled, matches re-filed).
+        """
+        if not self.enabled:
+            return (0, 0)
+        payload = self._request("GET", "/v1/themes")
+        if not payload:
+            return (0, 0)
+        filled = self._store.adopt_theme_windows(payload.get("themes", []))
+        refiled = self._store.refile_default_themes()
+        if filled or refiled:
+            logging.info(
+                f"[SC-37] theme windows: {filled} filled, {refiled} match(es) re-filed"
+            )
+        return (filled, refiled)
+
     def sync_now(self) -> None:
         """Manual trigger: push, then pull.
 
         Order matters - our own rows reach the pool before we read it back.
+
+        Themes first: a match pushed before the window is known is filed under the
+        default and stays that way on the server, so learning the boundaries has to
+        happen before anything is sent.
         """
+        self.pull_themes()
         if self.push()[0] >= 0:
             self.pull()

@@ -879,11 +879,29 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # poll instead would re-lose monotonic timing, which matters on an overnight run
         # where an NTP step would otherwise stretch or shorten this timeout silently.
         overworld_seen = 0
+        # The locked screen is still up when this wait begins - it IS the last-chance
+        # betting countdown - so the fight has not started yet and the number is still
+        # worth showing. The fight starts when that screen goes away, which is the only
+        # honest signal for "betting is closed": seen, then gone.
+        locked_seen = False
 
         def _match_end() -> TemplateMatchResult | None:
             """Return a result-screen match, None for a confirmed draw, else poll on."""
-            nonlocal overworld_seen
+            nonlocal overworld_seen, locked_seen
             frame = self.get_screenshot()
+
+            # Hiding earlier - when this wait began - took the bubble down while betting
+            # was still open, which is the one moment it exists for.
+            try:
+                screens = self._screens
+                if is_locked_screen(frame, screens):
+                    locked_seen = True
+                elif locked_seen:
+                    locked_seen = False
+                    self._overlay_hide()
+            except Exception as exc:  # noqa: BLE001 - a display is never worth a match
+                logging.debug(f"[SC-81] could not track the locked screen: {exc}")
+
             hit = self.find_any_template(
                 [
                     # result_chart FIRST: it is the DETAILS button tapped next, so its
@@ -908,12 +926,6 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             else:
                 overworld_seen = 0
             raise _UndesiredResultError()
-
-        # The fight is starting, so betting is closed and the number is history. Hiding it
-        # here rather than at the next draft means the overlay is absent for the minutes
-        # a match takes, which is most of a run - and an absent bubble is the state that
-        # is provably identical to not having the overlay at all.
-        self._overlay_hide()
 
         try:
             found = self._execute_or_timeout(

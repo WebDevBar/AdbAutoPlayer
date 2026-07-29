@@ -243,8 +243,15 @@ def fit(matches: list[Match], theme_id: int | None = None) -> Fit:
         if np.max(np.abs(gradient)) < CONVERGENCE:
             break
 
+    # Counted from matches that actually CONTRIBUTED, not from everything handed in.
+    # Another theme's matches carry weight 0 now, so counting them said the model had
+    # seen a hero 21 times in a theme holding 14 matches - and `hero_evidence` reads this
+    # same count to decide how far to trust the hero term, so the error was inflating the
+    # model's confidence, not just a log line.
     appearances: dict[str, int] = {}
-    for match in matches:
+    for row, match in enumerate(matches):
+        if w[row] <= 0.0:
+            continue
         for hero in (*match.left, *match.right):
             appearances[hero] = appearances.get(hero, 0) + 1
 
@@ -618,7 +625,7 @@ def format_odds(
         f"  {header}",
         f"  BLUE {left:.0f}%   |   RED {right:.0f}%",
         f"  80% interval {band}   trust: {trust}",
-        f"  {locked}/6 picks locked, weakest hero seen {prediction.weakest_evidence}x",
+        f"  {locked}/6 picks locked",
         _RULE,
         "",
     ]

@@ -1,11 +1,10 @@
-"""What the overlay strip says, and what it takes to get it there - pure, no device."""
+"""What the odds bubble shows, and what it takes to get it there - pure, no device."""
 
 from adb_auto_player.games.afk_journey.services.solstice.odds import (
     Match,
     fit,
     predict,
 )
-from adb_auto_player.games.afk_journey.services.solstice.overlay import display_text
 
 
 def _fitted():
@@ -28,38 +27,6 @@ def _prediction():
     )
 
 
-def test_it_shows_both_sides_and_the_interval():
-    text = display_text(_prediction(), None)
-    assert "BLUE" in text and "RED" in text
-    # Never a bare percentage: odds.format_odds refuses to emit one because a number
-    # without its interval invites acting on a coin flip that happens to read 54%, and
-    # that reasoning is strongest where somebody is about to bet.
-    assert "-" in text
-
-
-def test_a_gated_prediction_says_so_rather_than_showing_a_number():
-    """Blankness reads as broken and a number reads as a call. Neither is true here."""
-    text = display_text(None, "4/6 picks locked, need 4")
-    assert "%" not in text
-    assert "no call" in text.lower()
-
-
-def test_it_fits_the_strip():
-    """~33 glyphs fit at the chosen size. Longer does not wrap - it runs off the edge."""
-    assert len(display_text(_prediction(), None)) <= 40
-
-
-def test_the_two_sides_always_sum_to_a_hundred():
-    """A viewer reads these as complements; rounding must not break that."""
-    import re
-
-    for lr, rr in ((4400, 4100), (4100, 4400), (4250, 4250), (4600, 4000)):
-        p = predict(_fitted(), ["star", "h0", "h1"], ["h2", "h3", "h4"],
-                    left_rating=lr, right_rating=rr)
-        blue, red = (int(x) for x in re.findall(r"(\d+)%", display_text(p, None))[:2])
-        assert blue + red == 100
-
-
 def test_an_update_is_a_service_start_not_a_broadcast():
     """A broadcast reaches a runtime receiver only while the process is alive, so it
     cannot revive a service the OS killed - and an action-only broadcast is implicit,
@@ -76,14 +43,6 @@ def test_an_update_is_a_service_start_not_a_broadcast():
     assert "--es" in cmd and "text" in cmd
     # Quoted: the device shell parses `|` as a pipe, so the text is one argument.
     assert "BLUE 34%  |  RED 66%" in cmd[-1]
-
-
-def test_clearing_sends_an_empty_string():
-    from adb_auto_player.games.afk_journey.services.solstice.overlay import clear_command
-
-    # Quoted empty string, not a bare one - an unquoted empty argument disappears
-    # entirely and the service would be started with no text extra at all.
-    assert clear_command()[-1] == "''"
 
 
 def test_the_version_is_read_from_dumpsys():
@@ -126,20 +85,94 @@ def test_a_successful_shell_returns_its_output():
     assert safe_shell(Fine(), ["echo", "hi"]) == "ran echo hi"
 
 
-def test_the_text_survives_the_device_shell():
-    """adb runs the command through /bin/sh on the device, which parses `|` as a pipe.
-    The display text contains one, and unquoted it produced 'RED: inaccessible or not
-    found' and no service started."""
+def test_the_overlay_notice_is_snoozed_by_key_for_a_day():
+    """Android posts the "displaying over other apps" notice from the system package the
+    moment the view attaches. Nothing in the APK can stop it and there is no channel-block
+    subcommand, so snoozing is the only lever adb has."""
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import (
+        PACKAGE,
+        snooze_notice_command,
+    )
+
+    cmd = snooze_notice_command()
+    assert cmd[:3] == ["cmd", "notification", "snooze"]
+    assert cmd[cmd.index("--for") + 1] == "86400000"
+    assert PACKAGE in cmd[-1] and cmd[-1].startswith("0|android|0|")
+
+
+def test_an_update_is_a_service_start_not_a_broadcast():
+    """A broadcast reaches a runtime receiver only while the process is alive, so it
+    cannot revive a service the OS killed - and an action-only broadcast is implicit,
+    which API 26+ will not deliver to a manifest receiver either. One command therefore
+    both starts and updates."""
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import (
+        SERVICE,
+        update_command,
+    )
+
+    cmd = update_command("blue", 63)
+    assert cmd[:2] == ["am", "start-foreground-service"]
+    # `-n` is required, not stylistic: `am` parses a bare component as the intent spec's
+    # trailing argument and silently drops every extra after it. Verified on device - the
+    # service started, received nothing, and painted nothing.
+    assert cmd[cmd.index(SERVICE) - 1] == "-n"
+    assert "blue" in cmd and "63" in cmd
+
+
+def test_the_two_fields_never_need_quoting():
+    """A single "blue 63" string had to be quoted to survive the device shell, and the
+    quote then leaked into the rendered text as "63'%". Neither field can contain a
+    space, so neither is quoted and neither can be mangled."""
     from adb_auto_player.games.afk_journey.services.solstice.overlay import update_command
 
-    cmd = update_command("BLUE 34%  |  RED 66%   25-44%")
-    assert cmd[-1].startswith("'") and cmd[-1].endswith("'")
-    assert "BLUE 34%  |  RED 66%   25-44%" in cmd[-1]
+    for part in update_command("red", 58):
+        assert "'" not in part and '"' not in part
 
 
-def test_a_quote_in_the_text_cannot_break_out_of_the_argument():
-    """Not paranoia about user input - there is none. It is that a generated string with
-    an apostrophe would silently turn into a different command."""
-    from adb_auto_player.games.afk_journey.services.solstice.overlay import update_command
+def test_hiding_is_a_mode_not_an_empty_string():
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import clear_command
 
-    assert update_command("it's 60%")[-1] == "'its 60%'"
+    assert "hidden" in clear_command()
+
+
+def test_no_favourite_means_no_bubble():
+    """Inside the middle band the model is right 50.2% of the time across 705
+    predictions - a coin flip - while outside it it is right about 58%. So "no favourite"
+    and "nothing worth showing" are the same condition."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import predict
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import bubble_for
+
+    fitted = _fitted()
+    even = predict(fitted, ["h0", "h1", "h2"], ["h3", "h4", "h5"])
+    assert bubble_for(even, None)[0] == "hidden"
+    assert bubble_for(None, "4/6 picks locked")[0] == "hidden"
+
+
+def test_the_colour_names_the_favoured_side_and_the_number_is_its_own():
+    """Only the favoured side's probability is shown; the complement is implied by the
+    colour, which is what lets the plate be small."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import predict
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import bubble_for
+
+    p = predict(_fitted(), ["star", "h0", "h1"], ["h2", "h3", "h4"],
+                left_rating=4600, right_rating=4100)
+    mode, pct = bubble_for(p, None)
+    assert mode in ("blue", "red")
+    assert 50 < pct <= 100
+
+
+def test_installing_skips_ahead_of_time_compilation():
+    """Waydroid's dex2oat hangs - installd killed it after 570 seconds on a 4KB dex, and
+    every pm install blocked forever behind sessions wedged at 90%. Skipping compilation
+    installs the same APK in 25 seconds.
+
+    Issued as part of installing rather than once by hand, because the property does not
+    survive a reboot and the mode has to work on a machine nobody prepared."""
+    from adb_auto_player.games.afk_journey.services.solstice.overlay import (
+        dexopt_skip_command,
+        install_command,
+    )
+
+    assert dexopt_skip_command() == ["setprop", "pm.dexopt.install", "skip"]
+    assert install_command()[:2] == ["pm", "install"]
+    assert "-t" in install_command()

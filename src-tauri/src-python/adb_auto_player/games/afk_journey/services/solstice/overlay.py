@@ -31,71 +31,113 @@ MAX_CHARS = 40
 _VERSION = re.compile(r"versionCode=(\d+)")
 
 
-def display_text(prediction: Prediction | None, gate: str | None) -> str:
-    """One line for the strip, or the no-call text.
+def update_command(mode: str, percent: int) -> list[str]:
+    """Show the bubble, or hide it.
 
-    Never a bare percentage. `odds.format_odds` refuses to emit one on the grounds that a
-    number without its interval invites acting on a coin flip that happens to read 54%,
-    and that reasoning is strongest here, at the surface where somebody is about to bet.
+    Two extras and nothing else: `mode` is "hidden", "blue" or "red", and `pct` is the
+    favoured side's percentage. Neither value can contain a space, so neither needs
+    quoting - which matters because a quoted single string leaked its own quote into the
+    rendered text on device, as "63'%".
+
+    ONE mechanism for start and update, deliberately. A broadcast reaches a
+    runtime-registered receiver only while that process is alive, so it cannot revive a
+    service the OS has killed, and an action-only broadcast is implicit - which API 26+
+    will not deliver to a manifest receiver anyway. Routing every update through
+    `onStartCommand` is what makes "the next pick brings it back" true rather than hopeful.
 
     Args:
-        prediction: The current estimate, or None when there is nothing to show.
-        gate: Why the number must not be shown, or None if it may be.
+        mode: "blue", "red", or "hidden".
+        percent: The favoured side's probability, 0-100. Ignored when hidden.
 
     Returns:
-        The text to paint. Never empty - clearing is a separate command, because an empty
-        string means "detach the view" rather than "paint nothing".
+        The adb shell command, already split.
+    """
+    # `-n` is REQUIRED, not stylistic. `am` parses a bare component as the trailing
+    # argument of the intent spec, so extras after it are dropped SILENTLY: the service
+    # starts, receives nothing, and paints nothing. Verified on device - without -n the
+    # intent prints as MAIN/LAUNCHER with no "(has extras)".
+    return [
+        "am", "start-foreground-service", "-n", SERVICE,
+        "--es", "mode", mode,
+        "--ei", "pct", str(int(percent)),
+    ]
+
+
+def bubble_for(prediction, gate: str | None) -> tuple[str, int]:
+    """(mode, percent) for a prediction - the only place that decides what is shown.
+
+    Nothing is drawn without a favourite. That is not tidiness: inside the middle band the
+    model is right 50.2% of the time across 705 predictions, a literal coin flip, while
+    outside it it is right about 58%. So "no favourite" and "nothing worth showing" are
+    the same condition, and the bubble appearing at all is the first half of the signal.
     """
     if gate is not None or prediction is None:
-        # Not blankness. A viewer who sees nothing assumes the tool is broken; one who
-        # sees a number assumes it is a call. Neither is true when the gate is closed.
-        return "- no call -"
-
-    blue = round(prediction.p_mid * 100)
-    # The complement rather than an independent rounding: a viewer reads these as two
-    # halves of one thing, and 34% / 67% from separate rounding looks like a defect.
-    red = 100 - blue
-    low = round(prediction.p_low * 100)
-    high = round(prediction.p_high * 100)
-    return f"BLUE {blue}%  |  RED {red}%   {low}-{high}%"
+        return "hidden", 0
+    left = prediction.p_mid
+    if abs(left - 0.5) < NO_CALL_MARGIN:
+        return "hidden", 0
+    return ("blue", round(left * 100)) if left > 0.5 else ("red", round((1 - left) * 100))
 
 
-def update_command(text: str) -> list[str]:
-    """Start the service, or update it if it is already running.
+# Half-width of the band where the model has nothing to say. 0.02 puts the cut at 48-52%,
+# where measured accuracy is 50.2% over 705 predictions.
+NO_CALL_MARGIN = 0.02
 
-    ONE mechanism for both, deliberately. A broadcast reaches a runtime-registered
-    receiver only while that process is alive, so it cannot revive a service the OS has
-    killed - and an action-only `am broadcast` is an implicit broadcast, which API 26+
-    will not deliver to a manifest receiver anyway. Routing every update through
-    `onStartCommand` is what makes "the next pick brings it back" true rather than
-    hopeful.
+
+# Android posts "<app> is displaying over other apps" itself, from the system package,
+# the moment a SYSTEM_ALERT_WINDOW view is attached. Nothing in the APK can prevent it and
+# there is no channel-block subcommand in `cmd notification`, so the only lever available
+# over adb is to snooze it. A day at a time is plenty - a collection run is hours, and the
+# next run snoozes it again.
+NOTICE_KEY = f"0|android|0|com.android.server.wm.AlertWindowNotification - {PACKAGE}|1000"
+SNOOZE_MS = 86_400_000
+
+
+def snooze_notice_command() -> list[str]:
+    """Dismiss Android's own overlay notice for a day.
+
+    Cosmetic, and deliberately best-effort: the notice is a host-side popup that Waydroid
+    forwards to the desktop, so it never appears in a captured frame and cannot affect
+    what the automation reads. It is only in the way of the person watching.
     """
-    # QUOTED. adb runs this through the device's /bin/sh, which parses `|` as a pipe -
-    # the display text contains one, and unquoted it produced "RED: inaccessible or not
-    # found" and no service. Single quotes are safe because the text is generated here
-    # and never contains one; `_shell_safe` enforces that rather than trusting it.
-    return ["am", "start-foreground-service", SERVICE, "--es", "text", _shell_safe(text)]
+    return ["cmd", "notification", "snooze", "--for", str(SNOOZE_MS), NOTICE_KEY]
 
 
-def _shell_safe(text: str) -> str:
-    """Wrap text so the device shell treats it as one argument.
+# Where the APK is staged on the device before installing. /data/local/tmp is the one
+# directory the adb shell user can always write and the package manager can always read.
+STAGED_APK = "/data/local/tmp/odds-overlay.apk"
 
-    Anything that could end the quoting is stripped rather than escaped: this is a display
-    string we generate, so there is no legitimate case for a quote or a backslash in it,
-    and silently dropping one is better than a command that parses as something else.
+
+def dexopt_skip_command() -> list[str]:
+    """Turn off ahead-of-time compilation for installs.
+
+    Waydroid's `dex2oat` hangs. Measured on LineageOS 20 for Waydroid: installd killed it
+    after 570 SECONDS on a 4KB dex, leaving seven install sessions wedged at 90% and every
+    `pm install` blocked forever. With compilation skipped the same APK installs in 25s.
+
+    Shell can set this - no root, which Waydroid does not offer anyway. It does not
+    survive a reboot, which is why it is issued as part of installing rather than once by
+    hand: the mode must work on a machine nobody prepared.
+
+    The app runs interpreted instead of compiled. For a service that draws one view, that
+    costs nothing measurable.
     """
-    cleaned = text.replace("'", "").replace("\\", "")
-    return f"'{cleaned}'"
+    return ["setprop", "pm.dexopt.install", "skip"]
+
+
+def install_command() -> list[str]:
+    """Install the staged APK. `-r` replaces, `-t` allows a debug-signed build."""
+    return ["pm", "install", "-r", "-t", STAGED_APK]
 
 
 def clear_command() -> list[str]:
-    """Paint nothing.
+    """Hide the bubble.
 
-    The service detaches the view rather than blanking it. A translucent attached surface
-    should be invisible, but the bot reads this same screen, and a detached window is the
-    only state provably identical to never having installed the overlay.
+    The service detaches the view rather than blanking it: the automation reads this same
+    screen, and a detached window is the only state provably identical to never having
+    installed the overlay.
     """
-    return update_command("")
+    return update_command("hidden", 0)
 
 
 def stop_command() -> list[str]:

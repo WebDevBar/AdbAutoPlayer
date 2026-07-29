@@ -1,4 +1,0 @@
-#Wed Jul 29 03:43:07 CEST 2026
-base.0=/home/toshe/Dev/webdevbar/adbautoplayer/android/odds-overlay/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
-path.0=classes.dex
-renamed.0=classes.dex

@@ -289,7 +289,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         being a side effect of something else.
         """
         self.start_up(device_streaming=False)
-        self._overlay_prepare()
+        self._overlay_prepare(install_if_absent=True)
         if not getattr(self, "_overlay_ok", False):
             logging.warning("[SC-82] the odds overlay could not be installed")
 
@@ -1616,13 +1616,21 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")
 
-    def _overlay_prepare(self) -> None:
-        """Install, grant and quieten the overlay. ONCE, before the collection loop.
+    def _overlay_prepare(self, install_if_absent: bool = False) -> None:
+        """Get the overlay ready, ONCE, before the collection loop.
 
-        Never on the draft path. A draft is ~20 seconds and the first pick reads already
-        compete with the model fit and the ratings OCR; an install there would cost pick
-        reads and push the first number past the moment a bet is possible, which is the
-        one thing this feature exists to prevent.
+        A collection run does NOT install it. Absence is a decision: there is an explicit
+        command to install it and another to remove it, and a run that quietly put back
+        something the user deleted would be the tool overriding them. An install that IS
+        present but out of date is upgraded, because that choice was already made.
+
+        Nothing here happens on the draft path either. A draft is ~20 seconds and the
+        first pick reads already compete with the model fit and the ratings OCR; an
+        install there would cost pick reads and push the first number past the moment a
+        bet is possible, which is the one thing this feature exists to prevent.
+
+        Args:
+            install_if_absent: True only for the explicit install command.
         """
         self._overlay_ok = False
         try:
@@ -1634,6 +1642,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             installed = overlay.parse_version(
                 overlay.safe_shell(device, overlay.version_command()) or ""
             )
+            if installed is None and not install_if_absent:
+                logging.debug(
+                    "[SC-82] odds overlay is not installed - "
+                    "run 'WDB: Install Odds Overlay' if you want it"
+                )
+                return
             if overlay.needs_install(installed, overlay.OVERLAY_VERSION):
                 logging.info(f"[SC-82] installing the odds overlay ({apk.name})")
                 self._device.d.d.sync.push(str(apk), overlay.STAGED_APK)

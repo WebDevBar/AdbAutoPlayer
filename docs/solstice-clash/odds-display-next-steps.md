@@ -66,3 +66,47 @@ confirm the scores match the same frame without it. Do not assume the geometry h
 This adds a Java/Android build to a project that has none - a toolchain and a build
 artifact, for what is otherwise a hundred lines of service. That is the real price, not
 the code.
+
+## 3. Hero strengths on the compete draft screen (the pick assistant)
+
+Raised by the operator, 2026-07-29. Arguably more valuable than the win probability, and
+a different product: instead of telling you who will win after the draft, it tells you
+**who to pick during it.**
+
+The model already holds a strength number per hero. On the compete draft screen the 20
+available heroes are on screen and the operator is choosing between them, with 20+ seconds
+per pick - far more time than the spectate mode's ~2s budget. Overlaying each card with
+its strength turns a model nobody can see into the one thing a player actually wants.
+
+### Stored or computed live?
+
+Open question, and the answer is not obvious.
+
+- **Computed live** keeps the current architecture intact: matches are the only stored
+  truth, everything else is derived, nothing syncs, nothing goes stale. The full refit is
+  **9.6ms** measured at 363 matches, so recomputing per draft costs nothing.
+- **Stored** would be needed only if the fit ever grows expensive enough to matter, or if
+  something outside a run needs the numbers - a UI panel, a report, seeding the next event.
+
+The operator's own point argues for computing live: 20+ seconds per pick means inline
+detection of all 20 cards plus a fit is feasible without storing anything. The default
+should be live, with storage introduced only when something measurably needs it.
+
+Note the one real exception: **seeding a new event** with the previous event's strengths
+needs a snapshot at the boundary. That snapshot is local and never synced, since it is
+re-derivable from matches everyone already has.
+
+### What it would take
+
+- Read the 20-card pool - already done in spectate mode, so the geometry exists.
+- Score each card and overlay it. In-Android that is the same APK as the odds strip with a
+  different layout; on the desktop it could be a panel.
+- Beware the capture constraint: an overlay on the pool grid covers exactly what the bot
+  reads. In compete mode the bot does not read the pool, so this may be free - but it must
+  be verified, not assumed.
+
+### Why it is worth more than the odds
+
+A win probability tells you what is about to happen. This tells you what to do about it,
+which is the difference between a scoreboard and an advisor - and it is useful at 55%
+confidence where a win probability is not.

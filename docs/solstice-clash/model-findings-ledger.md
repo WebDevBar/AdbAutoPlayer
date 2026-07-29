@@ -459,6 +459,94 @@ on Flourishing Wilds. Report accuracy at thresholds as well as logloss.
 The `hero_matchup` view (`data/solstice_clash/views.sql`) exposes exactly the per-pair
 record this estimator reads, so the next round needs no new plumbing.
 
+## The pair programme is closed - all six shapes, 2026-07-29
+
+Six estimators over hero pairings, three rounds, two independent implementations. All null.
+Recorded together because the pattern matters more than any single result: the failures are
+not about which pairing or which estimator, they are about a few hundred matches per theme
+against thousands of possible parameters.
+
+| shape | verdict |
+|---|---|
+| cross-side (counter) raw tallies | gains on one half of one theme; fails shuffle splits, temporal blocks and cross-half consistency |
+| fitted low-rank antisymmetric counters | inert at zero, monotonically destructive once free |
+| same-side (synergy) raw tallies | negative on the mature theme's held-out half AND on the live theme |
+| **fitted same-side pair terms** | **the sweep chooses `sigma_pair = 0`** - see below |
+| depth-restricted variants (n>=5, n>=8) | numerically zero: depth and coverage cannot both be had |
+| hero-vs-class pooling | same half-flip signature; negative on the live theme at every setting |
+| whole-comp (3-hero) terms | impossible, not thin - see below |
+
+### The fitted version, which was the operator's own framing
+
+"Like BT but for pairs" - same-side pair terms added to the design matrix and fitted jointly
+with the hero strengths under the same regularised likelihood. Genuinely distinct from the
+raw tally, and never tested before this round.
+
+Degeneracy verified first: at `sigma_pair -> 0` the model reproduces the shipped one to
+1e-16, so the null is exact. Then:
+
+| sigma_pair | gain vs shipped, mature held-out half |
+|---|---|
+| 0 | 0.000000 |
+| 0.02 | -0.000005 |
+| 0.10 | -0.000134 |
+| 0.50 | -0.003639 |
+| 0.80 | -0.008604 |
+
+Monotonically worse on both themes. 25 shuffle splits at the best non-zero setting:
++0.000001, which is numerical dust. **The control settles it: assigning the pair terms to
+RANDOM hero pairs that never played together behaves identically** (-0.000002 to -0.000013),
+so even the dust is not about pair identity.
+
+**Left to itself the model refuses the pair terms.** That is the cleanest statement of the
+result: not "we tuned it badly", but "the likelihood prefers zero".
+
+### No combination is nameable, which was the operator's actual question
+
+Strongest fitted effects on the mature theme:
+
+| pair | times played | gamma |
+|---|---|---|
+| indris + lorsan | 7 | +0.0008 |
+| galahad + phraesto | 4 | +0.0007 |
+| indris + thoran | 4 | -0.0007 |
+| lorsan + nazrik | 5 | -0.0007 |
+
+Two things make these unusable. They sit on pairs seen 4-7 times; and 0.0008 log-odds is
+about **0.02 percentage points** on a prediction, against hundreds of times that for a
+single hero's strength. The permutation check finishes it: a shuffled-outcome null produced
+a spread of 0.001628 against the observed 0.001548 - the extremes are not merely
+insignificant, they are smaller than chance produces.
+
+Carrying the mature theme's gammas to the live theme alone: logloss 0.6931, accuracy 55.6%,
+and **zero calls clearing 54%**. A 50/50 model.
+
+### Whole comps: impossible, and worth stating as such
+
+| | Converging Paths | Flourishing Wilds |
+|---|---|---|
+| comps observed | 730 | 238 |
+| distinct comps | 717 | 238 |
+| seen 3+ times | 0 | 0 |
+| most-seen | 2 | 1 |
+
+Every comp on the live theme is unique. There is nothing to average, at any sample size
+reachable inside a three-day theme.
+
+### Same-side pair density, for whoever re-opens this
+
+Same-side pairs are THINNER than the cross-side ones that already failed - six per match
+against nine:
+
+| pairs seen | same-side (CP) | cross-side (CP) |
+|---|---|---|
+| 3+ times | 166 | 343 |
+| 5+ times | 17 | 42 |
+| 10+ times | 0 | - |
+
+Re-open at ~1,000 matches per theme, not before. That is roughly three contributors
+collecting continuously, and it is the only thing that changes the answer.
+
 ## Round 2: the best combination is no combination
 
 2026-07-29, frozen at 340 matches, both reviewers independently. Every stack of features

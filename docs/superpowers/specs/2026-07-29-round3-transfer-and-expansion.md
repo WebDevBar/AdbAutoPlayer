@@ -128,3 +128,46 @@ Most useful first, in plain language:
 
 Failures are as valuable as successes here - about 58 configurations have already lost,
 and the ledger records them so they are not retried.
+
+
+## FINDINGS SO FAR (added mid-round - test these rather than rediscovering them)
+
+### The transferable prior is dead
+
+Fit on all 365 Converging Paths matches, predict Flourishing Wilds cold: **33/70
+directional, 47%** - worse than a coin flip - and logloss 0.6989 against 0.6931 for saying
+50%. As a decayed prior mean it hurts at every k from 5 to 1000, by 0.0137 to 0.0164.
+
+Hero strength does not survive a rotation. Do not spend time on carrying it forward.
+
+### But the model is SELECTIVE, not flat - and that may be the product
+
+Walk-forward, out of sample, predicting each match from only what preceded it:
+
+| fit | >=54% | >=55% | >=56% | >=58% |
+|---|---|---|---|---|
+| Converging Paths, theme-locked | 67% (n=66) | 68% (n=40) | **78% (n=27)** | 64% (n=11) |
+| Converging Paths, cross-theme | 55% (n=112) | 56% (n=61) | 67% (n=36) | 77% (n=13) |
+| Flourishing Wilds, theme-locked | 50% (n=8) | 60% (n=5) | 100% (n=3) | 100% (n=3) |
+| Flourishing Wilds, cross-theme | 51% (n=41) | 57% (n=30) | 52% (n=23) | 67% (n=12) |
+
+At >=56% on the mature theme the model is right 78% of the time, P(from a coin) = 0.00.
+Pooled across themes, >=56% gives 24/30 = 80%.
+
+So the flatness we have been fighting is an average over two populations: a fifth of
+matches the model reads well, and four fifths it cannot read at all. The display has been
+showing both.
+
+**What this needs from you:**
+
+1. **Is the threshold real or selected?** It was chosen by looking at this data, which is
+   how you find a line that exists only in this sample. Test it properly - hold out, or
+   pick the threshold on one theme and test it on the other.
+2. **Does it survive on the thin theme as that theme fills?** The new theme shows nothing
+   yet at 70 matches, which is consistent with it simply being below the learning curve.
+3. **What separates the matches it reads from the ones it cannot?** If that is knowable in
+   advance - a comp of well-seen heroes, a big rating gap, something else - then the gate
+   can be that condition rather than a probability threshold, which would be far more
+   robust than a number tuned on 27 matches.
+
+Question 3 is the most valuable thing in this round if it has an answer.

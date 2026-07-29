@@ -9,7 +9,7 @@
  * `src-tauri/src-python/adb_auto_player/wdb_version.py`, which is the source of truth.
  * `build-rpm.sh` refuses to build if they disagree, so the drift cannot ship.
  */
-export const WDB_RELEASE = "20";
+export const WDB_RELEASE = "21";
 
 export function wdbVersion(appVersion: string): string {
   return `${appVersion}-${WDB_RELEASE}`;

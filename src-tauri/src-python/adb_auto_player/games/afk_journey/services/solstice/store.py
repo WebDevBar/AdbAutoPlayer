@@ -14,6 +14,7 @@ Two rules that come from real failures:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import sqlite3
 import uuid
@@ -210,40 +211,97 @@ class MatchStore:
         "outcome_source",
     )
 
-    # Databases whose views this process has already ensured. Ensuring is idempotent and
-    # costs about a millisecond, but doing it on every connection would run it thousands
-    # of times a session for no benefit.
-    _views_ensured: ClassVar[set[Path]] = set()
+    # Databases this process has already brought up to schema. Migrating is idempotent
+    # and costs a few milliseconds, but doing it per connection would run it thousands
+    # of times a session for nothing.
+    _schema_ensured: ClassVar[set[Path]] = set()
 
     def __init__(self, db_path: Path) -> None:
         self._db = Path(db_path)
-        self._ensure_views()
+        self._ensure_schema()
 
-    def _ensure_views(self) -> None:
-        """Create the derived views if this database does not have them yet.
+    def _ensure_schema(self) -> None:
+        """Bring this database up to the current schema, and create the derived views.
 
-        Needed because a shipped build never runs `migrate.py`, and `solstice_db_path`
-        returns an EXISTING user database untouched. A view added to the schema today
-        would otherwise reach only the machine that ran the migration and no one else.
-        `views.sql` is DROP-then-CREATE throughout, which makes this free to repeat and
-        lets a changed definition reach an install that already has the old one.
+        THIS IS NOT OPTIONAL PLUMBING. A shipped build never runs `migrate.py`, and
+        `solstice_db_path` returns an existing user database untouched - so without this
+        a database keeps whatever schema it was seeded with forever. A contributor who
+        installed before `match.predicted_left` existed had EVERY match fail at the
+        write with "no such column: predicted_left", and updating the app did not help,
+        because nothing ever added the column. 27 lost matches in one log, 2026-07-28.
 
-        Failure is swallowed on purpose. A view is a convenience over data that is
-        already there, and nothing that records a match depends on one. A mode refusing
-        to start because a read-only helper could not be created would be a far worse
-        bug than the missing helper.
+        Migration is only ATTEMPTED when something is actually missing. `migrate.py`
+        rewrites the schema and so needs a write lock, and taking one on every store
+        construction deadlocked against connections other callers still had open -
+        `with sqlite3.connect(...)` commits but does not close. The check below is a
+        handful of PRAGMA reads and needs no lock at all, so the common case (an
+        up-to-date database) touches nothing.
+
+        Checked by COLUMN rather than by recorded version: a database seeded from an old
+        bundle can carry a current-looking `schema_version` row and still lack the
+        columns, which is exactly the case that has to be repaired.
+
+        `migrate.py` is called rather than reimplemented. Two copies of a migration list
+        drift, and the one that drifts is the one nobody runs by hand.
         """
-        if self._db in MatchStore._views_ensured:
+        if self._db in MatchStore._schema_ensured:
             return
-        MatchStore._views_ensured.add(self._db)
-        sql = resource_file(Path("solstice_clash") / "views.sql")
-        if sql is None or not sql.is_file():
+        MatchStore._schema_ensured.add(self._db)
+
+        script = resource_file(Path("solstice_clash") / "migrate.py")
+        if script is None or not script.is_file():
+            logging.debug("[SC-93] migrate.py not found; schema left as-is")
             return
         try:
-            with self._connect() as con:
-                con.executescript(sql.read_text())
-        except (sqlite3.Error, OSError) as exc:
-            logging.debug(f"[SC-93] derived views not created: {exc}")
+            spec = importlib.util.spec_from_file_location("_solstice_migrate", script)
+            if spec is None or spec.loader is None:
+                return
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            if self._schema_is_current(module):
+                return
+            summary = module.apply(str(self._db), quiet=True)
+        except Exception as exc:  # see the docstring: never block startup
+            logging.warning(f"[SC-93] could not migrate {self._db}: {exc}")
+            return
+
+        added = summary.get("columns_added") or []
+        renamed = summary.get("columns_renamed") or []
+        logging.info(
+            f"[SC-93] database upgraded to schema v{summary.get('version')}: "
+            f"added {added or 'nothing'}, renamed {renamed or 'nothing'}"
+        )
+
+    def _schema_is_current(self, migrate_module) -> bool:
+        """Read-only: does the database already have every column and view we need?
+
+        Returns False on any doubt - a needless migration is idempotent and cheap, while
+        a skipped one loses every match the user records.
+        """
+        try:
+            con = sqlite3.connect(self._db)
+        except sqlite3.Error:
+            return False
+        try:
+            tables = {
+                r[0]
+                for r in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
+                )
+            }
+            if "hero_matchup" not in tables:
+                return False
+            for table, column, _decl in getattr(migrate_module, "ADD_COLUMNS", []):
+                if table not in tables:
+                    return False
+                present = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+                if column not in present:
+                    return False
+            return True
+        except sqlite3.Error:
+            return False
+        finally:
+            con.close()
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self._db)

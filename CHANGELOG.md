@@ -4,6 +4,25 @@
 
 ### Added
 
+- **The client now upgrades its own database.** A shipped build never ran `migrate.py`,
+  and `solstice_db_path` hands back an existing user database untouched - so a database
+  kept whatever schema it was seeded with, permanently. A contributor who installed
+  before `match.predicted_left` existed had EVERY match fail at the write with
+  `no such column: predicted_left`, and updating the app did not help, because nothing
+  ever added the column. 27 matches lost in one log before anyone noticed.
+  - `migrate.py` is now importable (`apply(db, quiet=True)`) and the store calls it,
+    rather than a second copy of the migration list living in the client. Two copies
+    drift, and the one that drifts is the one nobody runs by hand.
+  - Migration is attempted only when something is actually missing. It needs a write
+    lock, and taking one on every store construction deadlocked against connections
+    other callers still had open - `with sqlite3.connect(...)` commits but does not
+    close. The check is a few PRAGMA reads and takes no lock at all.
+  - Checked by COLUMN, not by recorded version: a database seeded from an old bundle can
+    carry a current-looking `schema_version` row and still lack the columns, which is
+    exactly the case that has to be repaired.
+  - Repairs in place. The user's collected matches survive, which is why this is worth
+    fixing rather than telling them to delete the file and start over.
+
 - **The log export says where it saved, and no longer opens a dialog.** There is no file
   picker - the export writes to `Downloads`, or the temp directory on a machine without
   one - and nothing said which. The frontend used to reveal the file in the file manager

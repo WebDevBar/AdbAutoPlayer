@@ -7,12 +7,14 @@ looked like it had done the wrong thing, and on Windows nothing said where the f
 went at all.
 """
 
-# ruff: noqa: E402  - sys.modules must be patched before the import under test
 import asyncio
+import importlib
 import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class _Commands:
@@ -35,20 +37,49 @@ class _Commands:
 
 _mock_pytauri = MagicMock()
 _mock_pytauri.Commands = _Commands
-sys.modules["pytauri"] = _mock_pytauri
-sys.modules["adb_auto_player.ext_mod"] = MagicMock()
-
-from adb_auto_player.__main__ import SaveLogFileBody, save_log_file
 
 
-def test_writes_the_file_and_logs_where(caplog, monkeypatch, tmp_path):
+@pytest.fixture
+def main_module():
+    """`adb_auto_player.__main__`, imported fresh with the pass-through stub in place.
+
+    Import order cannot be trusted: `test_e2e_flow` imports the same module with a plain
+    MagicMock for `pytauri`, and whichever test module lands first wins the sys.modules
+    entry for the whole session. When that was the other one, every command here was a
+    MagicMock and `asyncio.run` got a mock instead of a coroutine - a failure that only
+    appeared in the full suite and never when this file ran alone.
+
+    Everything is put back afterwards. Leaving the stub in place, or leaving the module
+    evicted, broke `test_e2e_flow` in turn - swapping a global and not restoring it just
+    moves the failure to whoever runs next.
+    """
+    saved = {
+        name: sys.modules.get(name)
+        for name in ("pytauri", "adb_auto_player.ext_mod", "adb_auto_player.__main__")
+    }
+    sys.modules["pytauri"] = _mock_pytauri
+    sys.modules["adb_auto_player.ext_mod"] = MagicMock()
+    sys.modules.pop("adb_auto_player.__main__", None)
+    try:
+        yield importlib.import_module("adb_auto_player.__main__")
+    finally:
+        for name, module in saved.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
+
+
+def test_writes_the_file_and_logs_where(main_module, caplog, monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     (tmp_path / "Downloads").mkdir()
 
     with caplog.at_level(logging.INFO):
         result = Path(
             asyncio.run(
-                save_log_file(SaveLogFileBody(content="hello\n", filename="probe.txt"))
+                main_module.save_log_file(
+                    main_module.SaveLogFileBody(content="hello\n", filename="probe.txt")
+                )
             )
         )
 
@@ -59,16 +90,15 @@ def test_writes_the_file_and_logs_where(caplog, monkeypatch, tmp_path):
     )
 
 
-def test_falls_back_to_temp_and_still_says_where(caplog, monkeypatch, tmp_path):
+def test_falls_back_to_temp_and_still_says_where(
+    main_module, caplog, monkeypatch, tmp_path
+):
     """A machine with no Downloads folder gets the temp directory - silently, before."""
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))  # no Downloads
 
     with caplog.at_level(logging.INFO):
-        result = Path(
-            asyncio.run(
-                save_log_file(SaveLogFileBody(content="x", filename="probe2.txt"))
-            )
-        )
+        body = main_module.SaveLogFileBody(content="x", filename="probe2.txt")
+        result = Path(asyncio.run(main_module.save_log_file(body)))
 
     assert result.is_file()
     assert result.parent.name != "Downloads"

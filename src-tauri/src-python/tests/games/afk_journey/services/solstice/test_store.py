@@ -684,3 +684,92 @@ def test_hero_matchup_counts_draws_separately(tmp_db):
             "  FROM hero_matchup WHERE hero_a='alsa' AND hero_b='bryon'"
         ).fetchone()
     assert row == (1, 0, 1, 1, 1)
+
+
+# ------------------------------------------------------------- schema migration
+
+
+def _strip_predicted_columns(db):
+    """Turn the fixture into a pre-2026-07 database: no predicted_* columns.
+
+    ALTER TABLE DROP COLUMN, not a hand-rolled rebuild. `CREATE TABLE AS SELECT` copies
+    rows but not constraints, and the copy silently lost both `INTEGER PRIMARY KEY` and
+    `UNIQUE(natural_key)` - which then failed in ways that looked like bugs in the code
+    under test rather than in the fixture.
+    """
+    con = sqlite3.connect(db)
+    try:
+        # The view reads `match`; dropping columns underneath it breaks every later
+        # statement that revalidates the schema. A database this old had no view anyway.
+        con.execute("DROP VIEW IF EXISTS hero_matchup")
+        for column in ("predicted_left", "predicted_source", "predicted_locked",
+                       "predicted_at"):
+            con.execute(f"ALTER TABLE match DROP COLUMN {column}")
+        con.commit()
+    finally:
+        # close(), not just `with` - a context manager COMMITS a sqlite connection but
+        # does not close it, and the lingering lock blocks the migration under test.
+        con.close()
+
+
+def test_opening_an_old_database_adds_the_missing_columns(tmp_db):
+    """The failure a real contributor hit: every match lost to "no such column".
+
+    A shipped build never runs migrate.py and `solstice_db_path` returns an existing
+    database untouched, so before this the schema froze at whatever seeded it - and
+    updating the app did not help, because nothing ever added the column.
+    """
+    _strip_predicted_columns(tmp_db)
+    with sqlite3.connect(tmp_db) as con:
+        present = {r[1] for r in con.execute("PRAGMA table_info(match)")}
+    assert not [c for c in present if c.startswith("predicted_")]
+
+    MatchStore(tmp_db)  # constructing the store is what repairs it
+
+    with sqlite3.connect(tmp_db) as con:
+        after = {r[1] for r in con.execute("PRAGMA table_info(match)")}
+    assert {"predicted_left", "predicted_source", "predicted_locked",
+            "predicted_at"} <= after
+
+
+def test_the_repaired_database_accepts_the_write_that_used_to_fail(tmp_db):
+    _strip_predicted_columns(tmp_db)
+    store = MatchStore(tmp_db)
+    mid = store.record_match(
+        MatchRecord(source="compete", captured_at="2026-07-29T10:00:00",
+                    natural_key="after-migration", outcome="left")
+    )
+    assert mid
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE match SET predicted_left=0.62 WHERE id=?", (mid,))
+        assert con.execute(
+            "SELECT predicted_left FROM match WHERE id=?", (mid,)
+        ).fetchone()[0] == 0.62
+
+
+def test_migration_preserves_the_matches_already_collected(tmp_db):
+    """Repair must not cost the user their data.
+
+    That is the whole point of fixing the database in place rather than telling them to
+    delete it and start over.
+    """
+    store = MatchStore(tmp_db)
+    mid = store.record_match(
+        MatchRecord(source="compete", captured_at="2026-07-29T09:00:00",
+                    natural_key="collected-before-the-upgrade", outcome="right")
+    )
+    store.record_heroes(mid, [HeroSlot("left", 1, "alsa", None, "identified")])
+    _strip_predicted_columns(tmp_db)
+    MatchStore._schema_ensured.discard(tmp_db)  # force a real re-run in-process
+
+    MatchStore(tmp_db)
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT outcome FROM match WHERE natural_key='collected-before-the-upgrade'"
+        ).fetchone()
+        heroes = con.execute(
+            "SELECT COUNT(*) FROM match_hero WHERE match_id=?", (mid,)
+        ).fetchone()[0]
+    assert row == ("right",), "the match survived the migration"
+    assert heroes == 1, "its heroes survived too"

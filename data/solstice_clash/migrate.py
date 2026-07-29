@@ -169,11 +169,30 @@ def columns(con: sqlite3.Connection, table: str) -> set[str]:
     return {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
 
 
-def main() -> None:
-    db = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "heroes.sqlite")
+def apply(db: str, quiet: bool = False) -> dict:
+    """Bring `db` up to the current schema. Idempotent; never drops or rewrites rows.
+
+    Callable as well as runnable, because THE CLIENT NEEDS IT. A shipped build never
+    executes this file as a script, and `solstice_db_path` returns an existing user
+    database untouched - so before this, a database kept whatever schema it was seeded
+    with, forever. A contributor who installed before `match.predicted_left` existed had
+    every single match fail at the write with "no such column", and updating the app did
+    not help, because nothing ever added the column. Observed in the wild, 2026-07-28.
+
+    Returns a summary of what changed, so a caller can log it without parsing stdout.
+    """
     fresh = not os.path.exists(db)
     con = sqlite3.connect(db)
+    try:
+        return _apply(con, db, fresh, quiet)
+    finally:
+        # Closing matters even when this raises. A half-applied migration that keeps a
+        # write lock makes the NEXT statement fail with "database is locked", which
+        # sends the reader hunting for a concurrency bug that does not exist.
+        con.close()
 
+
+def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     con.executescript(open(SCHEMA).read())          # CREATE IF NOT EXISTS throughout
     # Derived views live in their own file because the CLIENT executes them too - a
     # shipped build never runs this script. DROP-then-CREATE, so re-running is free
@@ -387,6 +406,17 @@ def main() -> None:
     )
     con.commit()
 
+    summary = {
+        "db": db,
+        "fresh": fresh,
+        "version": SCHEMA_VERSION,
+        "columns_added": added,
+        "columns_renamed": renamed,
+        "config_rows_inserted": inserted,
+    }
+    if quiet:
+        return summary
+
     print(f"  database    : {db}{' (created)' if fresh else ''}")
     print(f"  schema      : v{SCHEMA_VERSION}")
     print(f"  columns added: {added or 'none'}")
@@ -396,6 +426,11 @@ def main() -> None:
               "cell_registry", "art_transform", "library_config"):
         n = con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
         print(f"  {t:16s} {n:>5} rows")
+    return summary
+
+
+def main() -> None:
+    apply(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "heroes.sqlite"))
 
 
 if __name__ == "__main__":

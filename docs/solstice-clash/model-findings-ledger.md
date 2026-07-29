@@ -362,6 +362,68 @@ destroys the model in a straight line the moment it is free to speak - the signa
 pure overfitting, not of a weak signal. Rank 2 behaves identically to rank 1. **Do not fit
 a counter term at this sample size.**
 
+### The observed-tally estimator, after both reviewers attacked it
+
+Reviewed the same day. The verdict is neither "works" nor "dead" - it is SMALL, and the
+two reviewers disagreed in a way that is itself the finding.
+
+**They contradict each other on the central test, because they swept different settings:**
+
+| 25 shuffle splits, Converging Paths | |
+|---|---|
+| Fable, unfloored (k=1, w=0.25) | -0.0054, 8/25 - fails badly |
+| Codex, floored (min_n=3, k=5, w=0.25) | +0.00093, 19/25 |
+
+So "fails the bar" applies to the version already known to be unsafe on a fresh theme, not
+to the floored one. Both numbers are right.
+
+**Three corrections to what is written above, all mine:**
+
+1. **"All 30 settings gain" was one observation, not thirty.** Per-match gains across
+   settings correlate +0.967 to +0.995 - the sweep re-scales a single noisy quantity. It
+   read as robustness and was a single bet counted thirty times.
+2. **"The pair version gains twice the per-hero control" does not hold at matched
+   parameters.** Codex measured the reverse on Converging Paths: hero control +0.00374
+   (22/25) against the pair layer's +0.00093 (19/25). My comparison used different settings
+   for the two. The per-hero version does collapse on the fresh theme (-0.0047) where the
+   pair version stays flat, so the floor is preventing damage rather than revealing
+   counters.
+3. **The shuffle SE is optimistic here, as this file already warns.** Codex's +4.67 SE comes
+   from 25 correlated resamples of the same 365 matches. The per-match paired SE on
+   genuinely held-out data is **0.8 SE**: +0.0065 +- 0.0077 over the 92 second-half matches
+   where the layer fired, helping 52 and hurting 40 (P = 0.126).
+
+**No counter structure is detectable beyond Bradley-Terry.** Direct existence test, no
+layering formula involved: if counters are real, pair records must be more SPREAD than BT
+alone implies. Null simulated by redrawing outcomes from BT's own per-match probabilities,
+so the nine-pairs-per-match correlation and uneven pair frequencies are present in the null
+too. Converging Paths, 118 pairs: observed 112.7 against null 117.4 +- 14.1, **z = -0.33**,
+p = 0.625. Not merely non-significant - the observed spread is slightly BELOW chance. The
+power of this test at 365 matches is under review; "no trace at this sample size" is not
+"proven absent", and Bradley-Terry itself looked dead at 245.
+
+**What the gain probably is, since it is probably not counters.** Both reviewers found it
+concentrated LATE in the theme (blocks: -0.0017, -0.0010, +0.0044) and found recency
+weighting the strongest thing in the whole sweep. That points at within-theme
+nonstationarity - recent matches predicting better than old ones - which a pair tally picks
+up incidentally because recent pairs dominate a sparse record. **Time-decayed Bradley-Terry
+is the direct attack on that: one parameter, shipped machinery, no 4,000 sparse cells.**
+Registered as the more promising lead.
+
+**Tail accuracy does not improve**, which is what the product actually shows. On the mature
+theme the layer pushes far more matches above the display threshold at the same ~64%
+accuracy - it manufactures confidence without manufacturing accuracy. On the fresh theme it
+slightly worsens the threshold table.
+
+**Status: not shipped, not discarded.** The case for a forward test is that the downside is
+bounded and measured - on the live theme it fires on 11 matches and scores +0.0003, because
+almost nothing has 3 matchups yet - so the realistic outcomes are "small gain" or "nothing"
+rather than "small gain" or "regression". Pre-registered settings if it is ever wired in:
+theme-scoped, cross-side raw tally, prior matches only, `min_n=3`, shrink `n/(n+5)`,
+`weight=0.25`, `eta = logit(BT) + weight * sum(pair_scores)`. Acceptance: positive paired
+logloss delta and non-negative accuracy at >=0.55 and >=0.60; disable if the first 75 scored
+matches on a theme are worse by more than 0.001. No tuning on that theme, ever.
+
 ### The OBSERVED-TALLY estimator is the round's one positive result
 
 Nothing fitted: each pair carries its own record, the nine are summed, the sum is added to

@@ -9,6 +9,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
 import android.os.Build;
 import android.os.IBinder;
 import android.provider.Settings;
@@ -44,6 +47,13 @@ public class OverlayService extends Service {
     private static final float CORNER_FRACTION = 0.008f;  // ~15px radius
     private static final float BOTTOM_MARGIN_FRACTION = 0.008f;
     private static final float TEXT_FRACTION = 0.023f;    // ~44px on 1920
+    // The % is half height: it is a unit, not part of the number, and at full size it
+    // competes with the digits for attention.
+    private static final float PERCENT_SCALE = 0.78f;
+    // Optical rather than geometric centring. "63%" centred by its bounding box reads as
+    // sitting left, because the small % adds width without adding visual weight - so the
+    // whole label is nudged right until it looks centred.
+    private static final float OPTICAL_SHIFT_FRACTION = 0.0045f;
 
     // Fully opaque. The game behind this is bright and busy, and a translucent plate
     // reads as part of the UI rather than as something to look at.
@@ -108,7 +118,7 @@ public class OverlayService extends Service {
             return;
         }
         int height = getResources().getDisplayMetrics().heightPixels;
-        String label = percent.endsWith("%") ? percent : percent + "%";
+        CharSequence label = label(percent);
 
         if (view != null) {
             view.setText(label);
@@ -134,10 +144,33 @@ public class OverlayService extends Service {
         // The plate is a fixed-size window, not padding around the text, so a larger
         // font fills it rather than growing it. Padding is zeroed so the glyphs get the
         // whole plate and the size stays locked.
-        bubble.setPadding(0, 0, 0, 0);
+        // The DIGITS are centred, not the label. "58%" centred as a whole leaves the
+        // number sitting left, because the % adds width without adding weight - which is
+        // what the eye reads as off-centre. Padding the right by exactly the % glyph's
+        // measured width cancels it, so the digits land on the plate's centre line no
+        // matter how many of them there are or what the font does.
+        float percentWidth = bubble.getPaint().measureText("%") * PERCENT_SCALE;
+        int shift = Math.round(OPTICAL_SHIFT_FRACTION * height);
+        // LEFT, not right. With gravity CENTER, padding narrows the box the label is
+        // centred in, so right padding pulls it left - the opposite of what is wanted.
+        // Padding the left by the % width puts the digits exactly on the centre line:
+        // digits centre = pad + (plate - pad - digits - pct)/2 + digits/2 = plate/2.
+        bubble.setPadding(Math.round(percentWidth), shift, 0, 0);
         bubble.setIncludeFontPadding(false);
         windows.addView(bubble, params(height));
         view = bubble;
+    }
+
+    /** "63" at full size with a half-height "%" after it. */
+    private CharSequence label(String percent) {
+        String text = percent + "%";
+        SpannableString span = new SpannableString(text);
+        span.setSpan(
+                new RelativeSizeSpan(PERCENT_SCALE),
+                text.length() - 1,
+                text.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return span;
     }
 
     /**

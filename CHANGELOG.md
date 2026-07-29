@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+### Added
+
+- **AFK Journey - Solstice Clash: the odds appear inside the game.** A small rounded
+  plate at the bottom of the screen shows the favoured side's probability during a draft,
+  so it can be read without looking at another window. Blue or red for which side, one
+  number, and nothing at all when neither side is favoured - inside the middle band the
+  model is right 50.2% of the time across 705 predictions, so "no favourite" and "nothing
+  worth showing" are the same condition, and the plate appearing is itself the first half
+  of the signal.
+  - Two new commands install and remove it. A collection run never installs it: absence
+    is a decision, and a run that quietly restored something the user deleted would be the
+    tool overriding them. An install that is present but outdated is still upgraded.
+  - Positioned below every read band and every tap point, and detached rather than blanked
+    whenever it has nothing to say - the only state provably identical to not having the
+    overlay at all.
+  - Two device bugs found and fixed along the way, both silent. `am` parses a bare
+    component as the intent spec's trailing argument, so every extra after it was dropped
+    and the service started, received nothing and painted nothing. And Waydroid's
+    `dex2oat` hangs - installd killed it after 570 seconds on a 4KB dex, wedging seven
+    install sessions at 90% - so the install sets `pm.dexopt.install=skip` first and
+    completes in 25 seconds.
+  - The APK is 9KB of plain Java. The first Kotlin build was 612KB because the standard
+    library rode along in a 2MB dex to draw one text view.
+
+- **The log prints the fork's own version**, e.g. `App Version: 12.9.25   WDB Version:
+  12.9.25-19`. The upstream number says which AdbAutoPlayer release these patches sit on;
+  it does not say which of our builds is running, and those differ by a great deal within
+  one upstream version.
+
+- **Solstice Clash: optionally keep the draft screenshot of each match**, off by default,
+  under a new WDB Modes settings section. Every idea about reading something new off the
+  draft - hero levels, star tiers, pick order - is otherwise answerable only by collecting
+  for weeks. Frames are named for the match they belong to, because a timestamp join is
+  the kind that silently pairs the wrong records.
+
 ### Changed
 
 - **Solstice Clash odds: the crowd is out and the hero model is in at full strength.**

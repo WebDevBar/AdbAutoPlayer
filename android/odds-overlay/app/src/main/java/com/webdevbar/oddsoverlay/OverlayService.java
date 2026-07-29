@@ -18,6 +18,7 @@ import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 /**
@@ -54,6 +55,15 @@ public class OverlayService extends Service {
     // sitting left, because the small % adds width without adding visual weight - so the
     // whole label is nudged right until it looks centred.
     private static final float OPTICAL_SHIFT_FRACTION = 0.0045f;
+    private static final float GAP_FRACTION = 0.0012f;
+    // The % is drawn taller than the plate on purpose - it is a watermark, so letting it
+    // bleed past the edges reads as texture rather than as a cramped character.
+    private static final float SIGN_SCALE = 1.3f;
+    // Positive is down. Tuned by eye on device against a live game screen - there is no
+    // formula for where a watermark sits right behind a number. Locked; do not "fix".
+    private static final float SIGN_NUDGE_PX = 1f;
+    private static final float SIGN_NUDGE_X_PX = -2f;
+    private static final float NUMBER_DROP_PX = 5f;
 
     // Fully opaque. The game behind this is bright and busy, and a translucent plate
     // reads as part of the UI rather than as something to look at.
@@ -62,7 +72,9 @@ public class OverlayService extends Service {
     private static final String CHANNEL = "odds";
     private static final int NOTIFICATION_ID = 1;
 
-    private TextView view;
+    private FrameLayout view;
+    private TextView label;
+    private TextView sign;
     private WindowManager windows;
 
     @Override
@@ -118,10 +130,10 @@ public class OverlayService extends Service {
             return;
         }
         int height = getResources().getDisplayMetrics().heightPixels;
-        CharSequence label = label(percent);
 
         if (view != null) {
-            view.setText(label);
+            label.setText(percent);
+            place(height);
             ((GradientDrawable) view.getBackground()).setColor(colour);
             return;
         }
@@ -134,43 +146,108 @@ public class OverlayService extends Service {
         plate.setCornerRadius(CORNER_FRACTION * height);
         plate.setColor(colour);
 
-        TextView bubble = new TextView(this);
-        bubble.setText(label);
-        bubble.setTextColor(Color.WHITE);
-        bubble.setTypeface(Typeface.DEFAULT_BOLD);
-        bubble.setBackground(plate);
-        bubble.setTextSize(TypedValue.COMPLEX_UNIT_PX, TEXT_FRACTION * height);
-        bubble.setGravity(Gravity.CENTER);
-        // The plate is a fixed-size window, not padding around the text, so a larger
-        // font fills it rather than growing it. Padding is zeroed so the glyphs get the
-        // whole plate and the size stays locked.
-        // The DIGITS are centred, not the label. "58%" centred as a whole leaves the
-        // number sitting left, because the % adds width without adding weight - which is
-        // what the eye reads as off-centre. Padding the right by exactly the % glyph's
-        // measured width cancels it, so the digits land on the plate's centre line no
-        // matter how many of them there are or what the font does.
-        float percentWidth = bubble.getPaint().measureText("%") * PERCENT_SCALE;
-        int shift = Math.round(OPTICAL_SHIFT_FRACTION * height);
-        // LEFT, not right. With gravity CENTER, padding narrows the box the label is
-        // centred in, so right padding pulls it left - the opposite of what is wanted.
-        // Padding the left by the % width puts the digits exactly on the centre line:
-        // digits centre = pad + (plate - pad - digits - pct)/2 + digits/2 = plate/2.
-        bubble.setPadding(Math.round(percentWidth), shift, 0, 0);
-        bubble.setIncludeFontPadding(false);
-        windows.addView(bubble, params(height));
-        view = bubble;
+        // TWO views, not one string. The number is centred in the plate on its own, with
+        // nothing to correct for - which is the only way it is exactly centred rather
+        // than approximately. The % is a second view placed beside it.
+        //
+        // Everything else was tried and failed on device: padding narrows the box the
+        // label centres in, so "100%" overflowed against the right edge; translating the
+        // view that carried the background moved the plate and clipped its corners.
+        label = digits(height);
+        label.setText(percent);
+
+        sign = new TextView(this);
+        sign.setText("%");
+        // Half opacity: the % is a unit, not part of the number, and at full weight it
+        // competes with the digits for the glance this whole overlay exists to survive.
+        sign.setTextColor(Color.WHITE);
+        sign.setAlpha(0.18f);
+        // Not monospace. The number is monospace so its width never changes between
+        // values; the % is decoration behind it and reads better in the default face.
+        sign.setTypeface(Typeface.DEFAULT_BOLD);
+        // As tall as the plate and right-aligned: it is a watermark behind the number,
+        // not a suffix after it.
+        sign.setTextSize(TypedValue.COMPLEX_UNIT_PX, HEIGHT_FRACTION * height * SIGN_SCALE);
+        sign.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        sign.setIncludeFontPadding(false);
+
+        FrameLayout container = new FrameLayout(this);
+        container.setBackground(plate);
+        // The % goes in FIRST, so it sits behind the number rather than beside it.
+        //
+        // Its view is DELIBERATELY taller than the plate. At MATCH_PARENT the glyph was
+        // clipped by its own view rather than by the plate, so lifting the view carried
+        // the cut upward with it and the % lost its bottom while empty plate sat below.
+        // A taller view contains the whole glyph; the plate-sized window does the
+        // clipping, which is what makes the bleed symmetrical.
+        FrameLayout.LayoutParams tall = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Math.round(HEIGHT_FRACTION * height * SIGN_SCALE * 2f));
+        tall.gravity = Gravity.CENTER_VERTICAL;
+        container.setClipChildren(false);
+        container.addView(sign, tall);
+        container.addView(label, matchParent());
+        windows.addView(container, params(height));
+        view = container;
+        place(height);
     }
 
-    /** "63" at full size with a half-height "%" after it. */
-    private CharSequence label(String percent) {
-        String text = percent + "%";
-        SpannableString span = new SpannableString(text);
-        span.setSpan(
-                new RelativeSizeSpan(PERCENT_SCALE),
-                text.length() - 1,
-                text.length(),
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return span;
+    /** The number: monospace so every digit is the same width and nothing shifts. */
+    private TextView digits(int height) {
+        TextView text = new TextView(this);
+        text.setTextColor(Color.WHITE);
+        text.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_PX, TEXT_FRACTION * height);
+        text.setGravity(Gravity.CENTER);
+        text.setPadding(0, 0, 0, 0);
+        text.setIncludeFontPadding(false);
+        // Bolder than the bold face. Monospace has no heavier weight available, so the
+        // glyphs are stroked as well as filled - a fake bold, but the only way to add
+        // weight without changing the typeface that keeps every value the same width.
+        text.getPaint().setStyle(android.graphics.Paint.Style.FILL_AND_STROKE);
+        text.getPaint().setStrokeWidth(2.2f);
+        // A shadow, because the % now sits directly behind the digits: without it the
+        // two whites run together where they overlap.
+        text.setShadowLayer(5f, 0f, 2f, 0xB3000000);
+        return text;
+    }
+
+    private FrameLayout.LayoutParams matchParent() {
+        return new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+    }
+
+    /**
+     * Put the % immediately right of the centred number.
+     *
+     * <p>Both views fill the plate and centre their own text, so the % starts on the same
+     * centre line and is pushed out by half the number's width plus a hair of space. The
+     * number itself is never moved horizontally - it is centred because nothing touched
+     * it.
+     */
+    private void place(int height) {
+        // The % needs no horizontal placement now - its own gravity pins it to the
+        // right edge of the plate, behind the number.
+        sign.setTranslationX(SIGN_NUDGE_X_PX);
+        // No vertical nudge on the number: with nothing padding or translating it, it is
+        // centred by the layout, and that is the position to match rather than adjust.
+        // The number is centred by the layout, then dropped by a fixed amount: digits sit
+        // optically high inside their line box, so geometric centring reads as floating.
+        float drop = NUMBER_DROP_PX;
+        label.setTranslationY(drop);
+        // Centred by its GLYPH, not its line box. A TextView centres the line box, which
+        // includes ascent and descent sized for a font taller than the plate - so the %
+        // rendered visibly low. Offsetting by the difference between the line box's
+        // middle and the glyph's own middle puts the drawn shape on the centre line.
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        sign.getPaint().getTextBounds("%", 0, 1, bounds);
+        android.graphics.Paint.FontMetrics fm = sign.getPaint().getFontMetrics();
+        float lineMiddle = (fm.ascent + fm.descent) / 2f;
+        float glyphMiddle = (bounds.top + bounds.bottom) / 2f;
+        // NOT offset by the number's drop. They were sharing it, so every nudge to the
+        // number silently moved the watermark that had already been positioned.
+        sign.setTranslationY((lineMiddle - glyphMiddle) + SIGN_NUDGE_PX);
     }
 
     /**
@@ -183,6 +260,8 @@ public class OverlayService extends Service {
         if (view != null) {
             windows.removeView(view);
             view = null;
+            label = null;
+            sign = null;
         }
     }
 

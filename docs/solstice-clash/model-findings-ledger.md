@@ -11,23 +11,45 @@ sample size rather than about the game.
 Started 2026-07-29. Append; do not rewrite history. A superseded row keeps its date and
 gains a note.
 
-## Revisit next
+## Do NOT test these again
 
-**The confidence threshold, once Flourishing Wilds has ~200 of its own matches.** The one
-live question. See the threshold section below - the ordering is real, the line is not yet
-earned, and the check runs itself as the new theme accumulates confident calls. No new
-collection work, no decision needed before then.
+Closed by at least two independent implementations, usually three (this project, Codex,
+Fable), on the sample sizes shown. Re-opening one of these needs a REASON - a game change,
+a new data source - not simply more matches. Detail for each is further down.
 
-**The rating step against its pre-registered challenger, at ~250 rated matches.** The
-shipped step stopped confirming at 155 (see round 3). The challenger is written down in
-advance so the next look is not another after-the-fact choice: "+0.25 log-odds to the
-higher-rated side at any nonzero gap".
+| route | why it is closed | last measured |
+|---|---|---|
+| **Carrying hero strengths across a theme rotation** | 47% directional cold, worse than a coin. Symmetric: null in the reverse direction too. Not a roster problem - the old fit knew 5.6 of 6 heroes. Hurts as a decayed prior at every k from 1 to 1000 | 2026-07-29, 365 vs 70 |
+| **Rank-weighted hero popularity** | Correlation with fitted hero strength is 0.008 - it measures nothing. Its 61-match pass was luck; at 155 it is -0.0078, 6/25 | 2026-07-29, n=155 rated |
+| **Plain hero popularity** | Bandwagon count, null throughout | n=335 |
+| **Post-match stats (atk/heal/tank) in any shape** | ~16 variants across 3 rounds: raw, share, log, class-centred, outcome-adjusted, several shrinkages, team balance, damage-vs-opposing-tanking, stats-per-rating, consistency. None clears the bar; most dilute Bradley-Terry. Their variance is dominated by ROLE, and role composition is separately the worst family tested | 2026-07-29, n=435 |
+| **Class / faction / race composition, and class-vs-class counters** | 0.707-0.744 logloss, 2-6 of 25 splits. Strongly negative, not merely null | n=335 |
+| **Faction synergy** | +0.0020, 11/25 | n=335 |
+| **Player identity / personal win-rate prior** | Worst single candidate. A player's spectated win rate does not even correlate with their ladder rating (r=-0.11) | n=101 players |
+| **The crowd's betting split** | Uninformative in every form; a noisy echo of the rating gap (r=0.475). `W_CROWD = 0.0` | n=335 + 54 scored |
+| **Rank as a corrective ON TOP of a confident hero call** | Where the two disagree the hero model wins 11-6. Re-weighting would overturn more correct calls than it rescues | 2026-07-29, n=453 |
+| **Stacking a feature onto Bradley-Terry with a fitted weight** | Not a feature result - 435 matches cannot estimate stacking weights. Every stack scored worse than BT alone; the full stack scored worse than the base rate | rounds 2 and 3 |
+| **Synergy matrices, hero embeddings, GNNs, attention over draft** | Literature methods needing 10k-1M matches for thousands of pair parameters. Published draft-only accuracy is ~58% anyway. Not an option at 435 | web research, both reviewers |
+
+## Re-open when the data arrives - pre-registered
+
+Each of these is written down BEFORE looking again, so the next round is a test and not
+another after-the-fact choice. That discipline exists because rank-weighted popularity
+passed at 3.2x SE on 61 matches and turned out to measure nothing.
+
+| route | trigger | what will be tested, decided in advance |
+|---|---|---|
+| **Band evidence in the prediction path** | now - top of the next round | The selective edge is markedly LARGER without band-evidence damping (74% vs 61% at >=56%). Test whether damping should be weakened or removed in `predict`, not just noted. Highest-value open item |
+| **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed |
+| **The rating step vs its challenger** | ~250 rated matches | Challenger: "+0.25 log-odds to the higher-rated side at ANY nonzero gap" - no band structure. Currently measures better than the shipped step but was chosen after seeing the band table |
+| **Large rating gaps** | ~30 matches with gap >= 150 | Currently 13, effectively unobserved. Two open questions: does more gap mean more edge past 100, and the one dissenting cell above - a 100+ gap contradicting a confident call went 1/5 |
+| **Calibration / under-confidence** | ~600 predictions | Calibration slope measured ~2.07 (SE 0.96), suggesting the displayed spread understates the real one. In-sample; shipping it would repeat the threshold error |
+| **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |
 
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
-change when the battlefield does. So unlike the hero model, this survives a rotation.
-
-~~Rank-weighted hero popularity~~ - closed 2026-07-29 at 155 rated matches. It was the
-entry this file called the most promising untested signal. See round 3.
+change when the battlefield does. So unlike the hero model, that scoping survives a
+rotation - which is why the rating entries above trigger on rated-match count rather than
+on a theme boundary.
 
 ## Hero strength does NOT survive a theme rotation
 
@@ -69,12 +91,39 @@ populations. Walk-forward, out of sample, refitting before every match:
 
 Pooled at >=56%: 24/30 = 80%. P(78% or better from a coin at n=27) = 0.00.
 
-Two things fall out. First, a fifth of matches are ones the model reads well and four
-fifths it cannot read at all - and the bubble has been showing both, which is why it felt
-unreliable. If this survives honest testing the product is "show nothing until the number
-clears the line". Second, the theme-locked fit beats the cross-theme fit at the thresholds
-that matter on the mature theme, which is the transfer result again from a different angle:
-the other theme's matches do not even help the model pick its spots.
+The theme-locked fit beats the cross-theme fit at every threshold that matters, which is
+the transfer result from a different angle: the other theme's matches do not even help the
+model pick its spots. Re-measured unfrozen at 453 matches, cross-theme at >=56% collapses
+to 52% on Converging Paths against 78% theme-locked. `CROSS_THEME_WEIGHT = 0.0` is right
+for a third independent reason.
+
+### CORRECTION, same day: that table is NOT the production code path
+
+Caught by Codex on review. The table above calls `predict()` **without** `evidence`. The
+live path passes `_band_evidence` (`solstice_clash.py:1769`), which damps by how much
+rating evidence each band carries - and that changes the result materially:
+
+| at >=56%, walk-forward | production path (with band evidence) | the variant above (without) |
+|---|---|---|
+| Converging Paths | 23/36 = 64% | 21/27 = 78% |
+| Flourishing Wilds | 17/30 = 57% | 8/12 = 67% |
+| **pooled** | **40/66 = 61%** (95% CI 49-72) | 29/39 = 74% |
+
+**So the honest figure for what actually ships today is ~61% on ~15-17% of matches, not
+80%.** Under the production path the threshold does not survive its own selection audit:
+permutation p = 0.246, and picking the threshold on one theme scores 53% on the other.
+
+This is a straightforward measurement error on my part - benchmarking a call signature the
+product does not use - and it is recorded rather than quietly fixed because the shape of the
+error is instructive: **every experiment must call `predict` exactly as the mixin calls it,
+band evidence included.** Added to the methodology traps below.
+
+What survives the correction, and it is the interesting part: **the selective edge is
+larger WITHOUT band-evidence damping than with it.** That makes "drop or weaken band
+evidence in the prediction path" the single most promising open candidate in this file - it
+is not a bug to fix but a hypothesis to test, since band evidence was added for a reason.
+It measures 74% at >=56% on 39 matches, with a threshold-selection permutation p of 0.037.
+Thin, and chosen after the fact. Pre-registered for the next round rather than shipped.
 
 ### The verdict on it: the ordering is real, the line is not yet earned
 
@@ -107,9 +156,22 @@ correlation to correctness is the appearance count of the least-seen hero in the
 (+0.138, n=334, ~2.5 sigma), which is weak and largely redundant with confidence. So the
 gate stays a confidence line, not a condition.
 
-**Honest expectation, and what to tell a user:** show nothing below ~54-55%, show the call
-above it, and expect roughly **two in three** - not four in five - until the new theme's own
-confident calls settle it. The 78-80% figure has the widest error bars in the round.
+**Honest expectation, and what to tell a user:** on the code as it ships, **~61% correct on
+the ~15% of matches that clear 56%** (95% CI 49-72). Both reviewers landed within a point
+of each other on this once the production path was used. Not four in five; roughly three in
+five, with the upper end of the interval reaching two in three. The 78-80% figure belongs to
+the no-band-evidence variant and is not what the product does.
+
+**Does the ladder rating add anything on top of a confident call? No.** Measured unfrozen
+on all 453 matches, hero-only calls so the rating is genuinely external. At >=56% the calls
+where the rating AGREES score 7/8 and where it DISAGREES 3/3 - the disagreement cell is if
+anything better. And directly: across the 17 confident calls where the two contradict each
+other, **the hero model is right 11 and the rating 6.** Re-weighting a confident call by
+rank would overturn eleven correct calls to rescue six. Consistent with everything else
+here: the rating is a weak signal and the hero model at high confidence is a stronger one.
+
+One dissenting cell, logged because it is the only evidence anywhere for the opposite: when
+the rating disagrees AND the gap is 100+, the model went 1/5. Five matches. Watch it.
 
 One loose thread, deliberately not acted on: the calibration slope of ~2 suggests the model
 is UNDER-confident, meaning the true readable tail may be larger than the displayed spread
@@ -333,6 +395,13 @@ corpus grows and is not converged.
 - **Do not reimplement Bradley-Terry to test it.** Call the shipped `fit`/`predict`. A
   reimplementation with different regularisation produced a false null contradicted by two
   other runs.
+- **Calling the shipped function is not enough - call it with the SHIPPED ARGUMENTS.**
+  Omitting `evidence` from `predict` produced a 78% headline for a code path that does not
+  exist; the production call (`solstice_clash.py:1769`, band evidence included) gives 61%.
+  Same function, same data, a claim inflated by 17 points. Copy the mixin's call site.
+- **Selection is a measurement, so audit it.** Any threshold, band edge or cutoff chosen by
+  looking at results needs a permutation test of the SELECTION PROCEDURE, not of the chosen
+  value. Fixed >=56% permutes at p=0.0025; the procedure that picked it permutes at 0.246.
 - **Freeze the data.** The database is live and grew mid-experiment by more than some of
   the effects being measured.
 - **Shuffle splits leak the future** into any training-fold statistic. Temporal

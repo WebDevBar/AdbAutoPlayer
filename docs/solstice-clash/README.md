@@ -136,7 +136,7 @@ rather than tuning the global constant.
 |---|---|
 | `data/solstice_clash/heroes.sqlite` | The database (see §5) |
 | `data/solstice_clash/build_hero_db.py` | Regenerates everything here. **Verified reproducible.** |
-| `data/solstice_clash/hero_db_full.json` | Parsed hero records incl. skills |
+| `data/solstice_clash/hero_db_full.json` | Parsed hero records incl. skills. A WIKI SCRAPE, not a roster - see below |
 | `data/solstice_clash/wiki_skins.json` | skin → hero, rarity, type |
 | `data/solstice_clash/wiki_skins_by_hero.json` | hero → [skins] |
 | `data/solstice_clash/solstice_roster.json` | Event usable/banned + stat adjustments |
@@ -170,6 +170,27 @@ cd data/solstice_clash && python3 build_hero_db.py
 outstanding task — ask before doing it.
 
 ---
+
+### Which heroes are real
+
+**The `hero` table with a `game_icon` is the list of released heroes. Nothing else is.**
+
+Three counts get confused, and confusing them cost real time on 2026-07-29:
+
+| count | what it is |
+|---|---|
+| 153 | rows in `hero`, straight from the wiki scrape - includes unreleased and non-playable entries |
+| **121** | rows with a `game_icon`, i.e. matched to an extracted game portrait - **the released roster** (the wiki listed 120 playable heroes the same day) |
+| 93 | distinct heroes actually picked across collected matches |
+
+The 32 rows without a `game_icon` are unreleased heroes and non-playable entries the scrape
+swept up. They are harmless - nothing reads them - and they are kept rather than deleted so
+a hero that later releases already has its wiki data waiting.
+
+`solstice_roster.status` is NOT a source of truth for what is pickable. It is a single
+global snapshot with no theme attached, and bans vary by theme: it marked Aurora `banned`
+while she was being picked in a live match. What is pickable comes from the 20-card pool
+read off the draft screen, every draft.
 
 ## 5. Database schema (`heroes.sqlite`, ~430 KB)
 

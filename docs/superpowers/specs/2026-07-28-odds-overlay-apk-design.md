@@ -55,6 +55,50 @@ That choice is worth more than the 54px it costs:
   passes through the overlay, so the question never has to be answered.
 - `FLAG_NOT_TOUCHABLE` is still set, as defence in depth rather than as the mechanism.
 
+### A bubble, not a strip
+
+Revised 2026-07-29 on the operator's design: a circle, like a Messenger chat head, rather
+than a full-width bar.
+
+```text
+        (63%)          solid blue circle, white number  - blue favoured
+        (58%)          solid red circle, white number   - red favoured
+        nothing        no call, or between drafts
+```
+
+Strictly better than the strip on every axis that matters here:
+
+| | strip | bubble |
+|---|---|---|
+| screen covered | 1080 x 54 | ~150 x 150 |
+| carries direction | in the text | in the colour |
+| exposure to a read band | the whole bottom row | one corner |
+| how it is read | left to right | at a glance, peripherally |
+
+The colour carrying the direction is what makes it small enough to work. `BLUE 34% | RED
+66%` needs the full width because it names both sides; a blue circle reading `63%` says
+the same thing in one number, because the colour already said which side. Only the
+favoured side's probability is ever shown - the complement is implied.
+
+White on solid blue or solid red, no border, no label. The game behind it is bright and
+varied, and a solid fill is the only thing that reads reliably over all of it.
+
+### No favourite means no bubble
+
+The operator's rule: if neither side is favoured, nothing is drawn.
+
+That is not only a display choice - it matches what was measured. Inside 48-52% the model
+is right 50.2% of the time across 705 predictions, a literal coin flip, while outside that
+band it is right about 58%. So "no favourite" and "nothing worth showing" are the same
+condition, and the bubble expresses it by not existing.
+
+It also makes the appearance itself the signal. A bubble showing up means the model has
+something to say, before its number has even been read - which a strip that is always
+present, sometimes reading 51%, can never do.
+
+The view is detached rather than blanked in that state, so a captured frame is provably
+identical to having no overlay installed.
+
 ### What it displays
 
 54px allows roughly 40px glyphs, and 1080px of width fits about 33 of them - more than

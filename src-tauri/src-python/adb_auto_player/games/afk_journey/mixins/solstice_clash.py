@@ -1840,9 +1840,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # `same_event` is still computed and logged, because the contrast between the
             # two numbers is what shows how much a rotation costs.
             same_event = sum(1 for m in matches if m.event_id == _event)
-            # Rank evidence pools across themes but never across events: rank points
-            # reset on every theme change and the ladder resets between events, so a gap
-            # from another event is a different scale entirely.
+            # Rank evidence pools across themes but never across events. Rank is
+            # theme-agnostic - a player's rating does not change when the battlefield
+            # does - while the ladder resets between events, so a gap from another event
+            # is a different scale entirely.
             self._band_evidence = band_evidence(matches, event_id=_event)
             rated = sum(seen for seen, _ in self._band_evidence.values())
             # Every number here used to carry a different scope, printed side by side as

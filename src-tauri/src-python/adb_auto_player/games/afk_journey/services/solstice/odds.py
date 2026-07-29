@@ -335,11 +335,18 @@ def band_evidence(
 ) -> dict[int, tuple[int, int]]:
     """Per band: (matches seen, times the HIGHER-rated side won).
 
-    Scoped PER EVENT and pooled across themes within it. Both halves matter: a rating
-    means the same thing whichever theme is running, so splitting the evidence by theme
-    would starve every band for no reason - but ratings RESET between events, and the
-    game resets rank points on each theme change too, so a gap from a different event is
-    a different scale entirely and must not be pooled.
+    Scoped PER EVENT and pooled across themes within it. Both halves matter.
+
+    RANK IS THEME-AGNOSTIC (operator, 2026-07-29). A player's rating does not change when
+    the battlefield does, so splitting this evidence by theme would starve every band for
+    no reason - and unlike the hero model, which discards other themes outright because
+    the roster and the map change, this survives a rotation intact.
+
+    It does NOT survive an event. Ratings reset between events, so a gap from a different
+    event is a different scale entirely and must never be pooled with this one.
+
+    An earlier version of this docstring also claimed rank points reset on each theme
+    change, which contradicted the pooling directly below it. They do not.
 
     Only matches carrying both ratings count, which is every match recorded from
     2026-07-28 onward and none before it.

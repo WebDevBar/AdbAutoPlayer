@@ -1,4 +1,4 @@
-"""The odds strip drawn inside Android, and what it takes to drive it.
+"""The odds bubble drawn inside Android, and what it takes to drive it.
 
 Pure. This module formats text and emits adb argument lists; it never touches a device
 and imports nothing that does, which is what makes all of it testable without adb.
@@ -23,10 +23,6 @@ SERVICE = f"{PACKAGE}/.OverlayService"
 # The bundled APK's versionCode. Bump together with `versionCode` in the Gradle build, or
 # an upgraded desktop app will keep running last month's overlay.
 OVERLAY_VERSION = 1
-
-# Roughly 33 glyphs fit the strip at the chosen size. Longer text does not wrap - it runs
-# off the edge, silently, which is worse than saying less.
-MAX_CHARS = 40
 
 _VERSION = re.compile(r"versionCode=(\d+)")
 

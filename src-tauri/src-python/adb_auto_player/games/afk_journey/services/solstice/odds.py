@@ -15,7 +15,10 @@ appeared in one winning comp would read as unbeatable. Every parameter is shrunk
 zero, so thin evidence produces a number near "no information" rather than a confident
 wrong one.
 
-Cross-theme data is included at a LOWER WEIGHT rather than excluded. Themes change the
+Cross-theme data is currently DISCARDED - see CROSS_THEME_WEIGHT, which is 0.0. It was
+weighted at 0.35 first, on the reading that a theme changes how a fight plays out without
+changing which comp is stronger; the game then contradicted that twice in one evening, by
+changing the roster and the battlefield between themes. Themes change the
 hero pool and the battlefield rules, so another theme's matches are not the same
 experiment - but they are not noise either, and early in a theme they are most of what
 exists. Weight, not a binary include/exclude, is the honest expression of that.
@@ -148,7 +151,11 @@ class Match:
 
 @dataclass(frozen=True)
 class Fit:
-    """Fitted parameters and what they were fitted on."""
+    """Fitted parameters and what they were fitted on.
+
+    `matches` counts rows that CONTRIBUTED - not rows loaded. A cross-theme match at
+    weight 0 is loaded and ignored, and counting it would tell `gate_reason` the model
+    has evidence it does not have."""
 
     heroes: tuple[str, ...]
     players: tuple[str, ...]
@@ -255,12 +262,17 @@ def fit(matches: list[Match], theme_id: int | None = None) -> Fit:
         for hero in (*match.left, *match.right):
             appearances[hero] = appearances.get(hero, 0) + 1
 
+    # `matches` is the count that CONTRIBUTED, not the count loaded. `gate_reason` reads
+    # it to decide whether anything has been collected at all, and with cross-theme
+    # matches at weight 0 the loaded count says yes when the fit saw nothing.
+    contributing = int(sum(1 for weight in w if weight > 0.0))
+
     return Fit(
         heroes=heroes,
         players=players,
         beta=beta,
         hessian=hessian,
-        matches=len(matches),
+        matches=contributing,
         appearances=appearances,
     )
 

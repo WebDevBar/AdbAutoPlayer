@@ -112,16 +112,19 @@ class SyncClient:
 
         Never raises. That is the point: the caller is a collection loop.
         """
-        url = f"{self._cfg.base_url}{path}"
-        data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("X-API-Key", self._cfg.api_key)
-        req.add_header("X-Instance-Id", self._store.instance_uuid() or "")
-        req.add_header("X-Client-Version", self._client_version)
-        if data is not None:
-            req.add_header("Content-Type", "application/json")
-
+        # Built INSIDE the try. `instance_uuid()` opens SQLite and `json.dumps` can
+        # raise on an unserialisable payload - both were outside it, so a function
+        # documented as never raising could raise on a locked database.
         try:
+            url = f"{self._cfg.base_url}{path}"
+            data = json.dumps(body).encode() if body is not None else None
+            req = urllib.request.Request(url, data=data, method=method)
+            req.add_header("X-API-Key", self._cfg.api_key)
+            req.add_header("X-Instance-Id", self._store.instance_uuid() or "")
+            req.add_header("X-Client-Version", self._client_version)
+            if data is not None:
+                req.add_header("Content-Type", "application/json")
+
             with urllib.request.urlopen(req, timeout=self._cfg.timeout) as resp:
                 self._auth_failures = 0   # any success clears the streak
                 return json.loads(resp.read().decode())

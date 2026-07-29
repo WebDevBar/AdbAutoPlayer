@@ -127,9 +127,13 @@ def test_a_thin_theme_is_gated_rather_than_padded():
 
     fitted = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
                  theme_id=1)
+    # `Fit.matches` counts rows that CONTRIBUTED, so a fit fed only sibling-theme matches
+    # reports zero and the gate says so plainly, rather than quoting a threshold against
+    # a corpus the model never saw.
+    assert fitted.matches == 0
     reason = gate_reason(fitted, 6, 0, has_ratings=False)
     assert reason is not None
-    assert str(MIN_MATCHES_FOR_ODDS) in reason
+    assert "no matches collected" in reason
 
 
 def test_the_interval_brackets_the_estimate():

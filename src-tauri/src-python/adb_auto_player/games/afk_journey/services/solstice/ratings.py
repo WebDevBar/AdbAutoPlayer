@@ -1,4 +1,4 @@
-"""Ladder ratings from the locked-picks screen - pure, no device, no GUI.
+"""Ladder ratings from the draft screen, and the locked screen as a fallback - pure, no device, no GUI.
 
 The four-digit number beside each player, e.g. 4101 against 4241. It is the single
 strongest signal available before a fight and it costs one OCR pass: a player 150 points

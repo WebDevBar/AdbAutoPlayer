@@ -1,7 +1,8 @@
 """Match recording.
 
 These tables are LOCALLY EARNED - `build_hero_db.py` never touches them. A wiki refresh
-rebuilds only `hero_skill` and `solstice_roster`.
+rebuilds only the reference tables - `hero`, `hero_skin`, `hero_skill` and
+`solstice_roster`. The match tables are never touched, which is the load-bearing half.
 
 Two rules that come from real failures:
 
@@ -441,7 +442,11 @@ class MatchStore:
             ).fetchall()
 
     def matches_for_fit(self) -> list[tuple]:
-        """Every decisive match with a FULL three-a-side read, for the odds model.
+        """Hero rows for every decisive match, for the odds model.
+
+        NOT filtered to full three-a-side here: the query returns one row per identified
+        hero, and `load_matches` is what drops a partial comp. Saying otherwise here sent
+        a reader looking for a completeness check in the SQL that is not there.
 
         The completeness filter is not tidiness. Builds before wdb-12.9.24-7 shipped no
         hero art, so on any machine but the developer's every cell read `unknown` and
@@ -449,8 +454,10 @@ class MatchStore:
         sync - they never earn a natural_key - but a naive COUNT(*) would still count
         them toward the display gate, opening it on evidence that does not exist.
 
-        Returns (match_id, outcome, theme_id, left_player, right_player, side, slug)
-        joined, because a three-a-side check needs the heroes anyway.
+        Returns (match_id, outcome, theme_id, event_id, left_player, right_player,
+        left_rating, right_rating, side, slug) joined, because a three-a-side check needs
+        the heroes anyway. `load_matches` unpacks these positionally, so a new column
+        goes on the END or it silently shifts every field after it.
         """
         with self._connect() as con:
             return con.execute(

@@ -61,6 +61,41 @@ matches to say anything, every rotation resets it, and nothing can be carried fo
 a number worth nothing. Anything that fixes cold start has to be a signal that is not
 learned from this theme's outcomes at all.
 
+## The model is selective, not flat - the threshold finding
+
+2026-07-29. The model looked useless: predictions clustered within ~5 points of even, and
+57% directional on the new theme against a 57% base rate. That average hides two
+populations. Walk-forward, out of sample, refitting before every match:
+
+| threshold | Converging Paths, theme-locked | cross-theme fit | Flourishing Wilds, theme-locked | cross-theme fit |
+|---|---|---|---|---|
+| >=54% | 67% (66) | 55% (112) | 50% (8) | 51% (41) |
+| >=55% | 68% (40) | 56% (61) | 60% (5) | 57% (30) |
+| >=56% | **78% (27)** | 67% (36) | 100% (3) | 52% (23) |
+| >=58% | 64% (11) | 77% (13) | 100% (3) | 67% (12) |
+
+Pooled at >=56%: 24/30 = 80%. P(78% or better from a coin at n=27) = 0.00.
+
+Two things fall out. First, a fifth of matches are ones the model reads well and four
+fifths it cannot read at all - and the bubble has been showing both, which is why it felt
+unreliable. If this survives honest testing the product is "show nothing until the number
+clears the line". Second, the theme-locked fit beats the cross-theme fit at the thresholds
+that matter on the mature theme, which is the transfer result again from a different angle:
+the other theme's matches do not even help the model pick its spots.
+
+**This is 27 matches and a threshold chosen by looking at the same data, which is exactly
+how one finds a line that exists only in this sample.** Do not ship it on this evidence.
+It is under review by both reviewers with three questions: is it real or selected (choose
+the threshold on one theme, evaluate on the other); what distinguishes the matches it reads
+from the ones it cannot, since a CONDITION knowable before the fight would be far more
+robust than a tuned number; and what the honest accuracy and coverage of a threshold
+product would be.
+
+**Standing requirement for all future tuning:** report accuracy AT THRESHOLDS, both
+theme-locked and cross-theme, alongside logloss. A candidate that improves the tail is
+worth more than one that improves the average, because the tail is the only part anyone
+acts on.
+
 ## Recorded predictions are not tuning data
 
 **When retuning, ignore `predicted_left` entirely.** What matters is the match outcome and

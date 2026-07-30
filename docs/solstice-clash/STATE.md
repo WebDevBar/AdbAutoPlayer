@@ -121,7 +121,7 @@ Not modelling. Two things:
 | Windows log path | `wdb_log_path()` uses `~/.local/state` on Windows too. It works, but no Windows user would find it. `%LOCALAPPDATA%` is where it belongs. |
 | SC-05 / SC-06 frame capture | Fired twice across two machines. Benign (the match is recorded first), but no frame is saved so a recurrence cannot be diagnosed. Instrument rather than fix. |
 | Live log legibility | Colour on the odds and hero-matching lines, a match-result line saying hit or miss against our call, and a won/lost line when auto-bet staked. Agreed 2026-07-30; detail in `odds-display-next-steps.md` section 5. The auto-bet outcome line is the one that matters, since the toggle has never been run live. |
-| The rating step | Decide at ~250 rated matches against its pre-registered challenger. Currently 193. |
+| ~~The rating step~~ | Decided round 4 at 421 rated matches: the challenger does not beat it, and neither beats deleting the term. Kept unchanged. The live question is now a GRADED nudge - the rating edge is monotonic to 250 points and one flat step above 100 cannot express it. Pre-registered in the ledger. |
 | The confidence threshold | Settles itself as the live theme fills. No work needed. |
 
 ## Traps that have each cost an evening

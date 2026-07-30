@@ -31,6 +31,93 @@ a new data source - not simply more matches. Detail for each is further down.
 | **Stacking a feature onto Bradley-Terry with a fitted weight** | Not a feature result - 435 matches cannot estimate stacking weights. Every stack scored worse than BT alone; the full stack scored worse than the base rate | rounds 2 and 3 |
 | **Synergy matrices, hero embeddings, GNNs, attention over draft** | Literature methods needing 10k-1M matches for thousands of pair parameters. Published draft-only accuracy is ~58% anyway. Not an option at 435 | web research, both reviewers |
 
+## Round 4, 2026-07-30, n=714 across two themes (634 predictions)
+
+The first round run against the pre-registered list rather than against a fresh idea.
+Walk-forward, refitting before every match, theme-locked, `predict` called with band
+evidence exactly as the mixin calls it. Four triggers had fired: Flourishing Wilds at 345
+of its own matches, 421 rated matches, 62 at a gap of 150 or more.
+
+Three of the four came back null. The fourth is the only lead this round produced.
+
+### Band-evidence damping: NULL, and the "74% vs 61%" does not survive a paired test
+
+This was the file's highest-value open item. Weakening the damping does move the headline
+numbers in the direction the earlier measurement suggested:
+
+| BAND_PRIOR_STRENGTH | logloss | all | >=0.56 | >=0.62 |
+|---|---|---|---|---|
+| 20 (shipped) | 0.6770 | 361/634 = 57% | 136/204 = 67% | 48/72 = 67% |
+| 100 | 0.6757 | 367/634 = 58% | 117/168 = 70% | 24/36 = 67% |
+| 400 | 0.6758 | 370/634 = 58% | 95/130 = 73% | 21/30 = 70% |
+| no damping | 0.6763 | 371/634 = 59% | 93/128 = 73% | 21/25 = 84% |
+
+And then it evaporates under a PAIRED test on the same 634 matches, which is the only
+fair comparison because each setting selects a different subset at any threshold:
+
+| comparison | mean logloss difference | SE | t |
+|---|---|---|---|
+| shipped(20) vs weak(100) | +0.00126 | 0.00156 | **+0.81** |
+| shipped(20) vs no damping | +0.00064 | 0.00320 | **+0.20** |
+
+Nothing there. The apparent gain at a threshold is the same model making FEWER calls, not
+better ones: 128 predictions clear 56% undamped against 204 shipped. Fewer, more selective
+calls score higher per call while saying less overall - which is what a threshold table
+rewards and a proper scoring rule does not.
+
+**The selectivity itself is real for both settings.** Permuting outcomes 2,000 times and
+rebuilding the table produced nothing as good as either, p = 0.000 both ways. So the model
+does know when it knows; the damping is simply not what decides that.
+
+**Verdict: no change. Closed.** Re-open only with a mechanism, not a bigger sample - the
+paired difference is a fifth of its own standard error.
+
+### The rating step vs its challenger: NULL, and the term itself is barely earning
+
+The pre-registered challenger was "+0.25 log-odds to the higher-rated side at ANY nonzero
+gap", no band structure.
+
+| variant | logloss | all | >=0.56 | >=0.62 |
+|---|---|---|---|---|
+| shipped step (nothing under 100) | 0.6770 | 57% | 136/204 = 67% | 48/72 = 67% |
+| challenger (any gap) | 0.6772 | 56% | 154/241 = 64% | 56/80 = 70% |
+| no rating term at all | 0.6772 | 56% | 136/211 = 64% | 41/54 = 76% |
+
+Identical to three decimal places. The challenger does not beat the incumbent, and neither
+beats deleting the rating term. **Keep the shipped step** - not because it was shown to
+work, but because nothing displaced it and it is the one already carrying the band
+evidence. The honest position is that the rating term is worth approximately nothing at
+the level it is currently applied, which the next entry explains.
+
+### Large rating gaps: the one real finding - the effect is MONOTONIC and the flat step understates it
+
+| gap | n | model right | higher-rated side won | p |
+|---|---|---|---|---|
+| 0-50 | 141 | 56% | 52% | 0.368 |
+| 50-100 | 112 | 59% | 58% | 0.054 |
+| 100-150 | 74 | 64% | 61% | 0.040 |
+| **150-250** | **48** | **73%** | **71%** | **0.003** |
+| 250+ | 11 | 55% | 45% | 0.726 |
+
+The pre-registered question was "does more gap mean more edge past 100". **It does**, and
+the shipped table cannot express it: one flat +0.25 log-odds applies to everything above
+100, so a 160-point gap and a 110-point gap are treated identically when the data says the
+first is worth much more. Survives Bonferroni across the five bands.
+
+The 250+ reversal is 11 matches and means nothing yet.
+
+**This is a lead, NOT a change to ship.** The band boundaries above were read off the
+result, which is exactly the selection error this file exists to prevent. The next round
+tests a pre-registered graded nudge, and it is written into the table below before anyone
+looks again.
+
+### The dissenting cell is gone
+
+Round 3 recorded "a 100+ gap contradicting a confident call went 1/5". On the current path
+that situation now arises exactly ONCE in 634 predictions, and the model was wrong. The
+cell was an artefact of a weaker fit disagreeing with ratings more often; there is no
+longer a disagreement to study.
+
 ## Re-open when the data arrives - pre-registered
 
 Each of these is written down BEFORE looking again, so the next round is a test and not
@@ -39,10 +126,11 @@ passed at 3.2x SE on 61 matches and turned out to measure nothing.
 
 | route | trigger | what will be tested, decided in advance |
 |---|---|---|
-| **Band evidence in the prediction path** | now - top of the next round | The selective edge is markedly LARGER without band-evidence damping (74% vs 61% at >=56%). Test whether damping should be weakened or removed in `predict`, not just noted. Highest-value open item |
-| **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed |
-| **The rating step vs its challenger** | ~250 rated matches | Challenger: "+0.25 log-odds to the higher-rated side at ANY nonzero gap" - no band structure. Currently measures better than the shipped step but was chosen after seeing the band table |
-| **Large rating gaps** | ~30 matches with gap >= 150 | Currently 13, effectively unobserved. Two open questions: does more gap mean more edge past 100, and the one dissenting cell above - a 100+ gap contradicting a confident call went 1/5 |
+| ~~Band evidence in the prediction path~~ | ~~now~~ | **CLOSED round 4** - null on a paired test, t = +0.81. See round 4 |
+| ~~The rating step vs its challenger~~ | ~~250 rated~~ | **CLOSED round 4** - challenger does not beat the incumbent; neither beats deleting the term |
+| ~~Large rating gaps~~ | ~~30 at gap >= 150~~ | **ANSWERED round 4** - yes, monotonic to 250. Replaced by the graded-nudge entry below |
+| **A GRADED rating nudge** | next round, once Flourishing Wilds holds ~450 of its own matches OR a third theme opens | Pre-registered NOW, before looking again: replace the flat `(100, 0.0622)` with `(150, 0.124), (100, 0.0622), (0, 0.0)` - double weight above 150, unchanged between 100 and 150. Decided on the round-4 monotonic result, so it must be confirmed on matches that result never saw. Judged on PAIRED logloss against the shipped step, not on a threshold table. A gain smaller than its own SE is a null, however good the >=56% row looks |
+| **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed. Round 4: selectivity confirmed real (permutation p = 0.000) but the specific line is still unearned |
 | **Calibration / under-confidence** | ~600 predictions | Calibration slope measured ~2.07 (SE 0.96), suggesting the displayed spread understates the real one. In-sample; shipping it would repeat the threshold error |
 | **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |
 

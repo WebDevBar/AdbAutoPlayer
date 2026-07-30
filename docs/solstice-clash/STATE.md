@@ -120,6 +120,7 @@ Not modelling. Two things:
 | Device Stream wedges | `screenrecord` hangs inside Waydroid (OS-level, not ours - a 2-second capture ran 39s). Falls back to screenshots. Two cheap fixes not done: stop re-trying once proven wedged (13s wasted per match), and make the error state the actual reason instead of swallowing it. |
 | Windows log path | `wdb_log_path()` uses `~/.local/state` on Windows too. It works, but no Windows user would find it. `%LOCALAPPDATA%` is where it belongs. |
 | SC-05 / SC-06 frame capture | Fired twice across two machines. Benign (the match is recorded first), but no frame is saved so a recurrence cannot be diagnosed. Instrument rather than fix. |
+| Live log legibility | Colour on the odds and hero-matching lines, a match-result line saying hit or miss against our call, and a won/lost line when auto-bet staked. Agreed 2026-07-30; detail in `odds-display-next-steps.md` section 5. The auto-bet outcome line is the one that matters, since the toggle has never been run live. |
 | The rating step | Decide at ~250 rated matches against its pre-registered challenger. Currently 193. |
 | The confidence threshold | Settles itself as the live theme fills. No work needed. |
 

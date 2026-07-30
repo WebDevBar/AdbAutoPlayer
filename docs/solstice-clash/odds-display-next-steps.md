@@ -136,3 +136,44 @@ So the only missing pieces are ours:
 One caution: the export strips tags with `replace(/<[^>]*>/g, "")`, so markup must not
 carry meaning that is lost when the text is saved. Colour may emphasise; it must not be
 the only thing saying which side won.
+
+## 5. Note for 2026-07-31 - make the live log readable, and close the loop on a call
+
+Three things, agreed 2026-07-30. The first is presentation; the other two are information
+the log does not currently carry at all.
+
+### 5a. Colour the lines that matter
+
+This is the "decision about what deserves colour" section 4 left open. Two families:
+
+- **The odds calculation** - the favoured side and the number. Colour the side to match
+  its bubble (blue/red) so the eye finds the call without reading the sentence.
+- **Hero matching** - the identified hero names, so a misidentification stands out from
+  the surrounding prose rather than hiding in it.
+
+No app plumbing needed (section 4). CSS in `LogEntry.svelte` plus the markup or a
+`LogPreset` at the emit site. Keep the caution above: the text must still say which side
+is favoured when the tags are stripped by an export.
+
+### 5b. A line for the match result, and whether the call was right
+
+`[SC-40]` (`mixins/solstice_clash.py:612`) already names the winner when the match is
+recorded - it does not say whether we predicted it. The comparison is available right
+there: `match.predicted_left` is stored, and `read.winner` is in hand at the same point.
+Wanted: one line per match saying the outcome, what we called, and hit or miss. That turns
+the live log into a running accuracy read rather than something only the ledger can
+answer after the fact.
+
+Include the gate state. A miss on a GATED match is the model saying it did not know and
+should not count against it the way a confident miss does.
+
+### 5c. Whether an auto-bet won or lost
+
+`[SC-94]` (`mixins/solstice_clash.py:1966`) logs the stake and nothing ever closes it. If
+a bet was placed this cycle, the result read should say whether it won. This matters more
+than the other two: auto-bet has never been run with the toggle on, and the first live
+run needs to be legible without cross-referencing two log lines by hand.
+
+Needs the staked side carried from the bet to the result read - `_bet_this_cycle` is
+already the per-cycle flag, so it is the side and the confidence that need to travel with
+it.

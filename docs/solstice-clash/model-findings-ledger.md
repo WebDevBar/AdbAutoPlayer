@@ -256,6 +256,79 @@ with the shipped rating path and a fitted intercept. That is now the answer to "
 something else in the data" as well as "is there a better model" - the other recorded
 columns have been looked at directly and they are empty.
 
+## First pick as the explanation for the blue skew - a sound HYPOTHESIS, 2026-07-30
+
+Raised by the operator: **blue is always the left side, and left always picks first.** Both
+are facts about the game. The hypothesis is that the first pick is worth something, and
+that this is what the blue-side skew has been measuring all along.
+
+**This is not recorded as established.** It fits the data we have, it has a plausible
+mechanism, and one part of it is directly measured - but a real contradiction is still
+open, below.
+
+### What is measured
+
+The model already carries a term for exactly this: the intercept exists for "any
+structural left/right advantage", and because the fit is theme-locked it is estimated per
+theme, automatically.
+
+| theme | matches | fitted intercept | P(blue wins) at equal comps | raw left win rate |
+|---|---|---|---|---|
+| Converging Paths | 365 | -0.025 | **49.4%** | 50% |
+| Flourishing Wilds | 462 | **+0.244** | **56.1%** | 57% |
+
+So on the live theme, two identical comps give blue about **56%** - roughly six points -
+and on the previous theme the effect is absent.
+
+That theme-dependence is what makes the hypothesis plausible rather than merely
+convenient: a first pick is worth most when there is a dominant hero worth taking first,
+which is a property of the roster and the map, and those are exactly what a theme changes.
+
+It also explains round 5's intercept result from the other direction. Deleting the fitted
+intercept RAISED raw directional accuracy and destroyed the confident tail (46/71 to 16/27
+above 62%, t = -1.53). The term is carrying something real, and this is a credible account
+of what.
+
+### The contradiction that keeps this a hypothesis
+
+Two other contributors, on the SAME theme, lean the other way:
+
+| collector | blue wins |
+|---|---|
+| ours | 248/416 = 60% |
+| `2bf5fe8a` | 15/35 = 43% |
+| `6ec7496a` | 1/12 = 8% |
+
+If first pick is a game mechanic it should appear on every machine, and it does not appear
+on theirs. Their samples are small - 47 between them - but 34% pooled is not obviously
+noise around 56%.
+
+**Their data is not broken, which was checked before blaming it.** The higher-rated side
+wins 67% in both their sets against 59% in ours, so they are not misreading outcomes; and
+a mirrored install would flip sides and ratings together, leaving that figure intact,
+which it is. The left/right labels mean the same thing on all three machines.
+
+So there is no defect to point at. Three readings remain open: the advantage is real and
+their samples are too small; the three of us are drawn from pools that differ in some way
+that matters; or the effect is ours alone and something else explains it.
+
+### What would settle it, and what NOT to do meanwhile
+
+**Their match count settles it and nothing else does.** At 150-200 matches each, their
+figure either converges on ours or it does not. Tactical Grounds is the natural place to
+collect that, since it shares modifiers with the current theme.
+
+Do NOT hard-code a first-pick prior, and do not raise the intercept's weight. The model
+already estimates this per theme from the data, which is the correct treatment for a
+quantity that is 0.244 on one theme and -0.025 on the next. Writing in a fixed number
+would be choosing a value from one theme's sample - precisely the selection error this
+file exists to prevent.
+
+Pick order is NOT stored. `match_hero.slot` is the position on the team plate, not the
+draft order, so nothing here can be checked against a per-match pick sequence. Recording
+draft order would make the hypothesis directly testable - whether the first-picked hero
+outperforms - and is the one schema change this question would justify.
+
 ## Re-open when the data arrives - pre-registered
 
 Each of these is written down BEFORE looking again, so the next round is a test and not
@@ -272,6 +345,8 @@ passed at 3.2x SE on 61 matches and turned out to measure nothing.
 | **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed. Round 4: selectivity confirmed real (permutation p = 0.000) but the specific line is still unearned |
 | ~~Calibration / under-confidence~~ | ~~600 predictions~~ | **CLOSED round 5** - trigger fired, tested online and out of sample, t = -0.57. The under-confidence is real and acting on it is worse. See round 5 |
 | **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |
+| **First pick as the blue-side advantage** | other contributors at ~150-200 matches EACH on a shared-modifier theme | Whether the +0.244 intercept on Flourishing Wilds appears on their machines too. Converges or it does not; nothing else settles it. Do not hard-code a prior meanwhile - the model already fits this per theme |
+| **Record the draft PICK ORDER** | before the next event | Not a test, a schema gap. `slot` is plate position, not pick order, so the first-pick hypothesis cannot be checked directly - e.g. whether the first-picked hero outperforms. The only schema change this question justifies |
 
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
 change when the battlefield does. So unlike the hero model, that scoping survives a

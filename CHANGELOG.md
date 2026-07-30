@@ -4,6 +4,56 @@
 
 ### Added
 
+- **Themes that share modifiers are treated as one population.** Flourishing Wilds closes
+  and Tactical Grounds opens with the same modifiers, so the model no longer throws away
+  everything it learned at the rotation. Tactical Grounds opens with this theme's matches
+  and heroes behind it instead of starting cold and sitting gated for its first 40.
+  - Pooled when the model is FITTED, not merged in the database. Every match stays filed
+    under the theme it was actually played in, one row, so this is a switch rather than a
+    fusion - if the modifiers turn out to differ, the grouping comes out and nothing is
+    lost.
+  - Converging Paths is deliberately excluded. Its modifiers did change, and carrying its
+    strengths across that rotation measured 47% correct - worse than a coin.
+  - Groups are declared by theme NAME, because a name is what you can check against the
+    in-game Themes screen. `[SC-72]` says when a fitted count includes a pooled theme.
+
+- **The live log colours the call and says whether it was right.**
+  - The odds panel emphasises the favoured side in its own colour, and only that side. A
+    gated line is never coloured: a gate is the model saying it does not know.
+  - `[SC-75]` now reads `called blue 67% (r+h) - blue won - HIT`. Until now the log named
+    the winner of every match and never said what we had predicted, so it reported the
+    outcome of everything and the accuracy of nothing.
+  - The confidence shown is the CALL's, not the probability the left side wins: a 33% call
+    on blue is a 67% call on red, and printing 33% would read as weak when it is strong.
+  - A dead-even prediction is logged as "no call" rather than graded. 50/50 is the model
+    declining to choose, and scoring it would put noise in the one line meant to measure
+    accuracy.
+  - There is no separate bet-outcome line: the stake always goes on the called side, so
+    the HIT already is the bet result.
+
+- **`BETTING BLUE` / `BETTING RED`, in colour, once the tokens are committed.** Logged
+  after the handle has been dragged, so it means placed rather than about to be. The
+  existing `[SC-94]` line stays as the audit trail with the offset and confidence.
+
+### Changed
+
+- **The auto-bet slider cap is now 400px, up from 200.** The old cap arrived with the
+  feature and no reason was ever recorded; it was never a physical limit. The bar spans
+  x=151..948 around a handle at 540, so travel is 389px left and 408px right - a 400px
+  drag toward BLUE runs about 11px past the end of the bar, and the game's behaviour
+  there is untested. Linearity was only measured out to 20px, so the 55-60 tokens per
+  pixel figure should not be trusted at this end either, and the rate scales with your
+  balance - the cap is a fixed distance, not a fixed stake.
+
+### Fixed
+
+- **The live log printed raw `<span>` tags instead of colour.** Every message is escaped
+  before it reaches the renderer, so markup arrived as text. The escaping is correct and
+  stays - log lines carry device output and exception text - so an allowlist re-permits
+  exactly four classes, matching an opening tag, its text and its closing tag as one unit.
+  An orphan `</span>` in arbitrary log text cannot become real markup, nothing nests, and
+  no other attribute survives. Verified against ten injection attempts.
+
 - **Auto-Bet (off by default).** Stakes Guess Tokens on the favoured side when the model
   clears a confidence line, by dragging the stake handle a few pixels off centre. Three
   settings: the toggle, the confidence threshold (default 58%), and how far to drag

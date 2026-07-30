@@ -1846,8 +1846,19 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # while the database held hundreds.
             now = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
             _event, theme_id, _how = self._store.resolve_theme(now)
-            fitted = fit_odds(matches, theme_id=theme_id)
-            same_theme = sum(1 for m in matches if m.theme_id == theme_id)
+            # Themes with IDENTICAL modifiers are one population - see
+            # SHARED_MODIFIER_GROUPS. Pooled here at fit time rather than merged in the
+            # database, so each match stays filed under the theme it was played in and
+            # the grouping can be withdrawn without losing anything.
+            siblings = self._store.sibling_theme_ids(theme_id)
+            fitted = fit_odds(matches, theme_id=theme_id, siblings=siblings)
+            counts_fully = {theme_id, *siblings}
+            same_theme = sum(1 for m in matches if m.theme_id in counts_fully)
+            # Named in the log, because a fitted count that silently includes another
+            # theme is exactly the kind of number that gets misread later.
+            pooled_note = (
+                f" and {len(siblings)} sharing its modifiers" if siblings else ""
+            )
             # The gate counts the THEME. Themes change the roster and the battlefield -
             # a hero banned in one theme has no strength to carry into the next - so
             # matches from a sibling theme do not establish that this theme is understood.
@@ -1866,7 +1877,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # count was per-event and silently excluded zero-gap matches. Say what each
             # one measures, and lead with the one that decides whether the model works.
             logging.info(
-                f"[SC-72] odds model: fitted on {same_theme} matches from this theme "
+                f"[SC-72] odds model: fitted on {same_theme} matches from this theme"
+                f"{pooled_note} "
                 f"({len(fitted.appearances)} heroes seen in them); "
                 f"{len(matches)} stored, {same_event} this event, "
                 f"{rated} rated with a non-zero gap this event"

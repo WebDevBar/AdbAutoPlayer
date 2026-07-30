@@ -117,6 +117,41 @@ def test_another_theme_counts_for_nothing():
     assert CROSS_THEME_WEIGHT == 0.0
 
 
+def test_a_theme_that_shares_modifiers_counts_in_full():
+    """Two themes with the SAME modifiers are one population for the hero model.
+
+    The rotation reset exists because a theme changes the roster and the battlefield.
+    When it changes NEITHER - Flourishing Wilds to Tactical Grounds, 2026-07-30 - paying
+    the cold-start cost buys nothing. This pools at FIT time deliberately: the matches
+    are still stored under their own theme, one row each, so the assumption stays
+    testable and reversible rather than fused into the data.
+    """
+    sibling = [_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()]
+
+    discarded = fit(sibling, theme_id=1)
+    pooled = fit(sibling, theme_id=1, siblings=(2,))
+
+    column = pooled.index_of("star")
+    assert column is not None
+    # Discarded: the strength never leaves its prior. Pooled: it is learned in full.
+    assert abs(discarded.beta[column]) < 1e-6
+    assert pooled.beta[column] > 0.5
+    # And they COUNT - the gate must see them, or it reports a cold start that is not one.
+    assert pooled.matches == len(sibling)
+    assert discarded.matches == 0
+
+
+def test_pooling_is_opt_in_per_theme_not_a_free_for_all():
+    """Only the named sibling pools. A third theme is still discarded, which is what
+    keeps Converging Paths out of a Flourishing Wilds fit after the modifiers changed."""
+    mixed = [
+        *[_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant(n=20)],
+        *[_match(m.left, m.right, m.left_won, theme_id=3) for m in _dominant(n=20)],
+    ]
+    pooled = fit(mixed, theme_id=1, siblings=(2,))
+    assert pooled.matches == 20
+
+
 def test_a_thin_theme_is_gated_rather_than_padded():
     """The consequence of discarding: right after a rotation there is nothing to predict
     from, and the gate must say so instead of the model borrowing last theme's answers."""

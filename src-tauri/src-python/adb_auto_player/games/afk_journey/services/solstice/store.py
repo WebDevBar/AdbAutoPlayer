@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
+from .odds import themes_sharing_modifiers
 from .paths import resource_file
 
 
@@ -873,6 +874,32 @@ class MatchStore:
                 "SELECT id FROM theme WHERE event_id=? AND is_default=1", (event_id,)
             ).fetchone()
             return event_id, (int(fallback[0]) if fallback else None), "default"
+
+    def sibling_theme_ids(self, theme_id: int | None) -> tuple[int, ...]:
+        """Other theme ids whose modifiers are identical to `theme_id`'s.
+
+        Names are the join, because a name is what a person can check against the
+        in-game Themes screen and an id means nothing to anyone. Returns an empty tuple
+        for an unknown theme or one in no group, which makes the fit behave exactly as
+        it did before groups existed.
+        """
+        if theme_id is None:
+            return ()
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT name FROM theme WHERE id=?", (theme_id,)
+            ).fetchone()
+            if row is None or row[0] is None:
+                return ()
+            names = themes_sharing_modifiers(str(row[0]))
+            if len(names) <= 1:
+                return ()
+            placeholders = ",".join("?" for _ in names)
+            rows = con.execute(
+                f"SELECT id FROM theme WHERE name IN ({placeholders}) AND id != ?",
+                (*sorted(names), theme_id),
+            ).fetchall()
+        return tuple(int(r[0]) for r in rows)
 
     def _screen_id(self, con: sqlite3.Connection, slug: str) -> int:
         row = con.execute("SELECT id FROM screen WHERE slug=?", (slug,)).fetchone()

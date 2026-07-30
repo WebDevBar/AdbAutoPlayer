@@ -172,14 +172,55 @@ class Fit:
             return None
 
 
+# Themes whose modifiers are identical, listed by NAME because that is what a person can
+# check against the in-game Themes screen. Matches from any theme in a group count in
+# FULL toward a fit for any other theme in the same group.
+#
+# The rotation reset exists because a theme changes the roster and the battlefield. When
+# it changes neither, the cold start buys nothing - and at a few hundred matches per
+# theme with two collectors, a reset is most of what the model ever costs.
+#
+# Pooled at FIT time on purpose. The matches stay stored under their own theme, one row
+# each, so this is a flag rather than a merge: if the modifiers turn out to differ after
+# all, remove the group and nothing has been lost. Fusing the data would have destroyed
+# the control group behind the strongest result in the ledger.
+#
+# 2026-07-30: Flourishing Wilds closes and Tactical Grounds opens with the same
+# modifiers. Converging Paths is deliberately NOT here - its modifiers did change, and
+# carrying its strengths forward measured 47% directional, worse than a coin.
+SHARED_MODIFIER_GROUPS: tuple[frozenset[str], ...] = (
+    frozenset({"Flourishing Wilds", "Tactical Grounds"}),
+)
+
+
+def themes_sharing_modifiers(name: str | None) -> frozenset[str]:
+    """Every theme name sharing `name`'s modifiers, including itself.
+
+    Returns just the name itself when it belongs to no group, so a caller can always
+    treat the result as the full set of themes a fit may draw on.
+    """
+    if name is None:
+        return frozenset()
+    for group in SHARED_MODIFIER_GROUPS:
+        if name in group:
+            return group
+    return frozenset({name})
+
+
 def design(
-    matches: list[Match], theme_id: int | None = None
+    matches: list[Match],
+    theme_id: int | None = None,
+    siblings: tuple[int, ...] = (),
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[str, ...], tuple[str, ...]]:
     """Build the design matrix, outcomes and per-match weights.
 
     Column 0 is the intercept, then one column per hero, then one per player. A hero is
     +1 on the left and -1 on the right, so only the DIFFERENCE between the sides can be
     learned - which is all a win/lose outcome contains.
+
+    `siblings` are theme ids sharing this theme's modifiers - see
+    SHARED_MODIFIER_GROUPS. They carry full weight; every other theme still carries
+    CROSS_THEME_WEIGHT.
     """
     heroes = tuple(sorted({h for m in matches for h in (*m.left, *m.right)}))
     players = (
@@ -219,20 +260,27 @@ def design(
         if match.left_rating is not None and match.right_rating is not None:
             x[row, rating_at] = (match.left_rating - match.right_rating) / RATING_SCALE
         y[row] = 1.0 if match.left_won else 0.0
-        if theme_id is not None and match.theme_id != theme_id:
+        counts_fully = match.theme_id == theme_id or match.theme_id in siblings
+        if theme_id is not None and not counts_fully:
             w[row] = CROSS_THEME_WEIGHT
 
     return x, y, w, heroes, players
 
 
-def fit(matches: list[Match], theme_id: int | None = None) -> Fit:
+def fit(
+    matches: list[Match],
+    theme_id: int | None = None,
+    siblings: tuple[int, ...] = (),
+) -> Fit:
     """Newton-Raphson to convergence. No scipy - it is not in the bundled runtime.
 
     The Hessian is symmetric positive definite because XᵀWX is positive semi-definite
     and the prior term is strictly positive, so the solve is always well posed. That is
     also what makes the variance in `predict` safe to compute.
+
+    `siblings` pools themes with identical modifiers - see SHARED_MODIFIER_GROUPS.
     """
-    x, y, w, heroes, players = design(matches, theme_id)
+    x, y, w, heroes, players = design(matches, theme_id, siblings)
     penalty = np.full(x.shape[1], 1.0 / SIGMA_THETA**2)
     penalty[0] = 1.0 / SIGMA_BETA**2
     penalty[1 + len(heroes) : -1] = 1.0 / SIGMA_PHI**2

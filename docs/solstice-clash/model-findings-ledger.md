@@ -72,7 +72,72 @@ does know when it knows; the damping is simply not what decides that.
 **Verdict: no change. Closed.** Re-open only with a mechanism, not a bigger sample - the
 paired difference is a fifth of its own standard error.
 
-### The rating step vs its challenger: NULL, and the term itself is barely earning
+### CORRECTION, same day: two of the four claims above were WRONG
+
+Caught by Codex and Fable, run independently against the harness and the model, and each
+verified against the code before being accepted. **Read this section before believing the
+two that follow it.** The band-evidence verdict survives; the rating verdicts do not.
+
+Three defects, all in the harness rather than the model:
+
+**1. `RATING_NUDGE` is doing two jobs, and changing it changed both.** It defines the
+proposed rating curve AND the bins `band_evidence` tallies into. So a 25-band ramp did not
+test a graded curve against a flat one - it tested "graded curve + evidence fragmented
+into 25 starved bins" against "flat curve + two well-populated bins". Per-band shrinkage is
+`seen/(seen+20)`, so bins holding 1-43 matches carry weights of 0.05-0.68 and inject noise
+where the shipped two-bin version had a stable estimate. **This is a design defect in the
+model, not only in the test:** the calibration bins should not be defined by the thing
+being calibrated.
+
+**2. The "no rating term at all" arm never deleted the rating term.** `((0, 0.0),)` with
+evidence ON collapses every gap into band 0, and `blended_nudge` then refills the zero
+prior from the observed higher-rated win rate at weight 384/(384+20) = 0.95. Measured
+effective nudges: shipped 0.038/0.099 by band, "deleted" 0.038/0.091. It was the shipped
+model wearing a different table, which is why it scored identically.
+
+**3. The harness scoped rating evidence to one theme; production pools across themes.**
+`solstice_clash.py:1861` passes every stored match and scopes by EVENT, because rating is
+theme-agnostic. The harness passed theme-only history. Fixed.
+
+### Corrected results - evidence handling held FIXED across variants
+
+Prior-vs-prior, band evidence off on both sides, paired on the same 641 predictions.
+Positive t favours the variant.
+
+| variant | logloss | all | >=0.56 | paired t vs shipped |
+|---|---|---|---|---|
+| shipped step (flat above 100) | 0.6777 | 373/641 = 58% | 95/133 = 71% | - |
+| **rating term genuinely DELETED** | 0.6825 | 363/641 = 57% | 74/103 = 72% | **-2.16** |
+| challenger (0.0622 at any gap) | 0.6764 | 367/641 = 57% | 136/201 = 68% | +0.44 |
+| graded (pre-registered) | 0.6765 | 372/641 = 58% | 108/150 = 72% | **+0.81** |
+| fitted to the round-4 bands | 0.6740 | 371/641 = 58% | 156/236 = 66% | +0.79 |
+
+**What actually changed:**
+
+- **The rating term earns its place.** Deleting it is worse at t = -2.16 - the only result
+  in this round that clears its own standard error. The uncorrected run claimed the
+  opposite, on an arm that had not deleted anything.
+- **The graded nudge is NOT worse.** It flips to t = +0.81, and the version fitted to the
+  round-4 bands to +0.79. Both are still short of significance, so the honest verdict is
+  **indistinguishable from flat at this sample size**, not dead. The earlier "every variant
+  is worse" was the confound in 1 above.
+- **Band evidence contributes nothing either way.** Prior-only against band evidence, on
+  the corrected cross-theme scope: t = -0.06. So the round-4 damping conclusion stands, and
+  for a cleaner reason than the one first given - there is no damping effect to weaken
+  because the whole mechanism is inert at this sample size.
+- With evidence ON, graded reads t = -0.75 and fitted t = -0.43. That is the shared-bins
+  defect reappearing, and it is why every curve comparison from here on holds the evidence
+  handling fixed.
+
+**The lesson, which is the same one this file keeps learning:** an arm that scores exactly
+like the control usually IS the control. Three variants agreeing to four decimal places
+was the tell, and it was read as "the term does not matter" instead of "the patch did not
+take".
+
+### The rating step vs its challenger - SUPERSEDED, see the correction above
+
+Kept for the record. The "no rating term" arm in this table did not delete the rating
+term, so the conclusion drawn from it was wrong; the corrected table above replaces it.
 
 The pre-registered challenger was "+0.25 log-odds to the higher-rated side at ANY nonzero
 gap", no band structure.
@@ -89,7 +154,10 @@ work, but because nothing displaced it and it is the one already carrying the ba
 evidence. The honest position is that the rating term is worth approximately nothing at
 the level it is currently applied, which the next entry explains.
 
-### Large rating gaps: the one real finding - the effect is MONOTONIC and the flat step understates it
+### Large rating gaps: the one real finding - the effect is MONOTONIC
+
+This one survived review intact, with the sample re-checked independently: 34/49 = 69% at
+150-250 (p = 0.005) as the database grew, against the 34/48 = 71% first recorded.
 
 | gap | n | model right | higher-rated side won | p |
 |---|---|---|---|---|
@@ -111,6 +179,10 @@ result, which is exactly the selection error this file exists to prevent. The ne
 tests a pre-registered graded nudge, and it is written into the table below before anyone
 looks again.
 
+The first attempt to measure that nudge was confounded - see the correction above. On the
+corrected path it reads t = +0.81, meaning "not yet distinguishable from flat", so the
+pre-registered test below stands unchanged and still needs matches it has never seen.
+
 ### The dissenting cell is gone
 
 Round 3 recorded "a 100+ gap contradicting a confident call went 1/5". On the current path
@@ -129,7 +201,8 @@ passed at 3.2x SE on 61 matches and turned out to measure nothing.
 | ~~Band evidence in the prediction path~~ | ~~now~~ | **CLOSED round 4** - null on a paired test, t = +0.81. See round 4 |
 | ~~The rating step vs its challenger~~ | ~~250 rated~~ | **CLOSED round 4** - challenger does not beat the incumbent; neither beats deleting the term |
 | ~~Large rating gaps~~ | ~~30 at gap >= 150~~ | **ANSWERED round 4** - yes, monotonic to 250. Replaced by the graded-nudge entry below |
-| **A GRADED rating nudge** | next round, once Flourishing Wilds holds ~450 of its own matches OR a third theme opens | Pre-registered NOW, before looking again: replace the flat `(100, 0.0622)` with `(150, 0.124), (100, 0.0622), (0, 0.0)` - double weight above 150, unchanged between 100 and 150. Decided on the round-4 monotonic result, so it must be confirmed on matches that result never saw. Judged on PAIRED logloss against the shipped step, not on a threshold table. A gain smaller than its own SE is a null, however good the >=56% row looks |
+| **A GRADED rating nudge** | next round, once Flourishing Wilds holds ~450 of its own matches OR a third theme opens | Pre-registered NOW, before looking again: replace the flat `(100, 0.0622)` with `(150, 0.124), (100, 0.0622), (0, 0.0)` - double weight above 150, unchanged between 100 and 150. Decided on the round-4 monotonic result, so it must be confirmed on matches that result never saw. Judged on PAIRED logloss against the shipped step, not on a threshold table. A gain smaller than its own SE is a null, however good the >=56% row looks. **Hold the evidence handling FIXED across both arms** - `RATING_NUDGE` also defines the `band_evidence` bins, and letting it move re-partitions the estimator being compared |
+| **Separate the nudge curve from the evidence bins** | before the graded test is run | `RATING_NUDGE` currently defines both the rating curve and the bins `band_evidence` tallies into, so no curve can be tested without disturbing its own calibration. Give `band_evidence` its own fixed coarse bins. This is a prerequisite, not an improvement - the graded test cannot be run cleanly in production code until it exists |
 | **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed. Round 4: selectivity confirmed real (permutation p = 0.000) but the specific line is still unearned |
 | **Calibration / under-confidence** | ~600 predictions | Calibration slope measured ~2.07 (SE 0.96), suggesting the displayed spread understates the real one. In-sample; shipping it would repeat the threshold error |
 | **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |

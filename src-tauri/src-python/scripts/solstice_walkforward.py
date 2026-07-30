@@ -75,7 +75,19 @@ def load():
 
 
 def walk(rows, use_evidence=True, nudge=None, min_train=None):
-    """Predict each match from the ones before it in the same theme.
+    """Predict each match from the ones recorded before it.
+
+    TWO DIFFERENT SCOPES, and conflating them was a real defect caught in review
+    (2026-07-30, Codex + Fable, independently):
+
+    - The HERO fit is theme-locked. A theme changes the roster and the map, so another
+      theme's matches are discarded - `CROSS_THEME_WEIGHT` is 0.
+    - The RATING evidence pools ACROSS themes within one event, because a player's
+      rating does not change when the battlefield does. Production does this at
+      `solstice_clash.py:1861`, passing every stored match and scoping by event.
+
+    An earlier version passed theme-only history to `band_evidence`, which measured a
+    theme-isolated implementation that is not what ships.
 
     Returns a list of (theme, match_id, p_left, left_won, gap).
     """
@@ -86,38 +98,37 @@ def walk(rows, use_evidence=True, nudge=None, min_train=None):
         min_train = odds.MIN_MATCHES_FOR_ODDS
 
     results = []
-    by_theme = defaultdict(list)
-    for ts, theme, mid, m in rows:
-        by_theme[theme].append((mid, m))
+    theme_history = defaultdict(list)
+    global_history = []
 
     try:
-        for theme, items in by_theme.items():
-            history = []
-            fitted = None
-            for i, (mid, m) in enumerate(items):
-                if len(history) >= min_train:
-                    # Refit every match: this is the honest walk-forward cost.
-                    fitted = odds.fit(history, theme_id=m.theme_id)
-                    ev = (
-                        odds.band_evidence(history, event_id=m.event_id)
-                        if use_evidence
-                        else None
-                    )
-                    p = odds.predict(
-                        fitted,
-                        list(m.left),
-                        list(m.right),
-                        left_rating=m.left_rating,
-                        right_rating=m.right_rating,
-                        evidence=ev,
-                    )
-                    gap = (
-                        None
-                        if m.left_rating is None or m.right_rating is None
-                        else m.left_rating - m.right_rating
-                    )
-                    results.append((theme, mid, p.p_mid, m.left_won, gap))
-                history.append(m)
+        # One pass in true capture order, so the rating evidence sees the other theme's
+        # matches exactly when production would have seen them.
+        for _ts, theme, mid, m in sorted(rows, key=lambda r: (r[0], r[2])):
+            if len(theme_history[theme]) >= min_train:
+                # Refit every match: this is the honest walk-forward cost.
+                fitted = odds.fit(theme_history[theme], theme_id=m.theme_id)
+                ev = (
+                    odds.band_evidence(global_history, event_id=m.event_id)
+                    if use_evidence
+                    else None
+                )
+                p = odds.predict(
+                    fitted,
+                    list(m.left),
+                    list(m.right),
+                    left_rating=m.left_rating,
+                    right_rating=m.right_rating,
+                    evidence=ev,
+                )
+                gap = (
+                    None
+                    if m.left_rating is None or m.right_rating is None
+                    else m.left_rating - m.right_rating
+                )
+                results.append((theme, mid, p.p_mid, m.left_won, gap))
+            theme_history[theme].append(m)
+            global_history.append(m)
     finally:
         if nudge is not None:
             odds.RATING_NUDGE = original

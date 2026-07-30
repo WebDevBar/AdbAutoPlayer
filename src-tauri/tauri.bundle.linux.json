@@ -14,7 +14,7 @@
         "depends": [
           "tesseract"
         ],
-        "release": "24"
+        "release": "25"
       },
       "deb": {
         "depends": [

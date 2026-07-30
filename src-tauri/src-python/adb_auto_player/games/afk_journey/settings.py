@@ -214,7 +214,7 @@ class WDBModesSettings(BaseModel):
     auto_bet_offset_px: int = Field(
         default=18,
         ge=1,
-        le=200,
+        le=400,
         alias="Auto-Bet Slider Offset",
         title="Auto-Bet Slider Offset",
         description=(
@@ -222,7 +222,13 @@ class WDBModesSettings(BaseModel):
             "Measured live at a ~25k token balance: 5px staked 293, 9px staked 476, "
             "12px staked 739, 20px staked 1209 - roughly 55-60 tokens per pixel, "
             "near-linear. The default of 18 targets a little over 1000. The rate "
-            "scales with the balance: the same offset stakes more when there is more."
+            "scales with the balance: the same offset stakes more when there is more. "
+            "The cap is 400 (raised from an unexplained 200 on 2026-07-30). Note the "
+            "bar spans x=151..948 around a handle at 540, so travel is 389px left and "
+            "408px right - a 400px drag toward BLUE runs about 11px past the end of "
+            "the bar, and the game's behaviour there has not been tested. Linearity "
+            "was only ever measured out to 20px, so the 55-60/px rate should not be "
+            "trusted at this end either."
         ),
     )
 

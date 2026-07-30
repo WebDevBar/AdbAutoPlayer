@@ -50,6 +50,7 @@ from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
     band_evidence,
+    emphasise_bet,
     fit as fit_odds,
     format_call_result,
     format_odds,
@@ -1236,6 +1237,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
             )
             # Whether the call was RIGHT, said here where both halves are in hand.
+            # HIT is also the bet result: the stake always goes on the called side, so
+            # a separate won/lost line would restate this one. The BETTING line earlier
+            # in the same match says whether anything was staked at all.
             logging.info(f"[SC-75] {format_call_result(p_left, read.winner, source)}")
         self._pending_prediction = None
         self._draft_ratings = (None, None)
@@ -1989,6 +1993,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 f"[SC-94] staked on {side} at {confidence * 100:.0f}% "
                 f"- handle dragged {offset}px from centre"
             )
+            # Said again, loudly and in colour, AFTER the drag has happened. The line
+            # above is the audit trail; this one is for the person watching the log
+            # while the countdown runs.
+            logging.info(f"[SC-94] {emphasise_bet(side)}")
         except Exception as exc:  # a bet is never worth a match
             logging.warning(f"[SC-94] could not place the bet: {exc}")
 

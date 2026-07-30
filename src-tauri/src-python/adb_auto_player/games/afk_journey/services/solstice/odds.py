@@ -747,6 +747,15 @@ def format_odds(
     ]
 
 
+def emphasise_bet(colour: str) -> str:
+    """The staking announcement, in the side's own colour.
+
+    Logged AFTER the handle has been dragged, so the line means tokens are committed
+    rather than about to be. Reads correctly once the export strips the markup.
+    """
+    return _emphasise(f"BETTING {colour.upper()}", _SIDE_OF_COLOUR.get(colour))
+
+
 def format_call_result(p_left: float, winner: str, source: str) -> str:
     """One line saying what was called, what happened, and whether it was right.
 

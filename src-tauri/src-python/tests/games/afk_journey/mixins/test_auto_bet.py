@@ -110,6 +110,26 @@ def test_the_threshold_and_offset_are_configurable():
     assert bot.swipes[0][2] == BET_HANDLE_AT.x - 40
 
 
+def test_a_placed_bet_announces_the_side_in_its_colour(caplog):
+    """The operator asked for this line specifically: after the handle is dragged, say
+    which side the tokens went on, coloured to match the bubble."""
+    import logging
+
+    bot = _Stub()
+    with caplog.at_level(logging.INFO):
+        bot._auto_bet(_prediction(0.62), None)
+    line = next(r.message for r in caplog.records if "BETTING" in r.message)
+    assert '<span class="sc-blue">BETTING BLUE</span>' in line
+
+    bot2 = _Stub()
+    with caplog.at_level(logging.INFO):
+        bot2._auto_bet(_prediction(0.38), None)
+    line2 = next(
+        r.message for r in caplog.records if "BETTING RED" in r.message
+    )
+    assert '<span class="sc-red">BETTING RED</span>' in line2
+
+
 def test_a_failed_swipe_never_propagates():
     """Losing a recorded match over a bet would be a bad trade."""
 

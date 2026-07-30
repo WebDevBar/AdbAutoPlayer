@@ -190,6 +190,72 @@ that situation now arises exactly ONCE in 634 predictions, and the model was wro
 cell was an artefact of a weaker fit disagreeing with ratings more often; there is no
 longer a disagreement to study.
 
+## Round 5, 2026-07-30, n=732 (652 predictions) - Codex, independently
+
+Asked the open question directly: is Bradley-Terry on hero identity still the only thing
+that works, and do the OTHER recorded columns hold anything? Run by Codex against the
+walk-forward harness and a read-only snapshot, theme-locked, refit before every match,
+production `band_evidence`. Positive t favours the candidate.
+
+| candidate | logloss | paired t | n | verdict |
+|---|---|---|---|---|
+| online out-of-sample calibration (fitted slope) | 0.67875 vs 0.67779 | -0.57 | 652 | NULL |
+| fixed 2x log-odds calibration | 0.82884 vs 0.73655 | -1.49 | 18 | NULL, leaning dead |
+| delete the fitted intercept | 0.68144 vs 0.67779 | -1.53 | 652 | **DEAD** |
+| identification quality as a signal | - | - | 500 | NULL |
+
+### Calibration is ANSWERED, and the answer is no
+
+The trigger had fired at ~600 predictions. The under-confidence is real - the online slope
+settles at 1.31, mean 1.34 over the last hundred - and **acting on it makes unseen-match
+predictions worse.** The candidate produces more confident calls without producing better
+ones, which is the same shape as every threshold-table result in this file.
+
+The aggressive 2x variant was graded ONLY on the 18 predictions after round 4's frozen
+634, because those 18 are the only observations that did not generate the hypothesis. It
+lost badly. Small, but pointing the wrong way, and there is no case for re-opening.
+
+### The intercept stays - and this settles the left-side skew
+
+Deleting the fitted intercept RAISES raw directional accuracy, 376/652 against 365/652,
+and destroys the confident tail:
+
+| confidence | shipped | no intercept |
+|---|---|---|
+| >=56% | 138/207 | 122/202 |
+| >=62% | **46/71** | **16/27** |
+
+A cleaner demonstration than any argument that directional accuracy cannot overrule paired
+logloss. The collector-dependent left-side skew (63% on our Flourishing Wilds matches, 34%
+on another contributor's from the same theme, 50/50 on Converging Paths) does NOT justify
+removing the intercept. Keep it fitted and theme-scoped; it is absorbing something real.
+
+### Identification quality carries nothing
+
+Correlation between the vision layer's confidence and the model's per-match error, across
+500 predictions carrying scores: minimum margin -0.045, mean margin -0.035, minimum score
+-0.063, mean score -0.020. All inside noise.
+
+`runner_up_score` has ZERO usable coverage, so the score-minus-runner-up measure cannot be
+tested at all until that column is populated. The `identified_by=image` versus legacy split
+is chronologically confounded and is not evidence of anything.
+
+Worth keeping in mind for the displayed INTERVAL - a comp read with poor margins arguably
+deserves a wider one - but that is presentation, not a better forecast.
+
+### Stats as a shrinkage target was NOT re-run, correctly
+
+Round 2 already closed the exact experiment: gain -0.0000, SE 0.0006, 12/25 splits, with
+instructions not to re-run below ~1,000 matches. The round-4 write-up called it untried,
+which was wrong; the closure binds.
+
+### Where this leaves the model
+
+Nothing tested across five rounds has beaten regularised Bradley-Terry on hero identity
+with the shipped rating path and a fitted intercept. That is now the answer to "is there
+something else in the data" as well as "is there a better model" - the other recorded
+columns have been looked at directly and they are empty.
+
 ## Re-open when the data arrives - pre-registered
 
 Each of these is written down BEFORE looking again, so the next round is a test and not
@@ -204,7 +270,7 @@ passed at 3.2x SE on 61 matches and turned out to measure nothing.
 | **A GRADED rating nudge** | next round, once Flourishing Wilds holds ~450 of its own matches OR a third theme opens | Pre-registered NOW, before looking again: replace the flat `(100, 0.0622)` with `(150, 0.124), (100, 0.0622), (0, 0.0)` - double weight above 150, unchanged between 100 and 150. Decided on the round-4 monotonic result, so it must be confirmed on matches that result never saw. Judged on PAIRED logloss against the shipped step, not on a threshold table. A gain smaller than its own SE is a null, however good the >=56% row looks. **Hold the evidence handling FIXED across both arms** - `RATING_NUDGE` also defines the `band_evidence` bins, and letting it move re-partitions the estimator being compared |
 | **Separate the nudge curve from the evidence bins** | before the graded test is run | `RATING_NUDGE` currently defines both the rating curve and the bins `band_evidence` tallies into, so no curve can be tested without disturbing its own calibration. Give `band_evidence` its own fixed coarse bins. This is a prerequisite, not an improvement - the graded test cannot be run cleanly in production code until it exists |
 | **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed. Round 4: selectivity confirmed real (permutation p = 0.000) but the specific line is still unearned |
-| **Calibration / under-confidence** | ~600 predictions | Calibration slope measured ~2.07 (SE 0.96), suggesting the displayed spread understates the real one. In-sample; shipping it would repeat the threshold error |
+| ~~Calibration / under-confidence~~ | ~~600 predictions~~ | **CLOSED round 5** - trigger fired, tested online and out of sample, t = -0.57. The under-confidence is real and acting on it is worse. See round 5 |
 | **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |
 
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not

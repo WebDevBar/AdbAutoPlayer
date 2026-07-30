@@ -113,7 +113,23 @@ confidence where a win probability is not.
 
 ## 4. Colour in the live log
 
-Wanted, and it needs no work in AdbAutoPlayer itself - checked 2026-07-29.
+> **CORRECTED 2026-07-30. The claim below that this "needs no work" was WRONG, and
+> shipping on it put raw `<span class="sc-red">` tags on screen in release 23.**
+>
+> `LogEntry.svelte` does render with `{@html}` - that part was right. But
+> `formatMessage` in `src/lib/log/logHelper.ts` calls `escapeHtml` on EVERY message
+> before it reaches any renderer, so markup arrives as `&lt;span&gt;` and renders as
+> visible text. Checking the renderer and not the pipeline into it is what went wrong.
+>
+> That escaping is correct and stays: log lines carry device output and exception text.
+> The fix is `restoreAllowedMarkup`, which re-permits exactly four classes -
+> `sc-blue`, `sc-red`, `sc-hit`, `sc-miss` - by matching an opening tag, its text and its
+> closing tag as ONE unit, so an orphan `</span>` in arbitrary log text cannot become
+> real markup and no other attribute survives. Verified against ten injection attempts
+> including `<script>`, `onerror`, a spoofed `sc-red` carrying `onclick`, and a
+> quote-break out of the class attribute.
+
+The original note, kept because the rest of it is still accurate - checked 2026-07-29.
 
 `LogEntry.svelte:23` renders each message with `{@html}`, so a log line can already carry
 inline markup and it will render:

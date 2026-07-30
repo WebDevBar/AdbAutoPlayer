@@ -13,7 +13,7 @@ asking "is this the build with the fix?".
 Bump this when cutting a fork build. `build-rpm.sh` picks it up automatically.
 """
 
-WDB_RELEASE = "22"
+WDB_RELEASE = "24"
 
 
 def wdb_version(app_version: str) -> str:

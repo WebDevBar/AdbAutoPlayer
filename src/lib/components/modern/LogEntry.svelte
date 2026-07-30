@@ -77,6 +77,35 @@
     min-width: 0;
   }
 
+  /*
+   * Solstice Clash emphasis. The Python side emits these classes inline; see
+   * `odds.py` (_FAVOURED_CLASS) and the SC-40 / SC-75 log lines.
+   *
+   * :global() is required - the markup arrives through {@html}, so Svelte's scoped
+   * class hashing never touches it and an unscoped rule would be compiled away.
+   *
+   * Colour carries NO meaning on its own here: the log export strips tags, and every
+   * line still reads correctly as plain text. This only tells the eye where to land.
+   */
+  .message :global(.sc-blue) {
+    color: var(--sc-blue, #4c8dff);
+    font-weight: 700;
+  }
+  .message :global(.sc-red) {
+    color: var(--sc-red, #ff5c5c);
+    font-weight: 700;
+  }
+  .message :global(.sc-hit),
+  .message :global(.sc-miss) {
+    font-weight: 700;
+  }
+  .message :global(.sc-hit) {
+    color: var(--ok, #3fbf6f);
+  }
+  .message :global(.sc-miss) {
+    color: var(--text-4);
+  }
+
   /* Compact Mode adjustments inside layout components if inherited */
   :global(.log-panel.compact[data-position="bottom"]) .log-line {
     grid-template-columns: 68px 58px 1fr;

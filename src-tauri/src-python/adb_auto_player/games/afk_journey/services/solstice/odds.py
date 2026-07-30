@@ -509,7 +509,10 @@ def crowd_reliability(spectators: int | None, total_pool: int | None) -> float:
     q_stake = 0.0
     if total_pool:
         q_stake = min(
-            max(np.log(max(total_pool, 1) / 20_000.0) / np.log(1_000_000 / 20_000.0), 0.0),
+            max(
+                np.log(max(total_pool, 1) / 20_000.0) / np.log(1_000_000 / 20_000.0),
+                0.0,
+            ),
             1.0,
         )
 
@@ -524,9 +527,7 @@ def hero_evidence(fitted: Fit, heroes: list[str]) -> float:
     if not heroes:
         return 0.0
     seen = [fitted.appearances.get(h, 0) for h in heroes]
-    return float(
-        np.mean([n / (n + HERO_EVIDENCE_HALF) for n in seen])
-    )
+    return float(np.mean([n / (n + HERO_EVIDENCE_HALF) for n in seen]))
 
 
 def _logit(p: float) -> float:
@@ -652,6 +653,49 @@ def predict(
 # exists, this is what a person watching a draft actually sees.
 _RULE = "=" * 46
 
+# The live log renders messages as HTML, so a line can carry markup. Colour is used for
+# ONE thing - which side the number is calling - because a log where everything is
+# coloured is a log where nothing stands out.
+#
+# The export strips tags with `replace(/<[^>]*>/g, "")`. So the markup may only
+# EMPHASISE: every line here still reads correctly as plain text, and a test asserts it
+# rather than leaving it to whoever edits this next.
+_FAVOURED_CLASS = {"left": "sc-blue", "right": "sc-red"}
+_EVEN = 0.5
+
+
+def _favoured_side(p_left: float) -> str | None:
+    """Which side the number calls, or None when it is calling neither."""
+    if p_left > _EVEN:
+        return "left"
+    if p_left < _EVEN:
+        return "right"
+    return None
+
+
+def _emphasise(text: str, side: str | None) -> str:
+    """Wrap `text` in the colour for `side`, or leave it alone for a coin flip."""
+    if side is None:
+        return text
+    return f'<span class="{_FAVOURED_CLASS[side]}">{text}</span>'
+
+
+# The odds panel talks in sides ("left"/"right"); the rest of the log talks in the
+# colours a person sees on screen. Same two classes, so one map serves both.
+_SIDE_OF_COLOUR = {"blue": "left", "red": "right"}
+
+
+def emphasise_side(colour: str | None) -> str:
+    """The side name, coloured to match its bubble - "blue", "red", or "no call".
+
+    Returns plain text for an unknown or absent side, so a caller never has to guard.
+    The word itself is always present, which is what keeps the line readable after the
+    export strips the markup.
+    """
+    if colour is None:
+        return "no call"
+    return _emphasise(colour, _SIDE_OF_COLOUR.get(colour))
+
 
 def format_odds(
     prediction: Prediction,
@@ -686,16 +730,52 @@ def format_odds(
         if prediction.standard_error <= 0.45
         else "low"
     )
+    # Only the favoured half is coloured. Colouring both would make the line a
+    # decoration rather than a signal, and the eye would have to read it anyway.
+    favoured = _favoured_side(prediction.p_mid)
+    blue = _emphasise(f"BLUE {left:.0f}%", "left" if favoured == "left" else None)
+    red = _emphasise(f"RED {right:.0f}%", "right" if favoured == "right" else None)
     return [
         "",
         _RULE,
         f"  {header}",
-        f"  BLUE {left:.0f}%   |   RED {right:.0f}%",
+        f"  {blue}   |   {red}",
         f"  80% interval {band}   trust: {trust}",
         f"  {locked}/6 heroes identified",
         _RULE,
         "",
     ]
+
+
+def format_call_result(p_left: float, winner: str, source: str) -> str:
+    """One line saying what was called, what happened, and whether it was right.
+
+    [SC-40] already names the winner and says nothing about our own call, so the log
+    could tell you the outcome of every match and the accuracy of none - which is the
+    number a person watching actually wants.
+
+    Args:
+        p_left: the probability the LEFT (blue) side wins, as predicted.
+        winner: "left" or "right", as read from the result banner.
+        source: which signals the prediction was made from.
+
+    Returns:
+        The message body, with markup that emphasises the call and the verdict. It
+        still reads correctly once the export strips the tags.
+    """
+    called = "blue" if p_left > _EVEN else "red" if p_left < _EVEN else None
+    won = "blue" if winner == "left" else "red"
+    confidence = max(p_left, 1.0 - p_left) * 100.0
+    if called is None:
+        verdict = "no call - dead even"
+    elif called == won:
+        verdict = '<span class="sc-hit">HIT</span>'
+    else:
+        verdict = '<span class="sc-miss">MISS</span>'
+    return (
+        f"called {emphasise_side(called)} {confidence:.0f}% ({source}) - "
+        f"{won} won - {verdict}"
+    )
 
 
 MIN_LOCKED_FOR_ODDS = 4
@@ -786,9 +866,7 @@ def gate_reason(
     Gating on what was read is right; describing it as locked was not.
     """
     if identified < MIN_LOCKED_FOR_ODDS:
-        return (
-            f"{identified}/6 heroes identified, need {MIN_LOCKED_FOR_ODDS}"
-        )
+        return f"{identified}/6 heroes identified, need {MIN_LOCKED_FOR_ODDS}"
     if has_ratings:
         # The rating prior is informative on its own and does not depend on collected
         # matches at all, so a thin hero model is no reason to withhold the number. What

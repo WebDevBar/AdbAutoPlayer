@@ -25,6 +25,21 @@ def _match(left, right, left_won, theme_id=1, players=(None, None)):
     )
 
 
+def _prediction(p_left, se=0.3):
+    from adb_auto_player.games.afk_journey.services.solstice.odds import Prediction
+
+    return Prediction(
+        p_mid=p_left,
+        p_low=max(p_left - 0.1, 0.0),
+        p_high=min(p_left + 0.1, 1.0),
+        eta=0.0,
+        standard_error=se,
+        known_heroes=6,
+        weakest_evidence=10,
+        signals=("heroes",),
+    )
+
+
 def _dominant(hero="star", n=40):
     """`hero`'s side always wins, and it plays each side equally often.
 
@@ -108,13 +123,105 @@ def test_another_theme_counts_for_nothing():
     dropped to zero when the borrowed evidence proved worse than the thin data it was
     meant to cushion."""
     same = fit(_dominant(), theme_id=1)
-    other = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
-                theme_id=1)
+    other = fit(
+        [_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
+        theme_id=1,
+    )
     column = same.index_of("star")
     assert column is not None
     # Learned nothing at all from the sibling theme: the strength stays at its prior.
     assert abs(other.beta[column]) < 1e-6
     assert CROSS_THEME_WEIGHT == 0.0
+
+
+def _strip(line):
+    """What the log EXPORT keeps - it removes tags with the same regex the UI uses."""
+    import re
+
+    return re.sub(r"<[^>]*>", "", line)
+
+
+def test_the_odds_line_colours_the_favoured_side():
+    """Colour is what the eye finds first, so it must point at the side being called."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import format_odds
+
+    blue = format_odds(_prediction(0.67), locked=6, gate=None)
+    red = format_odds(_prediction(0.33), locked=6, gate=None)
+
+    blue_line = next(x for x in blue if "BLUE" in x)
+    red_line = next(x for x in red if "BLUE" in x)
+
+    assert 'class="sc-blue"' in blue_line
+    assert 'class="sc-red"' not in blue_line
+    assert 'class="sc-red"' in red_line
+    assert 'class="sc-blue"' not in red_line
+
+
+def test_the_odds_line_survives_having_its_markup_stripped():
+    """The export strips tags, so colour may EMPHASISE but must never be the only thing
+    saying which side is favoured. Checked as a property, not left to reviewer memory."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import format_odds
+
+    for p_left in (0.67, 0.33, 0.5):
+        line = next(
+            x
+            for x in format_odds(_prediction(p_left), locked=6, gate=None)
+            if "BLUE" in x
+        )
+        plain = _strip(line)
+        assert f"{p_left * 100:.0f}%" in plain
+        assert "BLUE" in plain and "RED" in plain
+        assert "<" not in plain
+
+
+def test_the_result_line_says_whether_the_call_was_right():
+    """The log named the winner and never said whether we predicted it, so it reported
+    the outcome of every match and the accuracy of none."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        format_call_result,
+    )
+
+    hit = format_call_result(0.67, "left", "r+h")
+    miss = format_call_result(0.67, "right", "r+h")
+
+    assert "HIT" in hit and "MISS" not in hit
+    assert "MISS" in miss and "HIT" not in miss
+    # The confidence is the CALL's confidence, not p(left): a 33% call on blue is a 67%
+    # call on red, and reporting 33% would read as a weak call when it is a strong one.
+    assert "67%" in format_call_result(0.33, "right", "r+h")
+    assert 'class="sc-red"' in format_call_result(0.33, "right", "r+h")
+
+
+def test_a_dead_even_prediction_is_not_scored_as_a_call():
+    """50/50 is the model declining to choose. Grading it as a hit or a miss would put
+    noise into the one line that is supposed to report accuracy."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        format_call_result,
+    )
+
+    line = format_call_result(0.5, "left", "h")
+    assert "HIT" not in line and "MISS" not in line
+    assert "no call" in line
+
+
+def test_the_result_line_survives_having_its_markup_stripped():
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        format_call_result,
+    )
+
+    for p_left, winner in ((0.67, "left"), (0.33, "right"), (0.5, "left")):
+        plain = _strip(format_call_result(p_left, winner, "r+h"))
+        assert "<" not in plain
+        assert "won" in plain
+
+
+def test_a_gated_line_is_never_coloured():
+    """A gate is the model saying it does not know. Colouring that would dress a refusal
+    up as a call, which is the one thing the gate exists to prevent."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import format_odds
+
+    for line in format_odds(_prediction(0.67), locked=6, gate="only 12 matches"):
+        assert "sc-blue" not in line and "sc-red" not in line
 
 
 def test_a_theme_that_shares_modifiers_counts_in_full():
@@ -160,8 +267,10 @@ def test_a_thin_theme_is_gated_rather_than_padded():
         gate_reason,
     )
 
-    fitted = fit([_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
-                 theme_id=1)
+    fitted = fit(
+        [_match(m.left, m.right, m.left_won, theme_id=2) for m in _dominant()],
+        theme_id=1,
+    )
     # `Fit.matches` counts rows that CONTRIBUTED, so a fit fed only sibling-theme matches
     # reports zero and the gate says so plainly, rather than quoting a threshold against
     # a corpus the model never saw.
@@ -205,8 +314,12 @@ def test_player_terms_are_off_until_players_actually_repeat():
     and predicts nothing is overfitting with extra steps.
     """
     matches = [
-        _match([f"a{i}", f"b{i}", f"c{i}"], [f"d{i}", f"e{i}", f"f{i}"], True,
-               players=("ace", "other"))
+        _match(
+            [f"a{i}", f"b{i}", f"c{i}"],
+            [f"d{i}", f"e{i}", f"f{i}"],
+            True,
+            players=("ace", "other"),
+        )
         for i in range(30)
     ]
     fitted = fit(matches)
@@ -219,8 +332,12 @@ def test_the_player_machinery_still_works_when_switched_on():
     import adb_auto_player.games.afk_journey.services.solstice.odds as odds_module
 
     matches = [
-        _match([f"a{i}", f"b{i}", f"c{i}"], [f"d{i}", f"e{i}", f"f{i}"], True,
-               players=("ace", "other"))
+        _match(
+            [f"a{i}", f"b{i}", f"c{i}"],
+            [f"d{i}", f"e{i}", f"f{i}"],
+            True,
+            players=("ace", "other"),
+        )
         for i in range(30)
     ]
     odds_module.USE_PLAYER_TERMS = True
@@ -257,7 +374,7 @@ def test_a_band_moves_toward_what_was_actually_observed():
     )
 
     prior = blended_nudge(150, {})
-    thin = blended_nudge(150, {150: (10, 5)})     # 50% - the band means nothing
+    thin = blended_nudge(150, {150: (10, 5)})  # 50% - the band means nothing
     thick = blended_nudge(150, {150: (60, 30)})
     assert thin < prior, "evidence against the prior must pull it down"
     assert thick < thin, "more evidence pulls further"
@@ -269,13 +386,27 @@ def test_rank_evidence_pools_across_themes_but_never_across_events():
     from adb_auto_player.games.afk_journey.services.solstice.odds import band_evidence
 
     same_event = [
-        Match(("a",), ("b",), True, theme_id=t, left_rating=4300, right_rating=4100,
-              event_id=1)
+        Match(
+            ("a",),
+            ("b",),
+            True,
+            theme_id=t,
+            left_rating=4300,
+            right_rating=4100,
+            event_id=1,
+        )
         for t in (3, 4, 5)
     ]
     other_event = [
-        Match(("a",), ("b",), True, theme_id=3, left_rating=4300, right_rating=4100,
-              event_id=2)
+        Match(
+            ("a",),
+            ("b",),
+            True,
+            theme_id=3,
+            left_rating=4300,
+            right_rating=4100,
+            event_id=2,
+        )
     ]
     pooled = band_evidence(same_event + other_event, event_id=1)
     # Band 100: the step has two bands, 0 and 100, so a 200-point gap lands in 100.
@@ -289,10 +420,22 @@ def test_a_gap_of_zero_is_not_evidence_about_anything():
     )
 
     assert rating_offset(4100, 4100) == 0.0
-    assert band_evidence(
-        [Match(("a",), ("b",), True, left_rating=4100, right_rating=4100, event_id=1)],
-        event_id=1,
-    ) == {}
+    assert (
+        band_evidence(
+            [
+                Match(
+                    ("a",),
+                    ("b",),
+                    True,
+                    left_rating=4100,
+                    right_rating=4100,
+                    event_id=1,
+                )
+            ],
+            event_id=1,
+        )
+        == {}
+    )
 
 
 def test_no_rating_gap_alone_reaches_certainty():
@@ -307,12 +450,16 @@ def test_no_rating_gap_alone_reaches_certainty():
 
 # --- combining rating, crowd and heroes ------------------------------------
 
+
 def test_a_thin_market_nudges_and_does_not_decide():
     """The case that prompted the weighting: 21 spectators screamed 92% and lost."""
     fitted = fit([])
-    thin = predict(fitted, ["a", "b", "c"], ["d", "e", "f"],
-                   4240, 4335, None, 0.92, 21, 128_492)
-    assert 0.45 < thin.p_mid < 0.60, f"a 21-spectator market moved it to {thin.p_mid:.2f}"
+    thin = predict(
+        fitted, ["a", "b", "c"], ["d", "e", "f"], 4240, 4335, None, 0.92, 21, 128_492
+    )
+    assert 0.45 < thin.p_mid < 0.60, (
+        f"a 21-spectator market moved it to {thin.p_mid:.2f}"
+    )
 
 
 def test_the_crowd_no_longer_moves_the_number_however_many_are_watching():
@@ -327,7 +474,7 @@ def test_the_crowd_no_longer_moves_the_number_however_many_are_watching():
     thin = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 21, 200_000)
     thick = predict(fitted, ["a"], ["b"], 4300, 4300, None, 0.75, 221, 200_000)
     assert thick.p_mid == thin.p_mid
-    assert abs(thick.p_mid - 0.5) < 1e-9   # equal ratings, no heroes: nothing to say
+    assert abs(thick.p_mid - 0.5) < 1e-9  # equal ratings, no heroes: nothing to say
 
 
 def test_signals_that_disagree_pull_toward_even():
@@ -382,9 +529,14 @@ def test_the_block_names_the_signals_that_built_the_number():
 
     fitted = fit(_dominant(n=40))
     p = predict(
-        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
-        left_rating=4400, right_rating=4100,
-        crowd=0.30, spectators=250, total_pool=500_000,
+        fitted,
+        ["star", "h0", "h1"],
+        ["h2", "h3", "h4"],
+        left_rating=4400,
+        right_rating=4100,
+        crowd=0.30,
+        spectators=250,
+        total_pool=500_000,
     )
     # The crowd is present in the inputs and absent from the label, because W_CROWD is 0
     # and the label describes what actually moved the number rather than what was read.
@@ -401,9 +553,14 @@ def test_a_signal_that_did_not_move_the_number_is_not_named():
 
     fitted = fit(_dominant(n=40))
     p = predict(
-        fitted, ["nobody1", "nobody2", "nobody3"], ["nobody4", "nobody5", "nobody6"],
-        left_rating=4400, right_rating=4400,
-        crowd=0.30, spectators=250, total_pool=500_000,
+        fitted,
+        ["nobody1", "nobody2", "nobody3"],
+        ["nobody4", "nobody5", "nobody6"],
+        left_rating=4400,
+        right_rating=4400,
+        crowd=0.30,
+        spectators=250,
+        total_pool=500_000,
     )
     # Equal ratings contribute nothing, unseen heroes contribute nothing, and the crowd
     # is switched off - so there is nothing honest to name.
@@ -417,9 +574,14 @@ def test_a_thin_market_is_not_named_either():
     the thing that would gate the crowd's return."""
     fitted = fit(_dominant(n=40))
     p = predict(
-        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
-        left_rating=4400, right_rating=4400,
-        crowd=0.90, spectators=12, total_pool=3_000,
+        fitted,
+        ["star", "h0", "h1"],
+        ["h2", "h3", "h4"],
+        left_rating=4400,
+        right_rating=4400,
+        crowd=0.90,
+        spectators=12,
+        total_pool=3_000,
     )
     assert "crowd" not in p.signals
 
@@ -429,9 +591,14 @@ def test_the_stored_source_records_the_composition():
     rating-plus-crowd are different models and must not pool their calibration."""
     fitted = fit(_dominant(n=40))
     p = predict(
-        fitted, ["star", "h0", "h1"], ["h2", "h3", "h4"],
-        left_rating=4400, right_rating=4100,
-        crowd=0.30, spectators=250, total_pool=500_000,
+        fitted,
+        ["star", "h0", "h1"],
+        ["h2", "h3", "h4"],
+        left_rating=4400,
+        right_rating=4100,
+        crowd=0.30,
+        spectators=250,
+        total_pool=500_000,
     )
     assert p.source_code == "r+h"
     # The server column is 16 characters and silently truncates past it.

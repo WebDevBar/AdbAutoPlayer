@@ -51,6 +51,7 @@ from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
     band_evidence,
     fit as fit_odds,
+    format_call_result,
     format_odds,
     gate_reason,
     load_matches,
@@ -745,7 +746,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                             str(target / f"lock_{shot:02d}.png"), self.get_screenshot()
                         )
                         time_module.sleep(LOCK_BURST_INTERVAL)
-                    logging.info(f"[SC-65] saved {LOCK_BURST_FRAMES} frames to {target}")
+                    logging.info(
+                        f"[SC-65] saved {LOCK_BURST_FRAMES} frames to {target}"
+                    )
                 except Exception as exc:  # noqa: BLE001 - never fatal
                     logging.warning(f"[SC-67] lock-frame capture failed: {exc}")
 
@@ -1232,9 +1235,8 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 locked,
                 datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
             )
-            logging.info(
-                f"[SC-75] recorded prediction {p_left * 100:.0f}% left ({source})"
-            )
+            # Whether the call was RIGHT, said here where both halves are in hand.
+            logging.info(f"[SC-75] {format_call_result(p_left, read.winner, source)}")
         self._pending_prediction = None
         self._draft_ratings = (None, None)
         self._first_locked_frame = None
@@ -1631,7 +1633,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             if pending.exists():
                 pending.rename(pending.with_name(f"draft-{match_id}.png"))
         except OSError as exc:
-            logging.debug(f"[SC-83] could not name the frame for match {match_id}: {exc}")
+            logging.debug(
+                f"[SC-83] could not name the frame for match {match_id}: {exc}"
+            )
 
     def _save_draft_frame(self, frame) -> None:
         """Keep this draft's screenshot, if the user asked for that.
@@ -1727,7 +1731,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 overlay.safe_shell(device, overlay.dexopt_skip_command())
                 result = overlay.safe_shell(device, overlay.install_command()) or ""
                 if "Success" not in result:
-                    logging.info(f"[SC-82] overlay install failed, continuing: {result}")
+                    logging.info(
+                        f"[SC-82] overlay install failed, continuing: {result}"
+                    )
                     return
             # Unconditionally: an uninstall/install cycle loses the grant, and re-granting
             # one already in place costs nothing.
@@ -1782,7 +1788,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 getattr(self, "_band_evidence", None),
                 market.crowd_probability if market else None,
                 getattr(self, "_spectators", None),
-                ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
+                ((market.left_pool or 0) + (market.right_pool or 0))
+                if market
+                else None,
             )
             # Both of these used to be invented: MIN_LOCKED_FOR_ODDS for a count we
             # actually have, and a literal 0 for the theme total. With ratings present
@@ -1826,7 +1834,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 getattr(self, "_band_evidence", None),
                 market.crowd_probability if market else None,
                 getattr(self, "_spectators", None),
-                ((market.left_pool or 0) + (market.right_pool or 0)) if market else None,
+                ((market.left_pool or 0) + (market.right_pool or 0))
+                if market
+                else None,
             )
             return prediction.p_mid, prediction.source_code, len(left) + len(right)
         except Exception as exc:  # noqa: BLE001 - never worth a match

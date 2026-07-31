@@ -16,9 +16,19 @@
 - **Never use the Edit tool on `.py` files** - it converts straight quotes to curly ones. Use `git apply` with a written patch, or a Python `.replace()` script with `assert s.count(old) == 1`.
 - Tests run from `src-tauri/`: `../.venv/bin/python -m pytest <path> -q -p no:cacheprovider`.
 - The toggle is **off by default**. With it off, the existing code path must be byte-for-byte unchanged in behaviour.
-- Colour predicate, exactly, on 8-bit RGB:
+- **Everything works in BGR**, because that is what `get_screenshot()` returns
+  (`_screenshot_mixin.py`: "Returns: np.ndarray: BGR screenshot"). Templates are loaded
+  with `cv2.imread`, which is also BGR, and test fixtures are loaded with `cv2.imread`
+  and **never converted**. An earlier draft specified RGB and converted in the tests
+  only - the suite would have passed while production applied the predicate to swapped
+  channels, which is total detection failure invisible to the tests.
+- Colour predicate on 8-bit **BGR** (`frame[:, :, 0]` is blue, `[:, :, 2]` is red):
   - Friend: `g > 120 and r < 110 and g - r > 60 and g - b > 40`
   - Guild: `g > 130 and b > 130 and r < 110 and abs(g - b) < 45 and g - r > 60`
+- Template confidence floor is **0.9, not 0.8**. Measured: the X template scores
+  **0.8027** against the no-control region of frame 04, so a 0.8 floor misclassifies an
+  unrelated screen as "exhausted". The real X scores 1.00 and Refresh 0.4252, so 0.9
+  separates with margin.
 - Component rules: 8-connectivity, discard `area < 400`, then flag when `area >= 2000 and width >= 100 and height <= 80 and width / height >= 2.0`.
 - OCR: per-box equality on casefolded, whitespace-collapsed text against `friend` / `guild member`; ignore boxes below confidence `0.6`.
 - Give-up requires **both** signals on every flagged card. One signal may skip a card; one signal may never spend an attempt.
@@ -184,7 +194,7 @@ GIVE_UP_CANCEL_CENTRE = Point(639, 1240)  # recorded only so tests can assert we
 # Supreme Arena taps fixed points; Arena locates its cards by template.
 SA_TAP_POINTS: tuple[Point, ...] = (Point(165, 950), Point(540, 950), Point(915, 950))
 
-CONFIDENCE_FLOOR = 0.8
+CONFIDENCE_FLOOR = 0.9  # 0.8 collides: the X scores 0.8027 on a no-control screen
 OCR_CONFIDENCE_FLOOR = 0.6
 ```
 
@@ -235,9 +245,9 @@ DATA = Path(__file__).parent / "data"
 
 def _frame(name: str) -> np.ndarray:
     path = next(DATA.glob(f"{name}*.png"))
-    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    assert bgr is not None, path
-    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    frame = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    assert frame is not None, path
+    return frame  # BGR, exactly as get_screenshot() delivers it - do NOT convert
 
 
 @pytest.mark.parametrize(
@@ -329,9 +339,11 @@ def _colour_mask(frame: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     Exact predicates rather than a tolerance: a "within N of this RGB" formulation
     flips the answer with N, and one setting attacks the friend.
     """
-    red = frame[:, :, 0].astype(np.int16)
+    # BGR, because that is what the device gives us. Naming the channels rather
+    # than indexing by convention is what stops the swap bug coming back.
+    blue = frame[:, :, 0].astype(np.int16)
     green = frame[:, :, 1].astype(np.int16)
-    blue = frame[:, :, 2].astype(np.int16)
+    red = frame[:, :, 2].astype(np.int16)
     friend = (green > 120) & (red < 110) & (green - red > 60) & (green - blue > 40)
     guild = (
         (green > 130)
@@ -347,7 +359,7 @@ def find_badges(frame: np.ndarray) -> list[Badge]:
     """Every badge on the frame, found by colour then filtered by shape.
 
     Args:
-        frame: RGB frame, 1080x1920.
+        frame: BGR frame, 1080x1920, straight from `get_screenshot()`.
 
     Returns:
         One `Badge` per qualifying component, in no particular order.
@@ -842,6 +854,8 @@ for src, box, dst in [
 ]:
     Image.open(D+src).convert("RGB").crop(box).save(T+dst)
     print("cut", dst)
+# PNG on disk is colour-order agnostic: PIL writes it, cv2.imread reads it back as BGR,
+# and every consumer here uses cv2.imread. No conversion anywhere in the pipeline.
 CUT
 ```
 
@@ -874,9 +888,9 @@ DATA = Path(__file__).parent / "data"
 
 def _frame(name):
     path = next(DATA.glob(f"{name}*.png"))
-    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    assert bgr is not None, path
-    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    frame = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    assert frame is not None, path
+    return frame  # BGR, exactly as get_screenshot() delivers it - do NOT convert
 
 
 def test_every_template_fits_inside_its_search_region():
@@ -968,10 +982,11 @@ _TICK_TEMPLATE = "arena/give_up_confirm.png"
 
 
 def _load(name: str) -> np.ndarray:
-    bgr = cv2.imread(str(_TEMPLATES / name), cv2.IMREAD_COLOR)
-    if bgr is None:
+    """Load a template in BGR, matching what the device and cv2.imread both give."""
+    template = cv2.imread(str(_TEMPLATES / name), cv2.IMREAD_COLOR)
+    if template is None:
         raise FileNotFoundError(_TEMPLATES / name)
-    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return template
 
 
 def _best(region: np.ndarray, template: np.ndarray) -> tuple[float, Point]:
@@ -1136,7 +1151,7 @@ def archive(frame: np.ndarray, mode: Mode, outcome: str) -> Path | None:
         directory.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         path = directory / f"{mode.value}-{stamp}-{outcome}.png"
-        cv2.imwrite(str(path), cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(str(path), frame)  # already BGR
         return path
     except Exception as exc:  # noqa: BLE001 - never worth a match
         logging.debug(f"[FF-10] could not archive frame: {exc}")
@@ -1180,7 +1195,7 @@ DATA = Path(__file__).parent / "data"
 
 def _frame(name):
     path = next(DATA.glob(f"{name}*.png"))
-    return cv2.cvtColor(cv2.imread(str(path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+    return cv2.imread(str(path), cv2.IMREAD_COLOR)  # BGR, as the device delivers
 
 
 class _NoText:
@@ -1286,7 +1301,7 @@ def evaluate(
     """Read one select-opponent frame and decide what to do about it.
 
     Args:
-        frame: RGB screenshot at 1080x1920.
+        frame: BGR screenshot at 1080x1920, as `get_screenshot()` returns it.
         mode: which screen this is.
         position: the user's configured Opponent Position (ignored for Arena).
         ocr_backend: anything exposing `detect_text_blocks`.
@@ -1341,25 +1356,28 @@ __all__ = ["Action", "Decision", "Mode", "evaluate"]
 - Modify: `mixins/arena.py`
 - Test: `tests/.../friendly_fire/test_arena_wiring.py`
 
-**Interfaces:**
-- Consumes: `friendly_fire.evaluate`, `Action`, `Mode`
-
 - [ ] **Step 1: Write the failing test**
 
 ```python
 """Arena wiring, with a stub standing in for the device."""
 
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import numpy as np
-import pytest
+import cv2
 
 sys.modules.setdefault("pytauri", MagicMock())
 sys.modules.setdefault("adb_auto_player.ext_mod", MagicMock())
 
 from adb_auto_player.games.afk_journey.mixins.arena import ArenaMixin  # noqa: E402
+from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (  # noqa: E402
+    CARD_X_RANGES,
+    Mode,
+)
+
+DATA = Path(__file__).parent / "data"
 
 
 class _Stub(ArenaMixin):
@@ -1379,19 +1397,10 @@ def test_the_guard_reports_on_when_enabled():
     assert _Stub(True)._friendly_fire_enabled() is True
 
 
-def test_the_card_tap_point_is_found_for_every_card():
-    """Arena's existing code searches only the left 40%, so it cannot reach card 2.
-    Searching per card x-range finds all three at >= 0.99."""
-    from pathlib import Path
-
-    import cv2
-    from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
-        CARD_X_RANGES,
-        Mode,
-    )
-
-    data = Path(__file__).parent / "data"
-    frame = cv2.imread(str(next(data.glob("01*.png"))), cv2.IMREAD_COLOR)
+def test_every_card_is_locatable_by_the_existing_template():
+    """Arena's current code searches only the left 40%, which is exactly why it
+    cannot reach card 2. Per card x-range, all three match at >= 0.99."""
+    frame = cv2.imread(str(next(DATA.glob("01*.png"))), cv2.IMREAD_COLOR)
     template = cv2.imread(
         str(
             Path(__file__).parents[5]
@@ -1404,11 +1413,19 @@ def test_the_card_tap_point_is_found_for_every_card():
         assert result.max() >= 0.99, f"card {index + 1} not located"
 ```
 
-- [ ] **Step 2: Patch `arena.py`**
+- [ ] **Step 2: Patch `arena.py`** (write the patch to a file, apply with `git apply` - never the Edit tool on a `.py` file)
 
-Write the patch to a file and apply it with `git apply` - never the Edit tool on a `.py` file.
+Module-level constants, beside the existing ones:
 
-Add the imports:
+```python
+# The guard re-reads after every refresh. Bounded so a screen that never changes
+# cannot loop forever; the real exit is the control turning into the X.
+_MAX_FRIENDLY_FIRE_ROUNDS = 12
+# Centre of the bottom-right control, per mode, from CONTROL_REGION.
+_ARENA_CONTROL_AT = Point(967, 1794)
+```
+
+Imports:
 
 ```python
 from adb_auto_player.games.afk_journey.services.friendly_fire import (
@@ -1422,9 +1439,11 @@ from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
     CARD_X_RANGES,
 )
+from adb_auto_player.games.afk_journey.settings import OpponentPosition
+from adb_auto_player.ocr import RapidOCRBackend
 ```
 
-Add the helpers and the guarded path:
+Methods:
 
 ```python
     def _friendly_fire_enabled(self) -> bool:
@@ -1432,12 +1451,20 @@ Add the helpers and the guarded path:
         arena = getattr(self.settings, "arena", None)
         return bool(getattr(arena, "prevent_friendly_fire", False))
 
-    def _tap_arena_card(self, index: int) -> bool:
-        """Tap opponent card `index` by locating it within its own x-range.
+    def _ff_ocr(self) -> RapidOCRBackend:
+        """One OCR backend per run, built lazily.
 
-        The existing code matches this same template inside CropRegions(right=0.6) -
-        the left 40% - which is exactly why it can only ever find card 1.
+        There is no `ocr_backend` attribute on the base class - every mode that
+        needs OCR constructs its own, as `solstice_clash.py:2112` does.
         """
+        backend = getattr(self, "_ff_ocr_cache", None)
+        if backend is None:
+            backend = RapidOCRBackend()
+            self._ff_ocr_cache = backend
+        return backend
+
+    def _tap_arena_card(self, index: int) -> bool:
+        """Tap opponent card `index`, located within its own x-range."""
         x0, x1 = CARD_X_RANGES[FFMode.ARENA][index]
         crop = CropRegions(left=x0 / 1080, right=(1080 - x1) / 1080)
         match = self.game_find_template_match(
@@ -1449,66 +1476,242 @@ Add the helpers and the guarded path:
         self.tap(match)
         return True
 
-    def _choose_opponent_guarded(self) -> bool:
-        """Pick an opponent that is not a Friend or Guild Member.
+    def _ff_give_up(self) -> bool:
+        """Forfeit the challenge. Two positive matches before anything is tapped.
 
-        Loops: read, decide, act. Refreshing re-reads; exhaustion either forfeits or
-        stops, and every tap on the forfeit path is positively matched first.
+        The X is already the control - that is what a GIVE_UP decision means - so
+        tap it FIRST to raise the dialog, then match the tick and tap that. An
+        earlier draft looked for the tick before opening the dialog, so it could
+        never find one and never forfeited.
         """
-        for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
-            self.handle_popup_messages()
-            frame = self.get_screenshot()
-            decision = ff_evaluate(
-                frame,
-                FFMode.ARENA,
-                getattr(getattr(self.settings, "supreme_arena", None), "opponent_position", None)
-                or OpponentPosition.Left,
-                self.ocr_backend,
-            )
-            if decision.action is Action.TAKE:
-                return self._tap_arena_card(decision.card)
-            if decision.action is Action.STOP:
-                logging.warning(f"[FF-31] stopping: {decision.reason}")
-                return False
-            if decision.action is Action.REFRESH:
-                self.tap(_REFRESH_AT[FFMode.ARENA])
-                self.sleep_navigation()
-                continue
-            return self._give_up()
-        logging.warning("[FF-32] gave up looking for a non-friendly opponent")
-        return False
-
-    def _give_up(self) -> bool:
-        """Forfeit the challenge, with both matches required before any tap."""
+        self.tap(_ARENA_CONTROL_AT)
         self.sleep_navigation()
         tick = find_give_up_tick(self.get_screenshot())
         if tick is None:
             logging.error("[FF-33] give-up dialog did not appear - stopping")
             return False
         self.tap(tick)
+        self.sleep_navigation()
+        logging.info("[FF-34] gave up the challenge - every opponent was a friend")
+        return False
+
+    def _choose_opponent_guarded(self) -> bool:
+        """Pick an opponent that is neither a Friend nor a Guild Member."""
+        for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
+            self.handle_popup_messages()
+            decision = ff_evaluate(
+                self.get_screenshot(),
+                FFMode.ARENA,
+                OpponentPosition.Left,  # Arena has no position setting
+                self._ff_ocr(),
+            )
+            if decision.action is Action.TAKE:
+                return self._tap_arena_card(decision.card)
+            if decision.action is Action.STOP:
+                logging.warning(f"[FF-31] stopping: {decision.reason}")
+                return False
+            if decision.action is Action.GIVE_UP:
+                return self._ff_give_up()
+            self.tap(_ARENA_CONTROL_AT)
+            self.sleep_navigation()
+        logging.warning("[FF-32] no non-friendly opponent after the round cap")
         return False
 ```
 
-And in `_choose_opponent`, branch at the top:
+**Where the branch goes.** NOT at the top of `_choose_opponent`: that method first
+waits for and taps Challenge/Continue, and branching before it would evaluate the
+Arena landing screen instead of the card-selection screen. Branch immediately after
+the existing `self.tap(btn)` and `handle_popup_messages()`, replacing only the
+`wait_for_template("arena/opponent.png", ...)` and its `self.tap(opponent)`:
 
 ```python
-        if self._friendly_fire_enabled():
-            return self._choose_opponent_guarded()
+            self.handle_popup_messages()  # Clear any potential popups
+            if self._friendly_fire_enabled():
+                return self._choose_opponent_guarded()
+            opponent = self.wait_for_template(  # unchanged original path
 ```
 
-- [ ] **Step 3: Run the tests, lint, commit**
+- [ ] **Step 3: Run, lint, commit**
+
+```bash
+cd src-tauri && ../.venv/bin/python -m pytest src-python/tests/games/afk_journey/services/friendly_fire/ -q -p no:cacheprovider
+cd ~/Dev/webdevbar/adbautoplayer && uvx ruff check --fix src-tauri/src-python/adb_auto_player/games/afk_journey/ && uvx ruff format src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/arena.py
+git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): Arena wiring"
+```
 
 ---
 
 ### Task 10: Wire into Supreme Arena
 
-Identical shape to Task 9, with three differences:
+**Files:**
+- Modify: `mixins/supreme_arena.py`
+- Test: `tests/.../friendly_fire/test_supreme_arena_wiring.py`
 
-- `Mode.SUPREME_ARENA`
-- the tap is `self.tap(SA_TAP_POINTS[decision.card])` - no template location needed
-- the position passed to `evaluate` is `self.settings.supreme_arena.opponent_position`
+- [ ] **Step 1: Write the failing test**
 
-- [ ] Steps mirror Task 9 exactly. Repeat the code rather than referring back to it.
+```python
+"""Supreme Arena wiring. Same shape as Arena, but it taps fixed points and it has a
+position setting to respect."""
+
+import sys
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+sys.modules.setdefault("pytauri", MagicMock())
+sys.modules.setdefault("adb_auto_player.ext_mod", MagicMock())
+
+from adb_auto_player.games.afk_journey.mixins.supreme_arena import (  # noqa: E402
+    SupremeArenaMixin,
+)
+from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (  # noqa: E402
+    SA_TAP_POINTS,
+)
+from adb_auto_player.games.afk_journey.settings import OpponentPosition  # noqa: E402
+
+
+class _Stub(SupremeArenaMixin):
+    def __init__(self, on, position=OpponentPosition.Left):
+        self._s = SimpleNamespace(
+            supreme_arena=SimpleNamespace(
+                prevent_friendly_fire=on, opponent_position=position, attempts=5
+            )
+        )
+        self.taps = []
+
+    @property
+    def settings(self):
+        return self._s
+
+    def tap(self, coordinates, **kwargs):
+        self.taps.append(coordinates)
+
+
+def test_the_guard_is_off_by_default():
+    assert _Stub(False)._sa_friendly_fire_enabled() is False
+
+
+def test_the_guard_reports_on_when_enabled():
+    assert _Stub(True)._sa_friendly_fire_enabled() is True
+
+
+def test_the_configured_position_is_read_not_ignored():
+    """The toggle must never silently override a setting the user chose."""
+    bot = _Stub(True, OpponentPosition.Right)
+    assert bot._sa_position() is OpponentPosition.Right
+
+
+def test_tapping_a_card_uses_the_existing_fixed_points():
+    bot = _Stub(True)
+    bot._tap_sa_card(1)
+    assert bot.taps == [SA_TAP_POINTS[1]]
+```
+
+- [ ] **Step 2: Patch `supreme_arena.py`**
+
+Same module-level constant and imports as Task 9, with the control centre for this
+mode and no `CARD_X_RANGES` import:
+
+```python
+_MAX_FRIENDLY_FIRE_ROUNDS = 12
+_SA_CONTROL_AT = Point(944, 1788)
+```
+
+```python
+from adb_auto_player.games.afk_journey.services.friendly_fire import (
+    Action,
+    Mode as FFMode,
+    evaluate as ff_evaluate,
+)
+from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
+    find_give_up_tick,
+)
+from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
+    SA_TAP_POINTS,
+)
+from adb_auto_player.ocr import RapidOCRBackend
+```
+
+```python
+    def _sa_friendly_fire_enabled(self) -> bool:
+        """Whether the guard is on for Supreme Arena."""
+        return bool(
+            getattr(self.settings.supreme_arena, "prevent_friendly_fire", False)
+        )
+
+    def _sa_position(self) -> OpponentPosition:
+        """The user's configured card preference, which the guard respects."""
+        return self.settings.supreme_arena.opponent_position
+
+    def _sa_ocr(self) -> RapidOCRBackend:
+        """One OCR backend per run, built lazily - there is no base-class attribute."""
+        backend = getattr(self, "_sa_ocr_cache", None)
+        if backend is None:
+            backend = RapidOCRBackend()
+            self._sa_ocr_cache = backend
+        return backend
+
+    def _tap_sa_card(self, index: int) -> None:
+        """Tap opponent card `index` at its existing fixed point."""
+        self.tap(SA_TAP_POINTS[index])
+
+    def _sa_give_up(self) -> bool:
+        """Forfeit the challenge: tap the X, match the dialog tick, tap it."""
+        self.tap(_SA_CONTROL_AT)
+        self.sleep_navigation()
+        tick = find_give_up_tick(self.get_screenshot())
+        if tick is None:
+            logging.error("[FF-43] give-up dialog did not appear - stopping")
+            return False
+        self.tap(tick)
+        self.sleep_navigation()
+        logging.info("[FF-44] gave up the challenge - every opponent was a friend")
+        return False
+
+    def _sa_choose_opponent_guarded(self) -> bool:
+        """Pick an opponent that is neither a Friend nor a Guild Member."""
+        for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
+            self.handle_popup_messages()
+            decision = ff_evaluate(
+                self.get_screenshot(),
+                FFMode.SUPREME_ARENA,
+                self._sa_position(),
+                self._sa_ocr(),
+            )
+            if decision.action is Action.TAKE:
+                self._tap_sa_card(decision.card)
+                return True
+            if decision.action is Action.STOP:
+                logging.warning(f"[FF-41] stopping: {decision.reason}")
+                return False
+            if decision.action is Action.GIVE_UP:
+                return self._sa_give_up()
+            self.tap(_SA_CONTROL_AT)
+            self.sleep_navigation()
+        logging.warning("[FF-42] no non-friendly opponent after the round cap")
+        return False
+```
+
+**Where the branch goes.** In `_sa_choose_opponent`, after the Select Opponent screen
+has been reached and the `no_attempts_popup` case has been handled - that is, replacing
+only the `position = ...` / `opponent_x = ...` / `self.tap(Point(opponent_x, 950))`
+block, and keeping the `challenge_detail.png` tap that follows it:
+
+```python
+            if self._sa_friendly_fire_enabled():
+                if not self._sa_choose_opponent_guarded():
+                    return False
+            else:
+                position = self.settings.supreme_arena.opponent_position  # unchanged
+                ...
+```
+
+- [ ] **Step 3: Run, lint, commit**
+
+```bash
+cd src-tauri && ../.venv/bin/python -m pytest src-python/tests/games/afk_journey/services/friendly_fire/ -q -p no:cacheprovider
+cd ~/Dev/webdevbar/adbautoplayer && uvx ruff check --fix src-tauri/src-python/adb_auto_player/games/afk_journey/ && uvx ruff format src-tauri/src-python/adb_auto_player/games/afk_journey/mixins/supreme_arena.py
+git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): Supreme Arena wiring"
+```
 
 ---
 

@@ -129,12 +129,26 @@ has no way to tap card 2 at all.
 
 | mode | how to tap card N |
 |---|---|
-| Arena | the card's green sword button, located as a connected component within the card's x-range. Measured on frame 01: card 1 at (227, 1433), card 3 at (943, 1314). Staggered with their cards, so LOCATED rather than hardcoded |
+| Arena | match the EXISTING `arena/opponent.png` template inside the card's x-range and tap the match centre |
 | Supreme Arena | the existing hardcoded points, unchanged: (165, 950), (540, 950), (915, 950) |
 
-Those buttons are the same ~8000px round green components the badge detector rejects on
-shape, so one pass finds both: the `w/h ~ 0.7` blobs it discards are exactly the tap
-targets.
+Arena needs no new asset and no new detector: the change is only to the crop it is searched
+in. Today it runs against `CropRegions(right=0.6)`, the left 40%, which is why the current
+code can only ever find card 1. Searched per card x-range instead, measured across frames
+01 and 03:
+
+| card | match | centre |
+|---|---|---|
+| 1 | 1.00 | (183, 1447) |
+| 2 | 0.99 | (546, 1387) |
+| 3 | 0.99 | (900, 1328) |
+
+**An earlier draft proposed locating the green sword buttons as connected components,
+claiming the badge pass would find them for free. That was false and peer review measured
+it:** applying the badge predicate to Arena frames finds ~8000px sword components at cards 1
+and 3 only. Card 2's largest matching component is **52px**, below the 400px speck
+threshold - so the locator would have failed precisely on the fallback card the feature
+exists to reach.
 
 A component overlapping two ranges flags **both** cards. That is deliberate: a centre-based
 rule is undefined for a component sitting on a boundary, and the failure mode of guessing
@@ -246,10 +260,10 @@ no timer**, so a second confirming screenshot before acting is free.
 Per attempt, with the toggle on:
 
 1. Screenshot the select-opponent screen.
-2. Evaluate **cards 1 and 2 only**. The right card is never considered - it is routinely
-   outside the player's power bracket. This is a deliberate product decision, not a
-   detection limit.
-3. Take the first unflagged card, in **preference order** (see below).
+2. Evaluate the cards named by the **preference order** for the active `Opponent Position`
+   (see below). Under the default that is cards 1 and 2 only; card 3 is evaluated ONLY when
+   it is the configured choice, and is never used as a fallback for a flagged card.
+3. Take the first unflagged card in that order.
 4. If both are flagged: **classify the bottom-right control FIRST** (see "Classifying the
    control" below) - it is either
    Refresh or the X, and it must be positively matched as one of them before anything is
@@ -554,8 +568,11 @@ attempt was uncovered until this list.
 1. ~~Supreme Arena's Guild Member badge position is assumed.~~ **RESOLVED 2026-07-31** -
    observed on the right card (x 759-948, y 981-1020) and the middle card (x 446-636,
    y 1048-1091). Same band as Friend, same centre, same width across columns.
-2. **Arena card 3 and Supreme Arena card 3 are never evaluated**, so no geometry was
-   measured for them. If the product rule ever changes, that work is outstanding.
+2. **Card 3 is evaluated only under `Opponent Position = Right`**, which is not the
+   default. Its badge geometry has never been measured, because no observed frame carries a
+   badge there. Under Right, a card-3 badge is therefore detected by shape and OCR alone,
+   both of which are position-independent - but it is the one path with no fixture behind
+   it, and frame collection should be checked for one before anyone relies on it.
 3. **Badge bands were measured at 1080x1920 only.** Other resolutions are unverified.
 4. **No badge has been observed on Supreme Arena's LEFT card.** Its band is inferred from
    the two measured columns plus the card stagger. Mitigated by the OR rule and resolved

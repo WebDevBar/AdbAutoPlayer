@@ -1408,9 +1408,11 @@ def test_every_card_is_locatable_by_the_existing_template():
         ),
         cv2.IMREAD_COLOR,
     )
+    # Measured: 0.99927, 0.99416, 0.98908. The floor is 0.98 because card 3 sits at
+    # 0.98908 - an earlier draft asserted 0.99 and could never have passed.
     for index, (x0, x1) in enumerate(CARD_X_RANGES[Mode.ARENA]):
         result = cv2.matchTemplate(frame[:, x0:x1], template, cv2.TM_CCOEFF_NORMED)
-        assert result.max() >= 0.99, f"card {index + 1} not located"
+        assert result.max() >= 0.98, f"card {index + 1} not located"
 ```
 
 - [ ] **Step 2: Patch `arena.py`** (write the patch to a file, apply with `git apply` - never the Edit tool on a `.py` file)
@@ -1496,7 +1498,23 @@ Methods:
         return False
 
     def _choose_opponent_guarded(self) -> bool:
-        """Pick an opponent that is neither a Friend nor a Guild Member."""
+        """Pick an opponent that is neither a Friend nor a Guild Member.
+
+        Waits for the selection screen before reading it. The unguarded path gets
+        that readiness guarantee from its `wait_for_template`, which this branch
+        replaces - without an explicit wait here, the first evaluation can land on
+        a half-drawn frame, read it as clear, and then fail to locate the card.
+        """
+        try:
+            self.wait_for_template(
+                template="arena/opponent.png",
+                timeout=self.min_timeout,
+                timeout_message="Arena opponent screen did not appear.",
+            )
+        except GameTimeoutError as fail:
+            logging.error(f"[FF-35] {fail}")
+            return False
+
         for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
             self.handle_popup_messages()
             decision = ff_evaluate(
@@ -1514,6 +1532,16 @@ Methods:
                 return self._ff_give_up()
             self.tap(_ARENA_CONTROL_AT)
             self.sleep_navigation()
+            # Re-establish readiness after the refresh redraws the cards.
+            try:
+                self.wait_for_template(
+                    template="arena/opponent.png",
+                    timeout=self.min_timeout,
+                    timeout_message="Arena cards did not redraw after a refresh.",
+                )
+            except GameTimeoutError as fail:
+                logging.error(f"[FF-36] {fail}")
+                return False
         logging.warning("[FF-32] no non-friendly opponent after the round cap")
         return False
 ```

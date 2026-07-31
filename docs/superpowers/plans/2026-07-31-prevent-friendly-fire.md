@@ -29,7 +29,9 @@
 
 | File | Responsibility |
 |---|---|
-| `services/friendly_fire/__init__.py` | Public surface: `evaluate_cards`, `Verdict`, `choose_card` |
+| `services/friendly_fire/__init__.py` | Public surface: `evaluate`, `Action`, `Decision`, `Mode` |
+| `services/friendly_fire/evaluate.py` | The orchestrator: colour + OCR + control -> one `Decision` |
+| `services/friendly_fire/control.py` | Classifying the Refresh/X control and finding the give-up tick |
 | `services/friendly_fire/geometry.py` | Every measured constant: card x-ranges, OCR y-ranges, control regions, template crops, tap points |
 | `services/friendly_fire/detect.py` | Pure detection: badge components, card assignment, OCR matching |
 | `services/friendly_fire/select.py` | Pure decision: preference order, what to do next |
@@ -443,6 +445,37 @@ def test_a_player_named_Friendzone_is_NOT_a_friend():
 def test_unrelated_text_does_not_match():
     for text in ("Refresh : 7/7", "Top 122", "MorganaLaFey", "1491", ""):
         assert not is_badge_text(text)
+
+
+def test_low_confidence_boxes_are_ignored():
+    """A shaky read must not flag a card and drive the refresh/forfeit ladder."""
+    from adb_auto_player.games.afk_journey.services.friendly_fire.detect import (
+        card_has_badge_text,
+    )
+    from adb_auto_player.models import ConfidenceValue
+
+    class _B:
+        def __init__(self, text, conf):
+            self.text = text
+            self.confidence = ConfidenceValue(conf)
+
+    assert card_has_badge_text([_B("Friend", 0.9)])
+    assert not card_has_badge_text([_B("Friend", 0.4)])
+
+
+def test_blocks_are_per_card_so_no_coordinate_mapping_is_needed():
+    """An earlier draft compared crop-local x against full-screen card ranges."""
+    from adb_auto_player.games.afk_journey.services.friendly_fire.detect import (
+        card_has_badge_text,
+    )
+    from adb_auto_player.models import ConfidenceValue
+
+    class _B:
+        def __init__(self, text):
+            self.text = text
+            self.confidence = ConfidenceValue(0.9)
+
+    assert not card_has_badge_text([_B("Bobo"), _B("Top 71")])
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -454,6 +487,7 @@ Expected: FAIL, `ImportError: cannot import name 'is_badge_text'`
 
 ```python
 _BADGE_TEXTS = frozenset({"friend", "guild member"})
+_OCR_FLOOR = 0.6
 
 
 def is_badge_text(text: str) -> bool:
@@ -466,25 +500,24 @@ def is_badge_text(text: str) -> bool:
     return " ".join(text.split()).casefold() in _BADGE_TEXTS
 
 
-def cards_with_badge_text(blocks: list, mode: Mode) -> set[int]:
-    """Card indices whose OCR contains a badge label.
+def card_has_badge_text(blocks: list) -> bool:
+    """Whether ONE card's OCR blocks contain a badge label.
+
+    Takes the blocks for a single card, so no coordinate mapping is needed: the
+    caller already cropped to that card. An earlier draft compared crop-local x
+    against full-screen card ranges, which silently misassigned every card but the
+    first.
 
     Args:
-        blocks: `OCRResult` items already filtered to the card's crop.
-        mode: which screen these came from.
+        blocks: `OCRResult` items from that card's crop only.
 
     Returns:
-        Indices of flagged cards.
+        True if any block is a badge label at or above the confidence floor.
     """
-    flagged: set[int] = set()
-    for block in blocks:
-        if not is_badge_text(block.text):
-            continue
-        centre_x = block.box.top_left.x + block.box.width // 2
-        for index, (x0, x1) in enumerate(CARD_X_RANGES[mode]):
-            if x0 <= centre_x <= x1:
-                flagged.add(index)
-    return flagged
+    return any(
+        block.confidence.value >= _OCR_FLOOR and is_badge_text(block.text)
+        for block in blocks
+    )
 ```
 
 - [ ] **Step 4: Run the tests, lint, commit**
@@ -786,69 +819,64 @@ git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): the toggl
 ### Task 6: Control classification and the give-up tick
 
 **Files:**
-- Create: `templates/arena/refresh_glyph.png`, `templates/arena/give_up_glyph.png`, `templates/supreme_arena/refresh_glyph.png`, `templates/arena/give_up_confirm.png`
-- Modify: `.../services/friendly_fire/detect.py`
+- Create: `templates/arena/refresh_glyph.png`, `arena/give_up_glyph.png`, `arena/give_up_confirm.png`, `supreme_arena/refresh_glyph.png`
+- Create: `.../services/friendly_fire/control.py`
 - Test: `tests/.../friendly_fire/test_control.py`
 
 **Interfaces:**
-- Produces: `classify_control(frame, mode, matcher) -> str` returning `"refresh" | "give_up" | "unknown"`
+- Produces: `classify_control(frame: np.ndarray, mode: Mode) -> str` returning `"refresh" | "give_up" | "unknown"`; `find_give_up_tick(frame: np.ndarray) -> Point | None`
 
 - [ ] **Step 1: Cut the templates from the fixtures**
 
 ```bash
 cd ~/Dev/webdevbar/adbautoplayer
-.venv/bin/python - <<'PY'
+.venv/bin/python - <<'CUT'
 from PIL import Image
 D = "src-tauri/src-python/tests/games/afk_journey/services/friendly_fire/data/"
 T = "src-tauri/src-python/adb_auto_player/games/afk_journey/templates/"
-cuts = [
+for src, box, dst in [
     ("01-friend-badge-middle-card-20260731.png", (930,1745,1010,1825), "arena/refresh_glyph.png"),
     ("03-refresh-exhausted-x-button-friend-on-left-20260731.png", (930,1745,1010,1825), "arena/give_up_glyph.png"),
     ("05-supreme-arena-select-opponent-no-badges-20260731.png", (905,1735,985,1815), "supreme_arena/refresh_glyph.png"),
     ("04-give-up-confirmation-dialog-20260731.png", (786,1163,947,1321), "arena/give_up_confirm.png"),
-]
-for src, box, dst in cuts:
+]:
     Image.open(D+src).convert("RGB").crop(box).save(T+dst)
     print("cut", dst)
-PY
+CUT
 ```
 
 - [ ] **Step 2: Write the failing test**
 
 ```python
-"""Classifying the bottom-right control. This decides whether we tap a control that
-forfeits a daily attempt, so the fixtures matter more here than anywhere else."""
+"""Classifying the bottom-right control, and finding the give-up tick.
+
+This decides whether we tap a control that forfeits a daily attempt, so the
+fixtures matter more here than anywhere else in the suite.
+"""
 
 from pathlib import Path
 
 import cv2
 import numpy as np
+from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
+    classify_control,
+    find_give_up_tick,
+)
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
     CONTROL_REGION,
+    GIVE_UP_CANCEL_CENTRE,
     GLYPH_TEMPLATE_BOX,
     Mode,
 )
 
 DATA = Path(__file__).parent / "data"
-TEMPLATES = (
-    Path(__file__).parents[5]
-    / "adb_auto_player/games/afk_journey/templates"
-)
 
 
 def _frame(name):
     path = next(DATA.glob(f"{name}*.png"))
-    return cv2.cvtColor(cv2.imread(str(path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-
-
-def _match(frame, mode, template_name):
-    x0, y0, x1, y1 = CONTROL_REGION[mode]
-    region = frame[y0:y1, x0:x1]
-    tpl = cv2.cvtColor(
-        cv2.imread(str(TEMPLATES / template_name), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB
-    )
-    res = cv2.matchTemplate(region, tpl, cv2.TM_CCOEFF_NORMED)
-    return float(res.max())
+    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    assert bgr is not None, path
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
 def test_every_template_fits_inside_its_search_region():
@@ -861,31 +889,161 @@ def test_every_template_fits_inside_its_search_region():
 
 
 def test_arena_refresh_and_x_are_told_apart():
-    assert _match(_frame("01"), Mode.ARENA, "arena/refresh_glyph.png") >= 0.8
-    assert _match(_frame("03"), Mode.ARENA, "arena/give_up_glyph.png") >= 0.8
+    assert classify_control(_frame("01"), Mode.ARENA) == "refresh"
+    assert classify_control(_frame("03"), Mode.ARENA) == "give_up"
 
 
-def test_supreme_arena_needs_its_OWN_refresh_template():
-    """Round 10: the Arena template scores 0.36 here. If someone deletes the
-    Supreme Arena template and points at Arena's, this must fail."""
-    assert _match(_frame("05"), Mode.SUPREME_ARENA, "supreme_arena/refresh_glyph.png") >= 0.8
-    assert _match(_frame("05"), Mode.SUPREME_ARENA, "arena/refresh_glyph.png") < 0.8
+def test_supreme_arena_is_classified_with_its_OWN_template():
+    """Round 10: the Arena refresh glyph scores 0.36 here. Deleting the Supreme
+    Arena template and pointing at Arena's must break this test, because the
+    symptom in production is a mode that quits instead of refreshing."""
+    assert classify_control(_frame("05"), Mode.SUPREME_ARENA) == "refresh"
+    assert classify_control(_frame("06"), Mode.SUPREME_ARENA) == "give_up"
 
 
-def test_the_x_template_is_genuinely_shared():
-    assert _match(_frame("06"), Mode.SUPREME_ARENA, "arena/give_up_glyph.png") >= 0.8
+def test_a_screen_with_no_control_is_unknown_not_guessed():
+    """The dialog frame has no bottom-right control. Unknown must never tap."""
+    assert classify_control(_frame("04"), Mode.ARENA) == "unknown"
+
+
+def test_the_give_up_tick_is_found_and_is_the_tap_target():
+    point = find_give_up_tick(_frame("04"))
+    assert point is not None
+    assert abs(point.x - 866) <= 12
+    assert abs(point.y - 1241) <= 12
+
+
+def test_the_tick_is_not_the_cancel_button():
+    """Recorded geometry exists so we can assert we are not tapping cancel."""
+    point = find_give_up_tick(_frame("04"))
+    assert abs(point.x - GIVE_UP_CANCEL_CENTRE.x) > 100
+
+
+def test_no_tick_on_a_screen_without_the_dialog():
+    for name in ("01", "05"):
+        assert find_give_up_tick(_frame(name)) is None
 ```
 
-- [ ] **Step 3: Run, confirm the numbers, commit**
+- [ ] **Step 3: Run it and watch it fail**
+
+Run: `cd src-tauri && ../.venv/bin/python -m pytest src-python/tests/games/afk_journey/services/friendly_fire/test_control.py -q -p no:cacheprovider`
+Expected: FAIL, `ModuleNotFoundError: ...friendly_fire.control`
+
+- [ ] **Step 4: Write `control.py`**
+
+```python
+"""The bottom-right control, and the give-up dialog.
+
+One of these two states forfeits a daily attempt, so nothing here guesses: the
+control is positively matched as Refresh or X, and anything else is "unknown",
+which the caller must treat as a reason to stop rather than to tap.
+"""
+
+import logging
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+from adb_auto_player.models.geometry import Point
+
+from .geometry import (
+    CONFIDENCE_FLOOR,
+    CONTROL_REGION,
+    GIVE_UP_TICK_REGION,
+    Mode,
+)
+
+_TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
+
+# The refresh glyph is NOT shared between modes: Arena's arrow is anticlockwise and
+# thin, Supreme Arena's clockwise and thick, and cross-matching scores 0.36 against a
+# 0.8 floor. The X IS shared - it cross-matches at 1.00 - so it has no per-mode variant.
+_REFRESH_TEMPLATE: dict[Mode, str] = {
+    Mode.ARENA: "arena/refresh_glyph.png",
+    Mode.SUPREME_ARENA: "supreme_arena/refresh_glyph.png",
+}
+_GIVE_UP_TEMPLATE = "arena/give_up_glyph.png"
+_TICK_TEMPLATE = "arena/give_up_confirm.png"
+
+
+def _load(name: str) -> np.ndarray:
+    bgr = cv2.imread(str(_TEMPLATES / name), cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise FileNotFoundError(_TEMPLATES / name)
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+
+def _best(region: np.ndarray, template: np.ndarray) -> tuple[float, Point]:
+    result = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
+    _, score, _, location = cv2.minMaxLoc(result)
+    centre = Point(
+        location[0] + template.shape[1] // 2, location[1] + template.shape[0] // 2
+    )
+    return float(score), centre
+
+
+def classify_control(frame: np.ndarray, mode: Mode) -> str:
+    """Whether the bottom-right control is Refresh, the X, or unrecognised.
+
+    Both-match and neither-match are BOTH "unknown". The two glyphs are visually
+    unalike, so a double match means the read is wrong - and resolving it by higher
+    confidence would spend a daily attempt on a coin toss.
+    """
+    x0, y0, x1, y1 = CONTROL_REGION[mode]
+    region = frame[y0:y1, x0:x1]
+    try:
+        refresh, _ = _best(region, _load(_REFRESH_TEMPLATE[mode]))
+        give_up, _ = _best(region, _load(_GIVE_UP_TEMPLATE))
+    except (FileNotFoundError, cv2.error) as exc:
+        logging.warning(f"[FF-20] could not classify the control: {exc}")
+        return "unknown"
+
+    is_refresh = refresh >= CONFIDENCE_FLOOR
+    is_give_up = give_up >= CONFIDENCE_FLOOR
+    if is_refresh == is_give_up:
+        return "unknown"
+    return "refresh" if is_refresh else "give_up"
+
+
+def find_give_up_tick(frame: np.ndarray) -> Point | None:
+    """The green confirm tick of the "Give up this challenge?" dialog.
+
+    Detected by the tick rather than the dialog sheet: the sheet is blank (pixel
+    std 4.8 against the tick's 54.5) so it carries no information, and the crop
+    that looked language-independent actually contained the sentence. The tick is
+    an icon, it is feature-rich, and it IS the tap target - so detection and action
+    cannot disagree.
+
+    Returns:
+        The matched centre to tap, or None if the dialog is not up.
+    """
+    x0, y0, x1, y1 = GIVE_UP_TICK_REGION
+    region = frame[y0:y1, x0:x1]
+    try:
+        score, centre = _best(region, _load(_TICK_TEMPLATE))
+    except (FileNotFoundError, cv2.error) as exc:
+        logging.warning(f"[FF-21] could not look for the give-up tick: {exc}")
+        return None
+    if score < CONFIDENCE_FLOOR:
+        return None
+    return Point(x0 + centre.x, y0 + centre.y)
+```
+
+- [ ] **Step 5: Run, lint, commit**
 
 ```bash
-cd src-tauri && ../.venv/bin/python -m pytest src-python/tests/games/afk_journey/services/friendly_fire/test_control.py -q -p no:cacheprovider
-git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): control glyph templates cut from the fixtures"
+cd src-tauri && ../.venv/bin/python -m pytest src-python/tests/games/afk_journey/services/friendly_fire/ -q -p no:cacheprovider
+cd ~/Dev/webdevbar/adbautoplayer && uvx ruff check --fix src-tauri/src-python/adb_auto_player/games/afk_journey/services/friendly_fire/ && uvx ruff format src-tauri/src-python/adb_auto_player/games/afk_journey/services/friendly_fire/
+git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): classify the control and locate the give-up tick"
 ```
 
 ---
 
 ### Task 7: Frame collection
+
+Unchanged from the previous numbering - see the `collect.py` task below, which now
+follows control classification.
 
 **Files:**
 - Create: `.../services/friendly_fire/collect.py`
@@ -899,9 +1057,6 @@ git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): control g
 ```python
 """Frame collection. Must work on a machine that is not the author's."""
 
-import os
-from pathlib import Path
-
 import numpy as np
 from adb_auto_player.games.afk_journey.services.friendly_fire.collect import (
     archive,
@@ -910,20 +1065,20 @@ from adb_auto_player.games.afk_journey.services.friendly_fire.collect import (
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import Mode
 
 
-def test_the_directory_is_NOT_the_authors_vault_mount():
+def test_the_directory_is_NOT_the_authors_vault_mount(monkeypatch):
     """The spec's earlier draft named /mnt/vault, which no end user has."""
+    monkeypatch.delenv("ADB_FRIENDLY_FIRE_DIR", raising=False)
     assert "/mnt/vault" not in str(collection_dir())
 
 
-def test_it_lands_under_the_per_user_data_dir(tmp_path, monkeypatch):
+def test_it_honours_an_override(tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
     assert collection_dir() == tmp_path
 
 
 def test_archiving_writes_a_named_frame(tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
-    frame = np.zeros((20, 20, 3), dtype=np.uint8)
-    out = archive(frame, Mode.ARENA, "flagged-1")
+    out = archive(np.zeros((20, 20, 3), dtype=np.uint8), Mode.ARENA, "flagged-1")
     assert out is not None and out.exists()
     assert "arena" in out.name and "flagged-1" in out.name
 
@@ -940,7 +1095,7 @@ def test_a_write_failure_never_raises(monkeypatch):
 """Archiving evaluated frames, so the unobserved cases can be studied later.
 
 Not /mnt/vault: that is the author's machine. This app ships to Windows and macOS,
-so the destination is resolved the same way the Solstice Clash mode resolves it.
+so the destination is resolved the way the Solstice Clash mode resolves it.
 """
 
 import logging
@@ -979,7 +1134,7 @@ def archive(frame: np.ndarray, mode: Mode, outcome: str) -> Path | None:
     try:
         directory = collection_dir()
         directory.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         path = directory / f"{mode.value}-{stamp}-{outcome}.png"
         cv2.imwrite(str(path), cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         return path
@@ -992,19 +1147,207 @@ def archive(frame: np.ndarray, mode: Mode, outcome: str) -> Path | None:
 
 ---
 
-### Task 8: Wire into Arena
+### Task 8: The orchestrator - the package's public surface
+
+This is the task the mixins actually call. It is the only place colour, OCR, the
+control and the decision meet.
 
 **Files:**
-- Modify: `mixins/arena.py` (`_choose_opponent`, currently lines 96-127)
-- Test: `tests/.../friendly_fire/test_arena_integration.py`
+- Create: `.../services/friendly_fire/evaluate.py`
+- Modify: `.../services/friendly_fire/__init__.py`
+- Test: `tests/.../friendly_fire/test_evaluate.py`
 
 **Interfaces:**
-- Consumes: everything above.
+- Consumes: `detect.cards_with_badges`, `detect.card_has_badge_text`, `control.classify_control`, `select.decide`, `select.preference_order`, `collect.archive`
+- Produces: `CardReport` (frozen dataclass: `index: int`, `colour: bool`, `ocr: bool`), `evaluate(frame, mode, position, ocr_backend) -> Decision`
 
-- [ ] **Step 1: Write the failing test using a stub, not a device**
+- [ ] **Step 1: Write the failing test**
 
 ```python
-"""Arena wiring. A stub records taps instead of performing them."""
+"""The orchestrator. A fake OCR backend keeps this device-free and deterministic."""
+
+from pathlib import Path
+
+import cv2
+import numpy as np
+from adb_auto_player.games.afk_journey.services.friendly_fire.evaluate import evaluate
+from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import Mode
+from adb_auto_player.games.afk_journey.services.friendly_fire.select import Action
+from adb_auto_player.games.afk_journey.settings import OpponentPosition
+
+DATA = Path(__file__).parent / "data"
+
+
+def _frame(name):
+    path = next(DATA.glob(f"{name}*.png"))
+    return cv2.cvtColor(cv2.imread(str(path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+
+
+class _NoText:
+    """An OCR backend that finds nothing, isolating the colour arm."""
+
+    def detect_text_blocks(self, image, min_confidence=None):
+        return []
+
+
+def test_a_flagged_middle_card_is_skipped_for_card_1(monkeypatch, tmp_path):
+    monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
+    d = evaluate(_frame("01"), Mode.ARENA, OpponentPosition.Left, _NoText())
+    assert d.action is Action.TAKE and d.card == 0
+
+
+def test_a_flagged_first_card_falls_through_to_card_2(monkeypatch, tmp_path):
+    """Frame 03 has the badge on the LEFT card and refreshes exhausted."""
+    monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
+    d = evaluate(_frame("03"), Mode.ARENA, OpponentPosition.Left, _NoText())
+    assert d.action is Action.TAKE and d.card == 1
+
+
+def test_a_clean_board_takes_the_first_card(monkeypatch, tmp_path):
+    monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
+    d = evaluate(_frame("05"), Mode.SUPREME_ARENA, OpponentPosition.Left, _NoText())
+    assert d.action is Action.TAKE and d.card == 0
+
+
+def test_the_configured_position_is_respected(monkeypatch, tmp_path):
+    """Frame 08 flags the MIDDLE card, so Middle must fall through to card 1."""
+    monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
+    d = evaluate(_frame("08"), Mode.SUPREME_ARENA, OpponentPosition.Middle, _NoText())
+    assert d.action is Action.TAKE and d.card == 0
+
+
+def test_every_evaluation_archives_its_frame(monkeypatch, tmp_path):
+    monkeypatch.setenv("ADB_FRIENDLY_FIRE_DIR", str(tmp_path))
+    evaluate(_frame("01"), Mode.ARENA, OpponentPosition.Left, _NoText())
+    assert list(tmp_path.glob("*.png"))
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Expected: FAIL, `ModuleNotFoundError: ...friendly_fire.evaluate`
+
+- [ ] **Step 3: Write `evaluate.py`**
+
+```python
+"""Where the two signals, the control and the decision meet."""
+
+import logging
+from dataclasses import dataclass
+
+import numpy as np
+
+from adb_auto_player.models import ConfidenceValue
+from adb_auto_player.games.afk_journey.settings import OpponentPosition
+
+from .collect import archive
+from .control import classify_control
+from .detect import card_has_badge_text, cards_with_badges
+from .geometry import CARD_X_RANGES, OCR_CONFIDENCE_FLOOR, OCR_Y_RANGE, Mode
+from .select import Decision, decide, preference_order
+
+
+@dataclass(frozen=True)
+class CardReport:
+    """What each signal said about one card."""
+
+    index: int
+    colour: bool
+    ocr: bool
+
+
+def _ocr_flags(frame: np.ndarray, mode: Mode, cards, ocr_backend) -> set[int]:
+    """Which of `cards` carry badge text.
+
+    Each card is OCR'd from its OWN crop, so the results need no coordinate
+    mapping back to screen space - which is where an earlier draft went wrong.
+    """
+    flagged: set[int] = set()
+    y0, y1 = OCR_Y_RANGE[mode]
+    for index in cards:
+        x0, x1 = CARD_X_RANGES[mode][index]
+        try:
+            blocks = ocr_backend.detect_text_blocks(
+                frame[y0:y1, x0:x1], ConfidenceValue(OCR_CONFIDENCE_FLOOR)
+            )
+        except Exception as exc:  # noqa: BLE001 - OCR failure must not abort the mode
+            logging.warning(f"[FF-22] OCR failed on card {index + 1}: {exc}")
+            continue
+        if card_has_badge_text(blocks):
+            flagged.add(index)
+    return flagged
+
+
+def evaluate(
+    frame: np.ndarray,
+    mode: Mode,
+    position: OpponentPosition,
+    ocr_backend,
+) -> Decision:
+    """Read one select-opponent frame and decide what to do about it.
+
+    Args:
+        frame: RGB screenshot at 1080x1920.
+        mode: which screen this is.
+        position: the user's configured Opponent Position (ignored for Arena).
+        ocr_backend: anything exposing `detect_text_blocks`.
+
+    Returns:
+        The action to take, with a reason for the log.
+    """
+    order = preference_order(mode, position)
+    colour = cards_with_badges(frame, mode) & set(order)
+    ocr = _ocr_flags(frame, mode, order, ocr_backend)
+    control = classify_control(frame, mode)
+    decision = decide(order, colour, ocr, control)
+
+    disagreement = colour ^ ocr
+    outcome = "-".join(
+        [
+            decision.action.value,
+            f"colour{sorted(c + 1 for c in colour)}",
+            f"ocr{sorted(c + 1 for c in ocr)}",
+            control,
+        ]
+    ).replace(" ", "")
+    archive(frame, mode, outcome + ("-DISAGREE" if disagreement else ""))
+
+    logging.info(
+        f"[FF-01] {mode.value}: colour flagged {sorted(c + 1 for c in colour)}, "
+        f"OCR flagged {sorted(c + 1 for c in ocr)}, control={control} "
+        f"-> {decision.action.value} ({decision.reason})"
+    )
+    return decision
+```
+
+And export it:
+
+```python
+"""Prevent Friendly Fire: never attack a Friend or a Guild Member."""
+
+from .evaluate import evaluate
+from .geometry import Mode
+from .select import Action, Decision
+
+__all__ = ["Action", "Decision", "Mode", "evaluate"]
+```
+
+- [ ] **Step 4: Run, lint, commit**
+
+---
+
+### Task 9: Wire into Arena
+
+**Files:**
+- Modify: `mixins/arena.py`
+- Test: `tests/.../friendly_fire/test_arena_wiring.py`
+
+**Interfaces:**
+- Consumes: `friendly_fire.evaluate`, `Action`, `Mode`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+"""Arena wiring, with a stub standing in for the device."""
 
 import sys
 from types import SimpleNamespace
@@ -1020,51 +1363,160 @@ from adb_auto_player.games.afk_journey.mixins.arena import ArenaMixin  # noqa: E
 
 
 class _Stub(ArenaMixin):
-    def __init__(self, toggle_on):
-        self._s = SimpleNamespace(arena=SimpleNamespace(prevent_friendly_fire=toggle_on))
-        self.taps = []
+    def __init__(self, on):
+        self._s = SimpleNamespace(arena=SimpleNamespace(prevent_friendly_fire=on))
 
     @property
     def settings(self):
         return self._s
 
-    def tap(self, coordinates, **kwargs):
-        self.taps.append(coordinates)
+
+def test_the_guard_is_off_by_default_and_reports_so():
+    assert _Stub(False)._friendly_fire_enabled() is False
 
 
-def test_with_the_toggle_OFF_the_guard_never_runs():
-    """Off is the default; the old path must be untouched."""
-    bot = _Stub(toggle_on=False)
-    assert bot._friendly_fire_enabled() is False
+def test_the_guard_reports_on_when_enabled():
+    assert _Stub(True)._friendly_fire_enabled() is True
 
 
-def test_with_the_toggle_ON_the_guard_runs():
-    assert _Stub(toggle_on=True)._friendly_fire_enabled() is True
+def test_the_card_tap_point_is_found_for_every_card():
+    """Arena's existing code searches only the left 40%, so it cannot reach card 2.
+    Searching per card x-range finds all three at >= 0.99."""
+    from pathlib import Path
+
+    import cv2
+    from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
+        CARD_X_RANGES,
+        Mode,
+    )
+
+    data = Path(__file__).parent / "data"
+    frame = cv2.imread(str(next(data.glob("01*.png"))), cv2.IMREAD_COLOR)
+    template = cv2.imread(
+        str(
+            Path(__file__).parents[5]
+            / "adb_auto_player/games/afk_journey/templates/arena/opponent.png"
+        ),
+        cv2.IMREAD_COLOR,
+    )
+    for index, (x0, x1) in enumerate(CARD_X_RANGES[Mode.ARENA]):
+        result = cv2.matchTemplate(frame[:, x0:x1], template, cv2.TM_CCOEFF_NORMED)
+        assert result.max() >= 0.99, f"card {index + 1} not located"
 ```
 
-- [ ] **Step 2: Implement `_choose_opponent` with the guard**
+- [ ] **Step 2: Patch `arena.py`**
 
-Restructure so that with the toggle off the existing code runs unchanged, and with it on the loop is: screenshot, `handle_popup_messages()`, evaluate, decide, act. Locate the card tap by matching `arena/opponent.png` inside the card's x-range, which is the change that lets it reach card 2 at all.
+Write the patch to a file and apply it with `git apply` - never the Edit tool on a `.py` file.
 
-- [ ] **Step 3: Run the full solstice + friendly-fire suites, lint, commit**
+Add the imports:
+
+```python
+from adb_auto_player.games.afk_journey.services.friendly_fire import (
+    Action,
+    Mode as FFMode,
+    evaluate as ff_evaluate,
+)
+from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
+    find_give_up_tick,
+)
+from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
+    CARD_X_RANGES,
+)
+```
+
+Add the helpers and the guarded path:
+
+```python
+    def _friendly_fire_enabled(self) -> bool:
+        """Whether the guard is on for this mode."""
+        arena = getattr(self.settings, "arena", None)
+        return bool(getattr(arena, "prevent_friendly_fire", False))
+
+    def _tap_arena_card(self, index: int) -> bool:
+        """Tap opponent card `index` by locating it within its own x-range.
+
+        The existing code matches this same template inside CropRegions(right=0.6) -
+        the left 40% - which is exactly why it can only ever find card 1.
+        """
+        x0, x1 = CARD_X_RANGES[FFMode.ARENA][index]
+        crop = CropRegions(left=x0 / 1080, right=(1080 - x1) / 1080)
+        match = self.game_find_template_match(
+            template="arena/opponent.png", crop_regions=crop
+        )
+        if match is None:
+            logging.error(f"[FF-30] could not locate card {index + 1}")
+            return False
+        self.tap(match)
+        return True
+
+    def _choose_opponent_guarded(self) -> bool:
+        """Pick an opponent that is not a Friend or Guild Member.
+
+        Loops: read, decide, act. Refreshing re-reads; exhaustion either forfeits or
+        stops, and every tap on the forfeit path is positively matched first.
+        """
+        for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
+            self.handle_popup_messages()
+            frame = self.get_screenshot()
+            decision = ff_evaluate(
+                frame,
+                FFMode.ARENA,
+                getattr(getattr(self.settings, "supreme_arena", None), "opponent_position", None)
+                or OpponentPosition.Left,
+                self.ocr_backend,
+            )
+            if decision.action is Action.TAKE:
+                return self._tap_arena_card(decision.card)
+            if decision.action is Action.STOP:
+                logging.warning(f"[FF-31] stopping: {decision.reason}")
+                return False
+            if decision.action is Action.REFRESH:
+                self.tap(_REFRESH_AT[FFMode.ARENA])
+                self.sleep_navigation()
+                continue
+            return self._give_up()
+        logging.warning("[FF-32] gave up looking for a non-friendly opponent")
+        return False
+
+    def _give_up(self) -> bool:
+        """Forfeit the challenge, with both matches required before any tap."""
+        self.sleep_navigation()
+        tick = find_give_up_tick(self.get_screenshot())
+        if tick is None:
+            logging.error("[FF-33] give-up dialog did not appear - stopping")
+            return False
+        self.tap(tick)
+        return False
+```
+
+And in `_choose_opponent`, branch at the top:
+
+```python
+        if self._friendly_fire_enabled():
+            return self._choose_opponent_guarded()
+```
+
+- [ ] **Step 3: Run the tests, lint, commit**
 
 ---
 
-### Task 9: Wire into Supreme Arena
+### Task 10: Wire into Supreme Arena
 
-**Files:**
-- Modify: `mixins/supreme_arena.py` (`_sa_choose_opponent`, currently lines 63-157)
+Identical shape to Task 9, with three differences:
 
-Same shape as Task 8, but tapping `SA_TAP_POINTS[card]` rather than locating a template, and passing `settings.supreme_arena.opponent_position` into `preference_order`.
+- `Mode.SUPREME_ARENA`
+- the tap is `self.tap(SA_TAP_POINTS[decision.card])` - no template location needed
+- the position passed to `evaluate` is `self.settings.supreme_arena.opponent_position`
 
-- [ ] Steps mirror Task 8.
+- [ ] Steps mirror Task 9 exactly. Repeat the code rather than referring back to it.
 
 ---
 
-### Task 10: Changelog, version bump, build
+### Task 11: Changelog, version bump, build
 
-- [ ] Add a `CHANGELOG.md` entry under Unreleased describing the toggle, the default-off decision, and the give-up behaviour.
+- [ ] Add a `CHANGELOG.md` entry under Unreleased: the toggle, default off, the refresh-then-give-up ladder, and that one signal can skip a card but never forfeit an attempt.
 - [ ] Bump `WDB_RELEASE` in BOTH `wdb_version.py` and `src/lib/wdb-version.ts` - the build refuses if they disagree.
+- [ ] Run the whole solstice + friendly-fire + auto-bet suites and show the pass count.
 - [ ] `./build-rpm.sh`, then report the install command. Do not install; the operator restarts the collector themselves.
 
 ---

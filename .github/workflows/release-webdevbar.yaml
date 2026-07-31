@@ -100,6 +100,48 @@ jobs:
             echo "::warning::ADB_SYNC_KEY_BUILTIN is not set - sync will be disabled in this build"
           fi
 
+      # The RPM's release number is derived from wdb_version.py, exactly as
+      # build-rpm.sh does it locally. Without this the workflow packages whatever
+      # value happens to be COMMITTED in tauri.bundle.linux.json - and that file is
+      # written by build-rpm.sh at build time, i.e. after the commit, so it always
+      # trails by one bump. Release wdb-12.9.25-26 shipped an RPM labelled -25 for
+      # exactly this reason. The code's number is the source of truth; packaging
+      # follows it.
+      - name: Derive the packaging release number from the code
+        if: runner.os == 'Linux'
+        run: |
+          WDB_RELEASE="$(sed -n 's/^WDB_RELEASE = "\(.*\)"/\1/p' \
+            src-tauri/src-python/adb_auto_player/wdb_version.py)"
+          if [ -z "$WDB_RELEASE" ]; then
+            echo "::error::could not read WDB_RELEASE from wdb_version.py"
+            exit 1
+          fi
+          python3 - "$WDB_RELEASE" <<'PYEOF'
+          import json, sys
+          from pathlib import Path
+          p = Path("src-tauri/tauri.bundle.linux.json")
+          cfg = json.loads(p.read_text())
+          cfg["bundle"]["linux"]["rpm"]["release"] = sys.argv[1]
+          p.write_text(json.dumps(cfg, indent=2) + "\n")
+          PYEOF
+          echo "RPM release set from wdb_version.py: $WDB_RELEASE"
+
+      # The frontend carries its own copy of the release number because the GUI logs
+      # a version before Python is reachable. Two copies can drift silently and would
+      # ship a build whose log lies about which version is running, so this refuses to
+      # build rather than let that out - the same guard build-rpm.sh applies locally.
+      - name: Refuse to build on a version mismatch
+        run: |
+          PY_RELEASE="$(sed -n 's/^WDB_RELEASE = "\(.*\)"/\1/p' \
+            src-tauri/src-python/adb_auto_player/wdb_version.py)"
+          UI_RELEASE="$(sed -n 's/^export const WDB_RELEASE = "\(.*\)";/\1/p' \
+            src/lib/wdb-version.ts)"
+          if [ "$PY_RELEASE" != "$UI_RELEASE" ]; then
+            echo "::error::WDB release mismatch - python says $PY_RELEASE, frontend says $UI_RELEASE"
+            exit 1
+          fi
+          echo "WDB release $PY_RELEASE, python and frontend agree"
+
       - name: Download python-build-standalone
         env:
           PYTHON_VERSION: "3.13.9"

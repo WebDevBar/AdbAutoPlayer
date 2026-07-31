@@ -153,6 +153,11 @@ const APP_SETTINGS_SCHEMA: &str = r##"
           "default": false,
           "title": "Close button should minimize the window",
           "type": "boolean"
+        },
+        "minimize_should_go_to_tray": {
+          "default": false,
+          "title": "Minimize button should hide to the system tray",
+          "type": "boolean"
         }
       },
       "title": "UISettings",
@@ -243,6 +248,9 @@ pub struct UISettings {
 
     #[serde(default)]
     pub close_should_minimize: bool,
+
+    #[serde(default)]
+    pub minimize_should_go_to_tray: bool,
 }
 
 // ---------- NotificationSettings ----------

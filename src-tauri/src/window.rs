@@ -45,6 +45,35 @@ pub fn setup_window_close_handler(app: &mut App) -> Result<(), Box<dyn std::erro
     let app_handle = app.handle().clone();
 
     main_window.on_window_event(move |event| {
+        // Tauri 2 has no WindowEvent::Minimized - a minimize arrives as a Resized, so
+        // the window's own minimized flag is what tells it apart from a drag or a
+        // maximise. Resized also fires repeatedly while a window is resized, which is
+        // harmless here: the is_visible check makes every call after the first a no-op
+        // until the window is shown again.
+        if let WindowEvent::Resized(_) = event {
+            let should_tray = {
+                let state = app_handle.state::<Mutex<AppSettings>>();
+                state
+                    .lock()
+                    .map(|app_settings| app_settings.ui.minimize_should_go_to_tray)
+                    .unwrap_or(false)
+            };
+
+            if should_tray {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    if window.is_minimized().unwrap_or(false)
+                        && window.is_visible().unwrap_or(false)
+                    {
+                        // Reuses the close-to-tray path rather than adding a second
+                        // one, so the tray menu stays in step either way.
+                        if let Err(e) = hide_window(&app_handle) {
+                            eprintln!("Failed to hide window to tray: {e}");
+                        }
+                    }
+                }
+            }
+        }
+
         if let WindowEvent::CloseRequested { api, .. } = event {
             // Access state and check the flag in one scope
             let should_minimize = {

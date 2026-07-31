@@ -123,6 +123,19 @@ x-ranges, and a component is assigned to **every card whose range it overlaps**:
 | Arena | 40-340 | 395-700 | 755-1060 |
 | Supreme Arena | 60-400 | 390-720 | 720-1050 |
 
+**Tap targets.** Selecting a card needs a point, and Arena's existing code can only find
+one: it matches `arena/opponent.png` inside `CropRegions(right=0.6)`, the left 40%, so it
+has no way to tap card 2 at all.
+
+| mode | how to tap card N |
+|---|---|
+| Arena | the card's green sword button, located as a connected component within the card's x-range. Measured on frame 01: card 1 at (227, 1433), card 3 at (943, 1314). Staggered with their cards, so LOCATED rather than hardcoded |
+| Supreme Arena | the existing hardcoded points, unchanged: (165, 950), (540, 950), (915, 950) |
+
+Those buttons are the same ~8000px round green components the badge detector rejects on
+shape, so one pass finds both: the `w/h ~ 0.7` blobs it discards are exactly the tap
+targets.
+
 A component overlapping two ranges flags **both** cards. That is deliberate: a centre-based
 rule is undefined for a component sitting on a boundary, and the failure mode of guessing
 wrong is marking the wrong card safe and attacking a friend. Overlap is deterministic and
@@ -183,7 +196,22 @@ Badge width is constant per mode regardless of column, which is a useful invaria
 
 ### Signal 2 - OCR
 
-OCR the card's crop rectangle - defined below - and flag on "Friend" or "Guild Member".
+OCR the card's crop rectangle - defined below - and flag on an exact badge-text match.
+
+**The match rule is exact, for the same reason the colour predicate is.** Leaving it as
+"flag on Friend or Guild Member" is the defect the colour arm already had:
+
+- RapidOCR returns **per-box** results. Compare each box's text individually; never
+  concatenate boxes and search the result.
+- Normalise: strip surrounding whitespace, collapse internal whitespace runs to one space,
+  casefold.
+- Flag when a normalised box text **equals** `friend` or `guild member`. Equality, never
+  substring.
+- Ignore boxes whose OCR confidence is below **0.6**.
+
+**Substring matching would attack friends and spare strangers.** The OCR rectangle contains
+the opponent's NAME row by design, and names are arbitrary player strings: a substring rule
+flags an opponent called "Friendzone" and burns refreshes on them. Per-box equality cannot.
 
 **Both crops are defined explicitly.** Leaving them as "a generous band" and "the whole
 card" was a leftover from the abandoned anchored-band design and is not implementable.
@@ -221,7 +249,7 @@ Per attempt, with the toggle on:
 2. Evaluate **cards 1 and 2 only**. The right card is never considered - it is routinely
    outside the player's power bracket. This is a deliberate product decision, not a
    detection limit.
-3. Take the first unflagged card, preferring card 1.
+3. Take the first unflagged card, in **preference order** (see below).
 4. If both are flagged: **classify the bottom-right control FIRST** (see "Classifying the
    control" below) - it is either
    Refresh or the X, and it must be positively matched as one of them before anything is
@@ -234,10 +262,17 @@ Per attempt, with the toggle on:
    **The control is classified before every tap, not once.** An already-exhausted screen
    on the first pass would otherwise send a Refresh tap into the X and open the
    destructive give-up flow.
-6. When exhausted with both still flagged: **positively match the X control** before
+6. When exhausted with both still flagged: **check the give-up precondition first** (see
+   "Never forfeit on one signal"). If it is not met, stop the mode instead. If it is,
+   **positively match the X control** before
    tapping it - never tap the refresh coordinate on the assumption that it has become the
    X. Then confirm the dialog per "The give-up dialog" below. Two positive matches are
    required before anything is tapped, because this path forfeits a daily attempt.
+7. **After a give-up, the mode STOPS.** It does not return to the attempt loop. Both run
+   loops would otherwise continue - `run_arena` over its 5+2 attempts, `run_supreme_arena`
+   over `attempts` - and a saturated opponent pool could forfeit EVERY attempt in the run,
+   one give-up per iteration. One forfeit is a bounded cost; a run of them is not, and if
+   the pool is that friendly the user should hear about it rather than pay for it.
 
 Before any tap that commits to a battle, take a second screenshot and re-evaluate.
 
@@ -250,6 +285,30 @@ This is the only safe resolution: proceeding on the optimistic read would defeat
 feature, and treating disagreement as fatal would stop the mode over a single noisy frame.
 
 Being slow is free; being wrong is not. The mode has no timer.
+
+## Never forfeit on one signal
+
+The design rests on an asymmetry: a false positive costs one refresh, a false negative
+attacks a friend. **That is only true for a TRANSIENT false positive**, and an earlier draft
+stated it without the qualifier.
+
+A persistent false positive - a player named "Friendzone" under a substring rule, a wide
+green UI element on a screen state none of the eight frames show - reproduces on every
+refresh. It drains all 7 or 5, reaches the X, and walks the give-up path, forfeiting a daily
+attempt because of a false read. The escalation ladder converts the cheap failure into the
+expensive one, which destroys the cost model the whole design rests on.
+
+**Precondition for the give-up path: on the final evaluation, every flagged card must be
+flagged by BOTH signals.** If any flag rests on colour alone or OCR alone, stop the mode and
+log it rather than forfeiting.
+
+The asymmetry is deliberate. One signal is enough to SKIP a card, because skipping is cheap
+and missing a friend is the thing being avoided. One signal is not enough to SPEND AN
+ATTEMPT, because a single detector agreeing with itself across refreshes is exactly what a
+persistent false positive looks like.
+
+Stopping is the safe failure: the attempt stays unspent and visible, and the archived frames
+are there to look at.
 
 ## Classifying the control
 
@@ -361,6 +420,33 @@ Supreme Arena.
 The cancel button's geometry is recorded for one reason: so an implementation can assert
 it is not tapping it.
 
+## Preference order, and `Opponent Position`
+
+Supreme Arena already has a user-facing `Opponent Position` setting (Left / Middle / Right,
+`settings.py:404`). An earlier draft ignored it, which would have silently overridden an
+explicit user choice the moment the toggle was enabled - against this spec's own reason for
+defaulting to off.
+
+**The toggle RESPECTS the setting; it only ever skips.**
+
+| `Opponent Position` | preference order with the toggle on |
+|---|---|
+| Left (default) | card 1, then card 2 |
+| Middle | card 2, then card 1 |
+| Right | card 3, then card 1, then card 2 |
+
+Two consequences, both deliberate:
+
+**Right is honoured as a first choice but never as a fallback.** A user who chose Right
+asked for that opponent, so it is offered first. It is not used to rescue a flagged card 1
+or 2, because card 3 is routinely out of the power bracket - falling back onto it would lose
+the battle in order to avoid a friend, and that is not a trade to make silently.
+
+**Card 3 is only ever read when it is the configured choice.** Under Left and Middle it is
+never evaluated and never tapped, exactly as today.
+
+Arena has no equivalent setting, so its order is fixed: card 1, then card 2.
+
 ## Settings
 
 One field per mode, so the two stay independently controllable as they are today:
@@ -386,9 +472,17 @@ not silently alter behaviour for anyone who has not asked for it.
 
 ## Frame collection
 
-Every evaluated select-opponent frame is written to
-`/mnt/vault/adbautoplayer/arena-friendly-fire/`, named with mode, timestamp and the
-detection outcome.
+Every evaluated select-opponent frame is written to a `friendly-fire/` directory under the
+**per-user application data directory**, named with mode, timestamp and detection outcome.
+
+**Not `/mnt/vault`.** An earlier draft named the author's own vault mount, which no end user
+has - this ships to Windows and macOS. Use the resolution the Solstice Clash mode already
+uses (`services/solstice/paths.py:user_data_dir`): `%APPDATA%` on Windows,
+`~/Library/Application Support` on macOS, `$XDG_DATA_HOME` or `~/.local/share` otherwise.
+
+The eight development frames stay at `/mnt/vault/adbautoplayer/arena-friendly-fire/` as test
+fixtures; that path appears in this spec only as the source of committed test data, never in
+shipped code.
 
 Two reasons this is in scope rather than a nice-to-have:
 
@@ -401,6 +495,7 @@ Two reasons this is in scope rather than a nice-to-have:
 
 | situation | behaviour |
 |---|---|
+| A popup is covering the select-opponent screen | Call `handle_popup_messages()` before the read, as `_choose_opponent` already does at `arena.py:115`. Popups appear there routinely; treating one as "not the select-opponent screen" would abort the mode over a weekly notice. |
 | Screenshot fails or screen is not the select-opponent screen | Retry the read once. If it fails again, **stop the mode** and log an error. Do NOT fall through to the old path: the old path attacks the left card without looking, which is precisely the outcome the toggle exists to prevent. |
 | OCR raises | Treat as no-signal, rely on colour, log at warning. OCR failure must not abort the mode - but note the colour arm is then unbacked, which is why its predicate is pinned numerically above. |
 | The two signals disagree | Flag the card - safe side - and archive the frame prominently. |
@@ -429,6 +524,29 @@ Two reasons this is in scope rather than a nice-to-have:
   caught.
 - Decision-table tests for the selection algorithm: card 1 clean; card 1 flagged and card 2
   clean; both flagged with refreshes left; both flagged and exhausted.
+- **Control classification**, which had no test at all: frames 01 and 05 are ready-made
+  Refresh fixtures, 03 and 06 ready-made X fixtures. Each must classify correctly in its own
+  mode.
+- **The per-mode refresh glyph.** Point Supreme Arena at Arena's template and the suite must
+  FAIL. Without this, the round-10 defect - a glyph wrongly assumed shared, scoring 0.36 -
+  is reintroducible in silence, and its symptom is a mode that quits instead of refreshing.
+- **The template-fits-its-search-region invariant** for every template, which is the
+  round-11 defect in general form.
+- **Give-up tick detection** on frame 04, including that the tap target is the MATCHED
+  centre rather than a constant.
+- **The give-up precondition**: a card flagged by one signal only must stop the mode, not
+  forfeit. This is the round where the cost model was wrong, and it is the most expensive
+  defect to reintroduce.
+- **The failure branches**, none of which had tests: a failed read must not fall through to
+  the old blind path; a static screen must not be read as exhaustion; a disagreeing second
+  read must flag the card.
+- **Preference order** against each `Opponent Position` value, including that card 3 is
+  never used as a fallback.
+
+The test suite's job is to fail if any defect found in review is reintroduced. Detection
+tests alone would not have caught most of them - and every one on the path that forfeits an
+attempt was uncovered until this list.
+
 - No device is required for any of the above; frames are fixtures.
 
 ## Open assumptions

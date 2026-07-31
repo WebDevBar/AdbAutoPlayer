@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Minimize to tray.** A new App setting, "Minimize button should hide to the system
+  tray", alongside the existing close-to-tray toggle. **Off by default** - the minimize
+  button keeps going to the taskbar until you turn it on. Tauri 2 has no Minimized event,
+  so the handler watches Resized and checks the window's own minimized flag; it reuses the
+  existing close-to-tray path rather than adding a second one.
+
 - **Prevent Friendly Fire, for Arena and Supreme Arena.** A per-mode checkbox -
   "Prevent Friendly Fire - do not attack friends or guild-mates in this mode" - that skips
   opponents the game marks as Friend or Guild Member. **Off by default**, because turning
@@ -66,6 +72,17 @@
   existing `[SC-94]` line stays as the audit trail with the offset and confidence.
 
 ### Changed
+
+- **The live log now reads like a summary, not a trace.** The debug log still records
+  everything, so nothing is lost.
+  - Picks are one coloured line each - `BLUE 1: Lucca`, `RED 2: Talene` - in the side's
+    own colour, with the plate number the draft screen actually shows. The match scores
+    (`[0.961/0.403]`) moved to the debug log.
+  - The draft screen numbers its cells 1-6 across both teams, so a draft read's slot IS
+    the plate number; only the per-side screens need translating. Getting that wrong would
+    have printed right-slot-2 as "RED 3".
+  - `[SC-94] staked on <side> at N% - handle dragged Npx` moved to debug. The coloured
+    `BETTING BLUE` / `BETTING RED` line already says what a person watching needs.
 
 - **The auto-bet slider cap is now 400px, up from 200.** The old cap arrived with the
   feature and no reason was ever recorded; it was never a physical limit. The bar spans

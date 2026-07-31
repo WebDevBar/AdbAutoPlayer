@@ -115,7 +115,22 @@ height <= 80 px
 width / height >= 2.0
 ```
 
-The component's x centre assigns it to a card.
+**Card assignment is by x-range OVERLAP, not by centre.** Each mode defines three card
+x-ranges, and a component is assigned to **every card whose range it overlaps**:
+
+| mode | card 1 | card 2 | card 3 |
+|---|---|---|---|
+| Arena | 40-340 | 395-700 | 755-1060 |
+| Supreme Arena | 60-400 | 390-720 | 720-1050 |
+
+A component overlapping two ranges flags **both** cards. That is deliberate: a centre-based
+rule is undefined for a component sitting on a boundary, and the failure mode of guessing
+wrong is marking the wrong card safe and attacking a friend. Overlap is deterministic and
+errs toward refusing to attack.
+
+All six observed badges fall cleanly inside a single range (Arena left 93-281, middle
+456-644 and 421-679; Supreme Arena middle 445-636, right 758-948), so the both-cards case
+has never been seen - but it is defined rather than left to an implementer.
 
 **Shape, not position.** An earlier draft searched a y band anchored to the player-name
 row. Peer review killed that: nothing in the frames uniquely identifies the name row
@@ -262,6 +277,7 @@ Two reasons this is in scope rather than a nice-to-have:
 | The two signals disagree | Flag the card - safe side - and archive the frame prominently. |
 | Refresh tapped but the screen does not change | Re-screenshot once. If it still has not changed, **stop the mode**. Do NOT infer exhaustion from a static screen: a stalled refresh and an exhausted one look identical, and acting on the guess taps a control that forfeits the challenge. Exhaustion is only ever established by positively matching the X. |
 | Give-up dialog does not appear after tapping X | Log and stop the mode. Do not tap coordinates hoping. |
+| The bottom-right control matches NEITHER Refresh nor X | Re-screenshot and classify once more. If it still matches neither, **stop the mode** and log an error. Never tap an unclassified control: it is either harmless or it forfeits a daily attempt, and we do not know which. This bound also guarantees the selection loop terminates - every iteration either takes a card, consumes a refresh, reaches the X, or stops. |
 | Toggle off | Existing code path, untouched, no screenshots, no OCR. |
 
 ## Testing

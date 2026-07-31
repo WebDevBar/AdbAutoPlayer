@@ -48,6 +48,11 @@ PULL_LIMIT = 500
 # commit AFTER a client has read past its value and that row would be skipped
 # forever. Re-delivery is free because pull upserts by natural_key.
 PULL_OVERLAP = 50
+
+# How much of an error response to keep. A 422 body names the exact field that failed
+# validation, which is the difference between "sync server error 422" and an answer -
+# a collaborator's log carried 75 of the former and diagnosed nothing.
+HTTP_ERROR_BODY_LIMIT = 2048
 AUTH_FAILURES_BEFORE_DISABLE = 3
 
 
@@ -107,6 +112,35 @@ class SyncClient:
 
     # -- transport ---------------------------------------------------------
 
+    def _error_detail(self, exc: urllib.error.HTTPError) -> str:
+        """A bounded, single-line, key-redacted view of an error response body.
+
+        FastAPI's 422 body names the field that failed validation - `matches.0.left_odds`
+        and the reason - and we were discarding it, so a blanket rejection looked
+        identical to any other server error. One contributor pushed nothing for a day
+        behind 75 undiagnosable 422s.
+
+        Never raises: diagnostics must not be able to break collection.
+
+        Args:
+            exc: The HTTPError just caught.
+
+        Returns:
+            The body as one line, truncated, with the API key masked. Empty on any
+            failure to read it.
+        """
+        try:
+            raw = exc.read(HTTP_ERROR_BODY_LIMIT + 1)
+        except Exception:  # noqa: BLE001 - see the docstring
+            return ""
+        truncated = len(raw) > HTTP_ERROR_BODY_LIMIT
+        text = " ".join(raw[:HTTP_ERROR_BODY_LIMIT].decode("utf-8", "replace").split())
+        # A proxy or a misconfigured server can echo the request back. The log is
+        # something people paste into chat.
+        if self._cfg.api_key:
+            text = text.replace(self._cfg.api_key, "[REDACTED]")
+        return text + ("..." if truncated else "")
+
     def _request(self, method: str, path: str, body: dict | None = None) -> dict | None:
         """Return the decoded response, or None on ANY failure.
 
@@ -129,6 +163,7 @@ class SyncClient:
                 self._auth_failures = 0   # any success clears the streak
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as exc:
+            detail = self._error_detail(exc)
             if exc.code in (401, 403):
                 self._auth_failures += 1
                 logging.warning(
@@ -145,7 +180,8 @@ class SyncClient:
             elif exc.code == 429:
                 logging.warning("[SC-32] sync rate limited - skipping this cycle")
             else:
-                logging.warning(f"[SC-33] sync server error {exc.code}")
+                suffix = f": {detail}" if detail else ""
+                logging.warning(f"[SC-33] sync server error {exc.code}{suffix}")
             return None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             logging.warning(f"[SC-30] sync unreachable: {exc}")

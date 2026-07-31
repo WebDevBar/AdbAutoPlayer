@@ -94,6 +94,24 @@
 
 ### Fixed
 
+- **The dex2oat workaround is now Waydroid-only.** `setprop pm.dexopt.install skip` exists
+  because Waydroid's ahead-of-time compilation hung for 570 seconds on a 4KB dex and
+  wedged every install. It was being issued on EVERY platform, so emulators with no such
+  bug had a package-manager tuning property mutated on them moments before an install that
+  never needed it. A contributor's BlueStacks install died with "Failure calling service
+  package: Broken pipe (32)" - the package manager losing its binder connection - and the
+  emulator froze. The log does NOT prove the property caused that, but it is risk we get
+  nothing for. Detection is `getprop ro.hardware`, failing CLOSED: an unrecognised device
+  gets the ordinary Android install path. Nothing replaces the property elsewhere, because
+  nothing else needs it.
+
+- **A sync error now says WHY.** `[SC-33] sync server error 422` logged only the status
+  code and discarded the response body - but a FastAPI 422 names the exact field that
+  failed validation. One contributor pushed nothing for a full day behind 75 of these and
+  there was no way to diagnose it from their log. The body is now logged: bounded to 2KB,
+  collapsed to one line, with the API key masked in case a proxy echoes the request back.
+  Reading it can never raise.
+
 - **The live log printed raw `<span>` tags instead of colour.** Every message is escaped
   before it reaches the renderer, so markup arrived as text. The escaping is correct and
   stays - log lines carry device output and exception text - so an allowlist re-permits

@@ -1746,7 +1746,19 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # dex, wedging every install. Skipping compilation installs in ~25s. The
                 # property does not survive a reboot, so it is set on every install rather
                 # than once by hand: the mode has to work on a machine nobody prepared.
-                overlay.safe_shell(device, overlay.dexopt_skip_command())
+                #
+                # WAYDROID ONLY. It used to be issued unconditionally, which meant every
+                # other emulator had a package-manager tuning property mutated on it
+                # moments before an install that never needed the workaround. A
+                # collaborator's BlueStacks install then died with "Failure calling
+                # service package: Broken pipe (32)" - the package manager losing its
+                # binder connection - and the emulator froze. That log does NOT prove the
+                # property caused it, but touching PackageManager settings on platforms
+                # with no measured problem is risk we get nothing for.
+                hardware = overlay.device_hardware(device)
+                logging.debug(f"[SC-82] device ro.hardware={hardware or 'unknown'}")
+                if hardware == "waydroid":
+                    overlay.safe_shell(device, overlay.dexopt_skip_command())
                 result = overlay.safe_shell(device, overlay.install_command()) or ""
                 if "Success" not in result:
                     logging.info(

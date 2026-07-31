@@ -121,6 +121,25 @@ def dexopt_skip_command() -> list[str]:
     return ["setprop", "pm.dexopt.install", "skip"]
 
 
+def device_hardware(device) -> str:
+    """`ro.hardware` for this target, lowercased, or "" if it cannot be read.
+
+    Used to decide whether a Waydroid-specific workaround applies. Failing to an empty
+    string is deliberate: an unrecognised device must get the ordinary Android path, not
+    a workaround aimed at somebody else's emulator.
+
+    Args:
+        device: Anything with a `shell(cmdargs)` method.
+
+    Returns:
+        The property value, lowercased and stripped, or "".
+    """
+    try:
+        return str(device.shell(["getprop", "ro.hardware"])).strip().lower()
+    except Exception:  # noqa: BLE001 - detection must never break an install
+        return ""
+
+
 def install_command() -> list[str]:
     """Install the staged APK. `-r` replaces, `-t` allows a debug-signed build."""
     return ["pm", "install", "-r", "-t", STAGED_APK]

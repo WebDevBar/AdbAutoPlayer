@@ -1525,6 +1525,17 @@ Methods:
         arena = getattr(self.settings, "arena", None)
         return bool(getattr(arena, "prevent_friendly_fire", False))
 
+    def _ff_halt(self) -> bool:
+        """Stop the whole RUN, not just this selection, and return False.
+
+        Every failure exit goes through here. `run_arena` has TWO loops, so a bare
+        `return False` only breaks the first - the second then claims a free attempt
+        and fights on, which is how an unsafe give-up or a failed refresh would have
+        been followed by more battles.
+        """
+        self._ff_stop_run = True
+        return False
+
     def _ff_ocr(self) -> RapidOCRBackend:
         """One OCR backend per run, built lazily.
 
@@ -1546,6 +1557,7 @@ Methods:
         )
         if match is None:
             logging.error(f"[FF-30] could not locate card {index + 1}")
+            self._ff_stop_run = True
             return False
         self.tap(match)
         return True
@@ -1563,7 +1575,7 @@ Methods:
         tick = find_give_up_tick(self.get_screenshot())
         if tick is None:
             logging.error("[FF-33] give-up dialog did not appear - stopping")
-            return False
+            return self._ff_halt()
         self.tap(tick)
         self.sleep_navigation()
         self._ff_stop_run = True
@@ -1586,7 +1598,7 @@ Methods:
             )
         except GameTimeoutError as fail:
             logging.error(f"[FF-35] {fail}")
-            return False
+            return self._ff_halt()
 
         retried_unknown = False
         excluded: set[int] = set()
@@ -1624,8 +1636,7 @@ Methods:
                     self.sleep_navigation()
                     continue
                 logging.warning(f"[FF-31] stopping: {decision.reason}")
-                self._ff_stop_run = True
-                return False
+                return self._ff_halt()
             if decision.action is Action.GIVE_UP:
                 return self._ff_give_up()
 
@@ -1637,7 +1648,7 @@ Methods:
                     "[FF-37] the screen did not change after a refresh - stopping "
                     "rather than assuming exhaustion, which would forfeit an attempt"
                 )
-                return False
+                return self._ff_halt()
             # Re-establish readiness after the refresh redraws the cards.
             try:
                 self.wait_for_template(
@@ -1647,9 +1658,9 @@ Methods:
                 )
             except GameTimeoutError as fail:
                 logging.error(f"[FF-36] {fail}")
-                return False
+                return self._ff_halt()
         logging.warning("[FF-32] no non-friendly opponent after the round cap")
-        return False
+        return self._ff_halt()
 ```
 
 **Stopping the RUN, not just the selection.** `run_arena` has TWO loops: five attempts,
@@ -1798,6 +1809,11 @@ from adb_auto_player.ocr import RapidOCRBackend
             getattr(self.settings.supreme_arena, "prevent_friendly_fire", False)
         )
 
+    def _sa_halt(self) -> bool:
+        """Stop the whole run and return False. Every failure exit goes through here."""
+        self._ff_stop_run = True
+        return False
+
     def _sa_position(self) -> OpponentPosition:
         """The user's configured card preference, which the guard respects."""
         return self.settings.supreme_arena.opponent_position
@@ -1821,7 +1837,7 @@ from adb_auto_player.ocr import RapidOCRBackend
         tick = find_give_up_tick(self.get_screenshot())
         if tick is None:
             logging.error("[FF-43] give-up dialog did not appear - stopping")
-            return False
+            return self._sa_halt()
         self.tap(tick)
         self.sleep_navigation()
         self._ff_stop_run = True
@@ -1860,8 +1876,7 @@ from adb_auto_player.ocr import RapidOCRBackend
                     self.sleep_navigation()
                     continue
                 logging.warning(f"[FF-41] stopping: {decision.reason}")
-                self._ff_stop_run = True
-                return False
+                return self._sa_halt()
             if decision.action is Action.GIVE_UP:
                 return self._sa_give_up()
 
@@ -1873,9 +1888,9 @@ from adb_auto_player.ocr import RapidOCRBackend
                     "[FF-47] the screen did not change after a refresh - stopping "
                     "rather than assuming exhaustion, which would forfeit an attempt"
                 )
-                return False
+                return self._sa_halt()
         logging.warning("[FF-42] no non-friendly opponent after the round cap")
-        return False
+        return self._sa_halt()
 ```
 
 **Stopping the run.** `run_supreme_arena` has one loop over `attempts`; set

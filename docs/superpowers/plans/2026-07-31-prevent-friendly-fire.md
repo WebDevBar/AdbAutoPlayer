@@ -1566,6 +1566,7 @@ Methods:
             return False
         self.tap(tick)
         self.sleep_navigation()
+        self._ff_stop_run = True
         logging.info("[FF-34] gave up the challenge - every opponent was a friend")
         return False
 
@@ -1623,6 +1624,7 @@ Methods:
                     self.sleep_navigation()
                     continue
                 logging.warning(f"[FF-31] stopping: {decision.reason}")
+                self._ff_stop_run = True
                 return False
             if decision.action is Action.GIVE_UP:
                 return self._ff_give_up()
@@ -1648,6 +1650,28 @@ Methods:
                 return False
         logging.warning("[FF-32] no non-friendly opponent after the round cap")
         return False
+```
+
+**Stopping the RUN, not just the selection.** `run_arena` has TWO loops: five attempts,
+then two more that claim a free attempt. Returning `False` from `_choose_opponent` only
+breaks the first, so a give-up would be followed by claiming a free attempt and fighting
+on - the opposite of the spec's "after a give-up, the mode STOPS". Set a run-level flag and
+honour it in both loops:
+
+```python
+    def run_arena(self) -> None:
+        """Use Arena attempts."""
+        self.start_up(device_streaming=False)
+        self._ff_stop_run = False
+        ...
+        for _ in range(5):
+            if self._ff_stop_run:
+                break
+            ...
+        for _ in range(2):
+            if self._ff_stop_run:
+                break
+            ...
 ```
 
 **Where the branch goes.** NOT at the top of `_choose_opponent`: that method first
@@ -1800,6 +1824,7 @@ from adb_auto_player.ocr import RapidOCRBackend
             return False
         self.tap(tick)
         self.sleep_navigation()
+        self._ff_stop_run = True
         logging.info("[FF-44] gave up the challenge - every opponent was a friend")
         return False
 
@@ -1835,6 +1860,7 @@ from adb_auto_player.ocr import RapidOCRBackend
                     self.sleep_navigation()
                     continue
                 logging.warning(f"[FF-41] stopping: {decision.reason}")
+                self._ff_stop_run = True
                 return False
             if decision.action is Action.GIVE_UP:
                 return self._sa_give_up()
@@ -1851,6 +1877,10 @@ from adb_auto_player.ocr import RapidOCRBackend
         logging.warning("[FF-42] no non-friendly opponent after the round cap")
         return False
 ```
+
+**Stopping the run.** `run_supreme_arena` has one loop over `attempts`; set
+`self._ff_stop_run = False` at the start of the run and `break` on it at the top of the
+loop, exactly as Arena does.
 
 **Where the branch goes.** In `_sa_choose_opponent`, after the Select Opponent screen
 has been reached and the `no_attempts_popup` case has been handled - that is, replacing
@@ -1884,6 +1914,16 @@ git add -A src-tauri/src-python && git commit -m "feat(friendly-fire): Supreme A
 - [ ] `./build-rpm.sh`, then report the install command. Do not install; the operator restarts the collector themselves.
 
 ---
+
+## Reviewer findings judged INVALID
+
+Recorded so they are not re-applied by a later reader.
+
+**"`parents[5]` resolves to `tests`, use `parents[6]`"** (plan round 6). Counted directly:
+from `tests/games/afk_journey/services/friendly_fire/test_x.py`, `parents[5]` is
+`src-tauri/src-python`, and `parents[5]/adb_auto_player` exists while
+`parents[6]/adb_auto_player` does not. Round 1 checked the same expression and agreed it was
+correct; round 6 contradicted itself. The path stays as written.
 
 ## Self-Review
 

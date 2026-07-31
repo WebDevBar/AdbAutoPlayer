@@ -379,7 +379,12 @@ The lesson is recorded because it nearly shipped: a claim that two assets are "t
 artwork" is a measurement, not an observation, and this spec was wrong about it until
 someone matched them.
 
-**Threshold and tie-break.** A confidence floor of 0.8 on each template, and then exactly
+**Threshold and tie-break.** A confidence floor of **0.9** on each template - not 0.8. Measured: the X template scores
+**0.8027** against the bottom-right region of frame 04, a screen with NO control at all, so
+a 0.8 floor classifies an unrelated screen as "refreshes exhausted" - the state that leads
+to forfeiting. The real X scores 1.00 and Refresh 0.4252, so 0.9 separates with margin.
+
+A confidence floor, and then exactly
 one of these three outcomes:
 
 | result | meaning | action |
@@ -410,7 +415,7 @@ confidence. Measured: the sheet has a pixel standard deviation of **4.8**, the t
 |---|---|
 | template `arena/give_up_confirm.png` | cut from `04-give-up-confirmation-dialog-20260731.png`, x 786-947, y 1163-1321 |
 | search region | x 700-1010, y 1100-1380 |
-| confidence floor | 0.8 |
+| confidence floor | 0.9 (see "Classifying the control" - 0.8 collides at 0.8027) |
 | tap target | the **matched centre**, not a fixed point. Observed at (866, 1241) |
 | cancel button, cream circle | x 500-779, y 1150-1331, centre (639, 1240) |
 

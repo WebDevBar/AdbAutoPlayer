@@ -174,6 +174,39 @@ def test_the_odds_line_survives_having_its_markup_stripped():
         assert "<" not in plain
 
 
+def test_the_winner_is_announced_in_its_own_colour():
+    """The match result the operator actually looks for. Announced on its own rather
+    than buried inside the verdict sentence, because after a match the first question is
+    who won, not whether we called it."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        announce_winner,
+    )
+
+    assert announce_winner("left") == '<span class="sc-blue">BLUE WINS</span>'
+    assert announce_winner("right") == '<span class="sc-red">RED WINS</span>'
+
+
+def test_the_winner_line_survives_having_its_markup_stripped():
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        announce_winner,
+    )
+
+    for winner, expected in (("left", "BLUE WINS"), ("right", "RED WINS")):
+        assert _strip(announce_winner(winner)) == expected
+
+
+def test_an_unresolved_winner_is_never_announced_as_a_side():
+    """A match whose banner could not be read must not print a confident winner."""
+    from adb_auto_player.games.afk_journey.services.solstice.odds import (
+        announce_winner,
+    )
+
+    for bad in ("", "draw", "unknown", None):
+        out = announce_winner(bad)
+        assert "BLUE WINS" not in out
+        assert "RED WINS" not in out
+
+
 def test_the_result_line_says_whether_the_call_was_right():
     """The log named the winner and never said whether we predicted it, so it reported
     the outcome of every match and the accuracy of none."""

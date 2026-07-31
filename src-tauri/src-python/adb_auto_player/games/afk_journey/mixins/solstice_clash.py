@@ -49,6 +49,7 @@ from ..services.solstice.matchkey import is_complete, natural_key
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
+    announce_winner,
     band_evidence,
     emphasise_bet,
     fit as fit_odds,
@@ -615,6 +616,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"[SC-40] recorded match {match_id}: {read.winner} won, "
             f"theme_id={theme_id} ({theme_resolved_by})"
         )
+        # The line a person actually looks for after a match. Announced in BOTH record
+        # paths - it was missing entirely, and a winner buried in the [SC-40] detail
+        # line is not something the eye finds in a scrolling log.
+        logging.info(f"[SC-40] {announce_winner(read.winner)}")
         return True
 
     def _open_spectate(self) -> tuple[bool, str | None]:
@@ -1225,6 +1230,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 logging.warning(f"[SC-78] market could not be recorded: {exc}")
         self._pool_read = None
         self._spectators = None
+
+        # Outside the prediction block on purpose: a match with no prediction still
+        # has a winner, and that is exactly when the log would otherwise say nothing.
+        logging.info(f"[SC-75] {announce_winner(read.winner)}")
 
         pending = getattr(self, "_pending_prediction", None)
         if pending is not None and match_id:

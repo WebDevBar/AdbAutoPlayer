@@ -31,6 +31,13 @@
   - There is no separate bet-outcome line: the stake always goes on the called side, so
     the HIT already is the bet result.
 
+- **`BLUE WINS` / `RED WINS` after every match, in the winner's colour.** Its own line
+  rather than a clause inside the verdict sentence, because after a match the first
+  question is who won. Logged in BOTH record paths - spectate and collect-while-playing -
+  and independently of whether a prediction was made, since a match with no prediction
+  still has a winner and that is exactly when the log used to say nothing. A banner that
+  could not be read prints "result unresolved" rather than guessing a side.
+
 - **`BETTING BLUE` / `BETTING RED`, in colour, once the tokens are committed.** Logged
   after the handle has been dragged, so it means placed rather than about to be. The
   existing `[SC-94]` line stays as the audit trail with the offset and confidence.

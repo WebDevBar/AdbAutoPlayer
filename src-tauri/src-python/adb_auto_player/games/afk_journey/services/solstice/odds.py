@@ -747,6 +747,27 @@ def format_odds(
     ]
 
 
+# Which colour each recorded outcome belongs to. `outcome` is stored as left/right
+# because that is what the screen geometry gives; blue/red is what a person sees.
+_COLOUR_OF_SIDE = {"left": "blue", "right": "red"}
+
+
+def announce_winner(winner: str | None) -> str:
+    """"BLUE WINS" / "RED WINS", in the winner's own colour.
+
+    Its own line rather than a clause inside the verdict: after a match the first
+    question is who won, and that should not need reading a sentence to answer.
+
+    An outcome that is not decisively left or right - an unread banner, a draw - returns
+    a plain, non-committal string. Printing a confident winner for a match we could not
+    read would be worse than printing nothing.
+    """
+    colour = _COLOUR_OF_SIDE.get(winner or "")
+    if colour is None:
+        return "result unresolved"
+    return _emphasise(f"{colour.upper()} WINS", winner)
+
+
 def emphasise_bet(colour: str) -> str:
     """The staking announcement, in the side's own colour.
 

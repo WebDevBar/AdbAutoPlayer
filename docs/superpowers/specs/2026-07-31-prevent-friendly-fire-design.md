@@ -185,10 +185,29 @@ Badge width is constant per mode regardless of column, which is a useful invaria
 
 OCR a crop of the **whole card**, and flag on "Friend" or "Guild Member".
 
-**The two signals are scoped differently on purpose.** If both were restricted to the same
-narrow band, a wrong band would defeat both and the redundancy would buy nothing. Colour
-runs over a generous per-card band; OCR covers the entire card. A position surprise is
-caught by OCR; a localised client is caught by colour.
+**Both crops are defined explicitly.** Leaving them as "a generous band" and "the whole
+card" was a leftover from the abandoned anchored-band design and is not implementable.
+
+- **Colour** runs over the WHOLE FRAME. Connected components are found first and assigned
+  to cards afterwards by x-range overlap, so it needs no per-card crop at all and the
+  vertical stagger cannot affect it.
+- **OCR** runs on a per-card rectangle: the card's x-range from the assignment table,
+  crossed with a per-mode y-range covering everything a card can display.
+
+| mode | OCR y-range | covers |
+|---|---|---|
+| Arena | 900-1300 | badges observed at 953-1052, name and score rows below |
+| Supreme Arena | 950-1500 | badges observed at 975-1091, name / power / rank rows below |
+
+The y-ranges are per MODE, not per card, and are wide enough to contain every card's
+content at any stagger - which is why they do not need anchoring either. They are
+deliberately loose: OCR contamination from a neighbouring card is prevented by the
+x-range, and a false "Friend" read costs one refresh.
+
+**The two signals remain scoped differently on purpose.** Colour is frame-wide and
+shape-based; OCR is a bounded rectangle and text-based. A geometry surprise is caught by
+OCR; a localised client is caught by colour. They share no crop, so they cannot share a
+failure.
 
 OCR cost is acceptable here because it reads one card crop, not a full frame - unlike the
 long-press OCR that was shelved in Solstice Clash for exactly that reason. **The mode has

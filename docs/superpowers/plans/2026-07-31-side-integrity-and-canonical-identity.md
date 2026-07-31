@@ -21,8 +21,18 @@
   TDD step in this plan depends on that, or the "confirm it fails" step misfires with a
   path error instead of the expected `ModuleNotFoundError`.
 - Other client commands (`uv sync`, `uv run pytest` with no path) run from `src-tauri/`.
-  Lint with `uvx ruff check --fix` and `uvx ruff format` from the repo ROOT, never from
-  `src-tauri/`.
+  Lint from the repo ROOT, never from `src-tauri/` - but **ALWAYS scope ruff to the files
+  you changed**:
+
+  ```bash
+  uvx ruff check --fix path/to/changed.py && uvx ruff format path/to/changed.py
+  ```
+
+  The bare, unscoped form is DESTRUCTIVE in this repo. It is not ruff-clean: running it
+  during Task 1 auto-fixed 111 errors and reformatted 57 files across the whole tree,
+  including `CLAUDE.md`, unrelated docs, and another agent's in-progress work. 590 ruff
+  errors remain repo-wide and are pre-existing - they are NOT yours to fix, and sweeping
+  them up silently would bury your actual change in an unreviewable diff.
 - Server commands run from `gameretro-adb-api/`: `pytest` (testpaths = `tests`), `alembic upgrade head`. Current Alembic head is `0004`.
 - Ruff: line length 88, Google docstrings, no magic values in comparisons (name a constant), modern typing (`X | None`), `time.monotonic()` never `time.time`, numpy indexing never `cv2.split`.
 - K&R braces for any brace-language code.

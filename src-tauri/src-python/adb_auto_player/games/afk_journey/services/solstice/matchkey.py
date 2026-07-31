@@ -69,3 +69,38 @@ def natural_key(
         ]
     )
     return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+
+
+def comps_key(event_slug: str, side_a_slugs: list[str], side_b_slugs: list[str]) -> str:
+    """Identity for a match: the event and its two hero trios, nothing else.
+
+    NOT in the key, each for a measured reason:
+
+    - The OUTCOME. Winner-first ordering survives a disagreement about which
+      SIDE a trio sat on, but not a disagreement about which trio WON - and a
+      misread panel tint is a failure mode on record. Sorting the trios against
+      each other removes the outcome from identity entirely.
+    - The TIME. A bucket splits at its boundaries: ids 1042/1044 are one match
+      nine seconds apart on opposite sides of a ten-minute wall. Proximity is
+      handled by a server-side lookup instead.
+    - Player NAMES, ranks and ratings. Ranks are NULL on every row. Names are
+      OCR-fragile in a SIDE-DEPENDENT way - profile art reads as `GAME` on one
+      side and `GAMERETRO` on the other, and rows 1133/1136 read one player as
+      `m` and `mn`. A field that reads differently per side is the worst
+      possible component of a key whose whole purpose is to make both sides
+      agree.
+    - The THEME. It is resolved server-side from the capture window and can be
+      backfilled later, which would change the key retroactively (see
+      `identity.py`).
+
+    Args:
+        event_slug: The event this match belongs to.
+        side_a_slugs: One side's hero slugs, any order.
+        side_b_slugs: The other side's hero slugs, any order.
+
+    Returns:
+        `sha256:<hex>`.
+    """
+    a, b = sorted([",".join(sorted(side_a_slugs)), ",".join(sorted(side_b_slugs))])
+    payload = f"{event_slug}|{a}|{b}"
+    return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()

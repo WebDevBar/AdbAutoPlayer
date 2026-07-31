@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import pytest
 
 from adb_auto_player.games.afk_journey.services.solstice.matchkey import (
+    comps_key,
     is_complete,
     natural_key,
 )
@@ -87,3 +88,33 @@ def test_the_key_matches_the_server_algorithm():
     assert key == (
         "sha256:a441384a8c7747c4c36ade5ac9eeaf3d1e102fc4a133a0fcdfee1f73e80a5bdd"
     )
+
+
+# --- the comps key ---------------------------------------------------------
+
+_A = ["lorsan", "sonja", "valka"]
+_B = ["hepler", "silven", "thador"]
+
+# Pinned. The server test asserts the SAME literal; if they ever diverge, both fail.
+_EXPECTED_PIN = "solstice-clash|hepler,silven,thador|lorsan,sonja,valka"
+
+
+def test_orientation_does_not_change_the_key():
+    assert comps_key("solstice-clash", _A, _B) == comps_key("solstice-clash", _B, _A)
+
+
+def test_shuffling_within_a_side_does_not_change_the_key():
+    assert comps_key("solstice-clash", _A, _B) == comps_key(
+        "solstice-clash", list(reversed(_A)), list(reversed(_B))
+    )
+
+
+def test_a_different_event_gives_a_different_key():
+    assert comps_key("solstice-clash", _A, _B) != comps_key("other-event", _A, _B)
+
+
+def test_payload_is_the_pinned_shape():
+    import hashlib
+
+    expected = "sha256:" + hashlib.sha256(_EXPECTED_PIN.encode()).hexdigest()
+    assert comps_key("solstice-clash", _A, _B) == expected

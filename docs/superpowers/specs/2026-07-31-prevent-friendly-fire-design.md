@@ -96,14 +96,66 @@ the union is deliberate.
 
 ### Signal 1 - colour run
 
-Within the card's x window, find a horizontal run of at least ~60 pixels matching either
-badge colour. **A run, not mere presence:** on the Supreme Arena baseline frame, naive
-"is this green anywhere" matches 134 stray pixels from the title lettering and artwork,
-while the run test scores 115 on a real badge and **0** on all three empty cards.
+Exact predicate, per pixel, on 8-bit RGB. A pixel is badge-coloured if it satisfies
+EITHER:
 
-The rule must accept **green or cyan**. A green-only rule sails straight past Guild Member.
+```
+Friend (green): g > 120  and  r < 110  and  g - r > 60  and  g - b > 40
+Guild  (cyan):  g > 130  and  b > 130  and  r < 110  and  |g - b| < 45  and  g - r > 60
+```
+
+A card is flagged when, inside that card's **anchored band** (below), some single row
+contains a horizontal run of **>= 60 consecutive** badge-coloured pixels.
+
+Three properties of this rule are load-bearing, and each was established by measurement
+rather than choice:
+
+**It must be a RUN, not a count.** On the Supreme Arena baseline frame, "is this colour
+present anywhere" matches 134 stray pixels from the title lettering and artwork. A badge
+is a solid bar; scattered pixels are not.
+
+**It must accept green OR cyan.** A green-only rule sails straight past Guild Member.
+
+**The band must be anchored per card, or the threshold is unusable.** Searching a loose
+y window catches the green "battle" sword buttons, which produce runs of **65-71px on
+cards carrying no badge** - above any threshold that still detects a Supreme Arena badge
+at 89-92. Measured over all eight frames:
+
+| scope | true badges | everything else |
+|---|---|---|
+| loose y window (850-1300) | 89, 92, 177, 178, 247 | **65, 71** (sword buttons), 35, 7, 0 |
+| anchored band | 91, 177, 178, 247 | 35, 0 |
+
+Anchored, the separation is 91 against 35 and a threshold of 60 sits between them with
+margin on both sides. Unanchored, there is no threshold that works.
 
 Language-independent, costs microseconds, needs no template file.
+
+### The anchored band
+
+Elements are fixed relative to their own card; only the card is staggered. So the band is
+derived per card from an anchor **detected in that frame** - the player-name row - rather
+than stored as absolute pixels.
+
+Do NOT hardcode a badge-to-name offset. Measured by eye at 59px on one Supreme Arena card
+and 70px on another; that spread is probably eyeballing rather than a real difference, and
+the way to stop guessing is for the implementation to locate the name row and take the
+band above it.
+
+Measured badge boxes, for fixture tests and for sanity-checking the anchor logic:
+
+| mode | card | badge | x | y |
+|---|---|---|---|---|
+| Arena | middle | Friend | 456-644 | 954-993 |
+| Arena | middle | Guild | 421-679 | 953-993 |
+| Arena | left | Friend | 93-281 | 1013-1052 |
+| Supreme Arena | right | Friend | 786-922 | 985-1014 |
+| Supreme Arena | right | Guild | 759-948 | 981-1020 |
+| Supreme Arena | middle | Guild | 446-636 | 1048-1091 |
+
+Badge width is constant per mode regardless of column - ~190 in Supreme Arena, ~188 for
+Friend and ~258 for Guild in Arena - which is a useful invariant for validating a
+detection.
 
 ### Signal 2 - OCR
 
@@ -131,11 +183,23 @@ Per attempt, with the toggle on:
 5. Repeat until a card is taken **or the refresh control has become the X**. Do not count
    refreshes: the limit differs per mode (7 and 5) and could change in a patch. Exhaustion
    is a visual fact.
-6. When exhausted with both still flagged: tap the X, then confirm on
-   "Give up this challenge?".
+6. When exhausted with both still flagged: **positively match the X control** before
+   tapping it - never tap the refresh coordinate on the assumption that it has become the
+   X. Then wait for the "Give up this challenge?" dialog and match it before tapping the
+   confirm tick. Two template matches, both required, because this path forfeits a daily
+   attempt.
 
-Before any tap that commits to a battle, take a second screenshot and require both reads
-to agree. Being slow is free; being wrong is not.
+Before any tap that commits to a battle, take a second screenshot and re-evaluate.
+
+**If the two reads disagree, the card is treated as FLAGGED** and the algorithm returns to
+step 3 with that card excluded - so a card seen clean once and flagged once is never
+attacked. If that leaves no unflagged card, it refreshes exactly as though both had been
+flagged. The frame is archived as a disagreement.
+
+This is the only safe resolution: proceeding on the optimistic read would defeat the
+feature, and treating disagreement as fatal would stop the mode over a single noisy frame.
+
+Being slow is free; being wrong is not. The mode has no timer.
 
 ## Settings
 
@@ -145,8 +209,17 @@ One field per mode, so the two stay independently controllable as they are today
 Prevent Friendly Fire - do not attack friends or guild-mates in this mode
 ```
 
-`bool`, default **false**. Added to `ArenaSettings` and `SupremeArenaSettings` in
-`games/afk_journey/settings.py`. Pydantic generates the UI, so no frontend work.
+`bool`, default **false**.
+
+`SupremeArenaSettings` already exists and gains the field. **`ArenaSettings` does NOT
+exist** - Arena has no settings section at all today, no class and no entry in the root
+`Settings` model. So the Arena side requires creating the class, registering it on
+`Settings` with an `Arena` alias, and accepting that a new `[Arena]` section appears in
+every user's `AFKJourney.toml`. That is a visible change to existing installs and is
+stated here deliberately rather than discovered during implementation.
+
+Pydantic generates the UI from the schema, so no frontend work is needed once the backend
+model is correct.
 
 Off is the default because this changes which opponent gets attacked, and an upgrade must
 not silently alter behaviour for anyone who has not asked for it.
@@ -168,10 +241,10 @@ Two reasons this is in scope rather than a nice-to-have:
 
 | situation | behaviour |
 |---|---|
-| Screenshot fails or screen is not the select-opponent screen | Fall through to existing behaviour and log. Never tap blind. |
-| OCR raises | Treat as no-signal, rely on colour, log at warning. OCR failure must not abort the mode. |
+| Screenshot fails or screen is not the select-opponent screen | Retry the read once. If it fails again, **stop the mode** and log an error. Do NOT fall through to the old path: the old path attacks the left card without looking, which is precisely the outcome the toggle exists to prevent. |
+| OCR raises | Treat as no-signal, rely on colour, log at warning. OCR failure must not abort the mode - but note the colour arm is then unbacked, which is why its predicate is pinned numerically above. |
 | The two signals disagree | Flag the card - safe side - and archive the frame prominently. |
-| Refresh tapped but the screen does not change | Re-screenshot once, then treat as exhausted rather than tapping repeatedly. |
+| Refresh tapped but the screen does not change | Re-screenshot once. If it still has not changed, **stop the mode**. Do NOT infer exhaustion from a static screen: a stalled refresh and an exhausted one look identical, and acting on the guess taps a control that forfeits the challenge. Exhaustion is only ever established by positively matching the X. |
 | Give-up dialog does not appear after tapping X | Log and stop the mode. Do not tap coordinates hoping. |
 | Toggle off | Existing code path, untouched, no screenshots, no OCR. |
 
@@ -189,11 +262,12 @@ Two reasons this is in scope rather than a nice-to-have:
 
 ## Open assumptions
 
-1. **Supreme Arena's Guild Member badge is assumed** to sit in the same band as its Friend
-   badge, styled like Arena's Guild Member badge. Never observed, because guild-mates who
-   are also friends display as Friend. Mitigated by the OR rule and by frame collection.
+1. ~~Supreme Arena's Guild Member badge position is assumed.~~ **RESOLVED 2026-07-31** -
+   observed on the right card (x 759-948, y 981-1020) and the middle card (x 446-636,
+   y 1048-1091). Same band as Friend, same centre, same width across columns.
 2. **Arena card 3 and Supreme Arena card 3 are never evaluated**, so no geometry was
    measured for them. If the product rule ever changes, that work is outstanding.
 3. **Badge bands were measured at 1080x1920 only.** Other resolutions are unverified.
-4. **The left-card band in Supreme Arena is inferred** from the right card plus the
-   observed stagger, not measured.
+4. **No badge has been observed on Supreme Arena's LEFT card.** Its band is inferred from
+   the two measured columns plus the card stagger. Mitigated by the OR rule and resolved
+   over time by frame collection - this is the specific gap the collection exists to fill.

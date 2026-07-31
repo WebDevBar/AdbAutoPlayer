@@ -236,9 +236,8 @@ Per attempt, with the toggle on:
    destructive give-up flow.
 6. When exhausted with both still flagged: **positively match the X control** before
    tapping it - never tap the refresh coordinate on the assumption that it has become the
-   X. Then wait for the "Give up this challenge?" dialog and match it before tapping the
-   confirm tick. Two template matches, both required, because this path forfeits a daily
-   attempt.
+   X. Then confirm the dialog per "The give-up dialog" below. Two positive matches are
+   required before anything is tapped, because this path forfeits a daily attempt.
 
 Before any tap that commits to a battle, take a second screenshot and re-evaluate.
 
@@ -267,8 +266,21 @@ Refresh or X:
 
 **Match the GLYPH, not the text.** The refresh state renders "Refresh : 7/7" or
 "Refresh : 5/5" beside a circular-arrow icon; the count varies by mode and the word is
-localised. The circular arrow and the X are neither. Two templates, cropped to the glyph
-only, matched inside the search region above.
+localised. The circular arrow and the X are neither.
+
+**The templates are assets to be cut, and this spec names their source exactly** so two
+implementers produce the same file:
+
+| template file | cut from | crop box |
+|---|---|---|
+| `arena/refresh_glyph.png` | `01-friend-badge-middle-card-20260731.png` | x 940-1010, y 1745-1815 |
+| `arena/give_up_glyph.png` | `03-refresh-exhausted-x-button-friend-on-left-20260731.png` | x 940-1010, y 1745-1815 |
+
+Both modes share these two templates: the glyph artwork is identical and only the button
+box moves, which is why the search region is per mode and the template is not.
+
+Source frames are in `/mnt/vault/adbautoplayer/arena-friendly-fire/`. The crop boxes are
+recorded so the assets can be re-cut identically if lost or if the game restyles the icons.
 
 **Threshold and tie-break.** A confidence floor of 0.8 on each template, and then exactly
 one of these three outcomes:
@@ -282,6 +294,28 @@ one of these three outcomes:
 Both-match is treated as unknown rather than resolved by higher confidence. The two glyphs
 are visually unalike, so a double match means something is wrong with the read, and the
 cost of guessing is a forfeited attempt.
+
+## The give-up dialog
+
+Reached only from step 6, and it spends an attempt, so every element is pinned.
+
+| element | geometry |
+|---|---|
+| dialog template `arena/give_up_dialog.png` | cut from `04-give-up-confirmation-dialog-20260731.png`, x 300-800, y 900-1000 - the blank upper sheet |
+| search region for it | x 200-900, y 850-1050 |
+| confirm tick, green circle | x 786-946, y 1163-1320, **tap centre (866, 1241)** |
+| cancel button, cream circle | x 500-779, y 1150-1331, centre (639, 1240) |
+
+Confidence floor 0.8, as for the control.
+
+**The dialog must match before the tick is tapped.** If it does not appear within the
+normal navigation timeout, stop the mode - do not tap (866, 1241) hoping. That coordinate
+is the confirm tick only while the dialog is up; without it the point is bare background
+in Arena and a card in Supreme Arena.
+
+The template is the blank sheet rather than the words "Give up this challenge?", because
+the sheet is language-independent and the sentence is not. The cancel button's geometry is
+recorded for one reason: so an implementation can assert it is not tapping it.
 
 ## Settings
 

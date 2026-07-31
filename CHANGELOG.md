@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Prevent Friendly Fire, for Arena and Supreme Arena.** A per-mode checkbox -
+  "Prevent Friendly Fire - do not attack friends or guild-mates in this mode" - that skips
+  opponents the game marks as Friend or Guild Member. **Off by default**, because turning
+  it on changes which opponent is attacked and an upgrade should not do that silently.
+  - Detects the badge by SHAPE rather than position: a badge is a wide short bar and the
+    green battle button is a blob, aspect 3.0-6.2 against 0.7. That needs no anchor, so the
+    cards' vertical stagger stops mattering. Area alone would not work - the largest badge
+    is 7948px and the smallest sword button 8012px.
+  - Two independent signals, colour and OCR, scoped differently on purpose so they cannot
+    share a failure. Either one flags a card. The OCR arm matches whole boxes exactly, so a
+    player called "Friendzone" is not mistaken for one.
+  - Skips to the next preferred card, then refreshes, and only gives up the challenge when
+    every refresh is spent. **Respects the existing Opponent Position setting** rather than
+    overriding it: Right offers card 3 first, but card 3 is never used as a fallback.
+  - **One signal can skip a card, but never forfeit an attempt.** Giving up requires both
+    signals to agree on every card - a persistent false positive would otherwise drain the
+    refreshes and spend a daily attempt on a bad read.
+  - Confirms with a second screenshot before committing to a battle, and remembers any card
+    that disagreed for the rest of the attempt. The mode has no timer, so the extra read is
+    free and being wrong is not.
+  - Every evaluated frame is archived under the app data directory, with disagreements
+    marked, so the cases no fixture covers can be studied later.
+
 - **Themes that share modifiers are treated as one population.** Flourishing Wilds closes
   and Tactical Grounds opens with the same modifiers, so the model no longer throws away
   everything it learned at the rotation. Tactical Grounds opens with this theme's matches

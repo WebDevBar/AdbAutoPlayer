@@ -397,6 +397,31 @@ class TitanReaverProxyBattlesSettings(BaseModel):
     )
 
 
+_FRIENDLY_FIRE_LABEL = (
+    "Prevent Friendly Fire - do not attack friends or guild-mates in this mode"
+)
+_FRIENDLY_FIRE_DESCRIPTION = (
+    "Skip opponents the game marks as Friend or Guild Member. Refreshes for another "
+    "opponent instead; gives up the challenge only if every refresh is spent. Off by "
+    "default - turning it on changes which opponent is attacked."
+)
+
+
+class ArenaSettings(BaseModel):
+    """Arena Settings model.
+
+    New section. Arena had no settings at all before this, so an [Arena] block
+    appears in every existing AFKJourney.toml on upgrade.
+    """
+
+    prevent_friendly_fire: bool = Field(
+        default=False,
+        alias=_FRIENDLY_FIRE_LABEL,
+        title=_FRIENDLY_FIRE_LABEL,
+        description=_FRIENDLY_FIRE_DESCRIPTION,
+    )
+
+
 class SupremeArenaSettings(BaseModel):
     """Supreme Arena Settings model."""
 
@@ -406,6 +431,12 @@ class SupremeArenaSettings(BaseModel):
         alias="Opponent Position",
         title="Opponent Position",
         description="Which opponent card to select: Left (weakest), Middle, or Right.",
+    )
+    prevent_friendly_fire: bool = Field(
+        default=False,
+        alias=_FRIENDLY_FIRE_LABEL,
+        title=_FRIENDLY_FIRE_LABEL,
+        description=_FRIENDLY_FIRE_DESCRIPTION,
     )
 
 
@@ -465,6 +496,9 @@ class Settings(TomlSettings):
         default_factory=TitanReaverProxyBattlesSettings,
         alias="Titan Reaver Proxy Battles",
         title="Titan Reaver Proxy Battles",
+    )
+    arena: ArenaSettings = Field(
+        default_factory=ArenaSettings, alias="Arena", title="Arena"
     )
     supreme_arena: SupremeArenaSettings = Field(
         default_factory=SupremeArenaSettings,

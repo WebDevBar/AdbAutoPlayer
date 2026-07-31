@@ -268,29 +268,41 @@ Refresh or X:
 "Refresh : 5/5" beside a circular-arrow icon; the count varies by mode and the word is
 localised. The circular arrow and the X are neither.
 
-**The templates are assets to be cut, and this spec names their source exactly** so two
-implementers produce the same file:
+**The templates are GLYPH crops, strictly smaller than the search region.** An earlier
+draft gave the whole button face as the crop box - 170px wide - while Supreme Arena's
+search region is 169px. A template wider than the image it is searched in cannot be
+matched at all, so the exhausted control would have errored rather than classified. Peer
+review caught it by comparing the two numbers.
 
-| template file | cut from | crop box |
+Glyphs measured as connected components inside each button face: Arena X 55x55,
+Supreme Arena X 55x55, Supreme Arena refresh 62x63. An 80x80 crop contains each with
+margin and fits inside both search regions.
+
+| template file | cut from | crop box (80x80) |
 |---|---|---|
-| `arena/refresh_glyph.png` | `01-friend-badge-middle-card-20260731.png` | x 882-1052, y 1724-1864 |
-| `supreme_arena/refresh_glyph.png` | `05-supreme-arena-select-opponent-no-badges-20260731.png` | x 860-1029, y 1718-1859 |
-| `arena/give_up_glyph.png` | `03-refresh-exhausted-x-button-friend-on-left-20260731.png` | x 882-1052, y 1724-1864 |
+| `arena/refresh_glyph.png` | `01-friend-badge-middle-card-20260731.png` | x 930-1010, y 1745-1825 |
+| `supreme_arena/refresh_glyph.png` | `05-supreme-arena-select-opponent-no-badges-20260731.png` | x 905-985, y 1735-1815 |
+| `arena/give_up_glyph.png` | `03-refresh-exhausted-x-button-friend-on-left-20260731.png` | x 930-1010, y 1745-1825 |
+
+**Invariant, and it must be asserted in a test:** every template's width and height are
+strictly less than its search region's. 80x80 against 170x140 in Arena and 169x141 in
+Supreme Arena.
 
 **The refresh glyph is NOT shared between the modes; the X is.** An earlier draft asserted
-that both modes used the same artwork and only the button box moved. That was wrong, and
-peer review disproved it by measurement: the Arena refresh template scores **0.36** against
-the Supreme Arena control, far below the 0.8 floor, so Supreme Arena's genuine Refresh
-would have classified as "neither" and stopped the mode every time both cards were flagged.
+both modes used the same artwork with only the button box moving. Peer review disproved it
+by measurement: the Arena refresh template scores **0.36** against the Supreme Arena
+control, far below the 0.8 floor, so Supreme Arena's genuine Refresh would have classified
+as "neither" and stopped the mode every time both cards were flagged.
 
-Looking at them side by side, the difference is plain: **Arena's arrow is anticlockwise and
-thin, Supreme Arena's is clockwise and thick.** They are different icons.
+Side by side the difference is plain: **Arena's arrow is anticlockwise and thin, Supreme
+Arena's is clockwise and thick.** Different icons.
 
-The X, by contrast, cross-matches at **1.00** between the two modes, so one template serves
-both and `give_up_glyph.png` has no per-mode variant.
+The X cross-matches at **1.00** between the modes, and both sit at the same offset within
+their button face, so one template serves both and `give_up_glyph.png` has no per-mode
+variant.
 
-The lesson is recorded because it nearly shipped twice: a claim that two assets are "the
-same artwork" is a measurement, not an observation, and this spec was wrong about it until
+The lesson is recorded because it nearly shipped: a claim that two assets are "the same
+artwork" is a measurement, not an observation, and this spec was wrong about it until
 someone matched them.
 
 **Threshold and tie-break.** A confidence floor of 0.8 on each template, and then exactly

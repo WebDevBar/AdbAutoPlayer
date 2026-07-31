@@ -372,7 +372,17 @@ Two reasons this is in scope rather than a nice-to-have:
   positive guard.
 - A test that the colour rule accepts cyan as well as green, since a green-only rule is the
   obvious regression.
-- A test that the run-length threshold rejects the 134 stray pixels in the baseline frame.
+- A test that the 400px speck discard rejects the scattered badge-coloured pixels in the
+  baseline frame: it contains 400 such pixels in total, none forming a component that
+  survives the discard, so the frame must yield zero candidates before the shape rules are
+  even reached.
+- A test that the shape rules reject the sword buttons, which DO survive the speck discard
+  at ~8000px each and are excluded only by `height <= 80` and `w/h >= 2.0`. This is the
+  test that would have caught the original design, and it must fail if either bound is
+  relaxed.
+- A test that area alone is insufficient: the largest badge is 7948px and the smallest
+  sword button 8012px, so any implementation that reintroduces an area-only rule must be
+  caught.
 - Decision-table tests for the selection algorithm: card 1 clean; card 1 flagged and card 2
   clean; both flagged with refreshes left; both flagged and exhausted.
 - No device is required for any of the above; frames are fixtures.

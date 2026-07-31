@@ -30,6 +30,8 @@ a new data source - not simply more matches. Detail for each is further down.
 | **Rank as a corrective ON TOP of a confident hero call** | Where the two disagree the hero model wins 11-6. Re-weighting would overturn more correct calls than it rescues | 2026-07-29, n=453 |
 | **Stacking a feature onto Bradley-Terry with a fitted weight** | Not a feature result - 435 matches cannot estimate stacking weights. Every stack scored worse than BT alone; the full stack scored worse than the base rate | rounds 2 and 3 |
 | **Synergy matrices, hero embeddings, GNNs, attention over draft** | Literature methods needing 10k-1M matches for thousands of pair parameters. Published draft-only accuracy is ~58% anyway. Not an option at 435 | web research, both reviewers |
+| **The crowd's betting split as a FILTER on our own bets** | Distinct from the crowd as a model INPUT, closed further up this table. A 90-cell threshold grid; best agreement gain +3.8 points; conditional permutation p = 0.577; both cross-theme directions reverse. The continuous forms - pool log-ratio, pool size x crowd size, spectator calibration - all worsen held-out logloss, with the pool coefficient flipping sign across themes (+0.146 / -0.156). Spectator count carries no independent information (p = 0.16), and `left_odds`/`right_odds` are redundant with the pools (R^2 = 0.70) and worsen logloss too | 2026-07-31 |
+| **Betting left only / never staking the right side** | Permutation p = 0.25 under three nulls (Fable) and 0.577-0.97 (Codex); reverses out of theme. Its rationale was a base-rate error: against a 42.8% right base rate the model's RIGHT calls carry +5.3 lift against +2.6 for its left calls | 2026-07-31 |
 
 ## Round 4, 2026-07-30, n=714 across two themes (634 predictions)
 
@@ -275,10 +277,18 @@ theme, automatically.
 | theme | matches | fitted intercept | P(blue wins) at equal comps | raw left win rate |
 |---|---|---|---|---|
 | Converging Paths | 365 | -0.025 | **49.4%** | 50% |
-| Flourishing Wilds | 462 | **+0.244** | **56.1%** | 57% |
+| Flourishing Wilds | 462 | **+0.16 at the theme's end** | **54.0%** | 57% |
 
-So on the live theme, two identical comps give blue about **56%** - roughly six points -
-and on the previous theme the effect is absent.
+**That intercept is a moving quantity, not a constant, and the row above is one reading of
+it.** Refitting walk-forward across Flourishing Wilds puts it near **+0.10 early, ~+0.31
+mid-theme and +0.16 at the last refit** - a swing of more than two to one within a single
+theme. This row previously recorded a static `+0.244`, corrected 2026-07-31; quoting any
+one value of it as a property of the theme is the same selection error this file exists to
+prevent.
+
+So on the live theme, two identical comps give blue somewhere between about **52% and
+58%** depending on when the fit is taken - two to eight points - and on the previous theme
+the effect is absent.
 
 That theme-dependence is what makes the hypothesis plausible rather than merely
 convenient: a first pick is worth most when there is a dominant hero worth taking first,
@@ -303,31 +313,104 @@ If first pick is a game mechanic it should appear on every machine, and it does 
 on theirs. Their samples are small - 47 between them - but 34% pooled is not obviously
 noise around 56%.
 
-**Their data is not broken, which was checked before blaming it.** The higher-rated side
-wins 67% in both their sets against 59% in ours, so they are not misreading outcomes; and
-a mirrored install would flip sides and ratings together, leaving that figure intact,
-which it is. The left/right labels mean the same thing on all three machines.
+**"The left/right labels mean the same thing on all three machines" was written here on
+2026-07-30 and is STRUCK, 2026-07-31.** The check behind it was that the higher-rated side
+wins 67% in both their sets against 59% in ours, on the reasoning that a mirrored install
+would flip sides and ratings together and leave that figure intact. It would - which is
+precisely why that figure cannot detect mirroring. It was evidence of nothing, and the
+claim rested entirely on it.
 
-So there is no defect to point at. Three readings remain open: the advantage is real and
-their samples are too small; the three of us are drawn from pools that differ in some way
-that matters; or the effect is ours alone and something else explains it.
+**What replaces it is a located defect on our own side.** Six pairs of rows in the client
+database are the same match recorded twice, 1 to 16 seconds apart; in four of them the
+hero trios AND the outcome are mirrored between our row and the synced one. Pair 1043/1046
+is the worked example, and `draft-1043.png` confirms ours is the correct orientation for
+that match. The three groups of fields have three different provenances: `left_player` /
+`right_player` come from the summary HEADER by x-position and `left_rating` /
+`right_rating` from the DRAFT screen, so neither flips; `match_hero.side` and `outcome`
+come from the summary PANELS via `_winner_by_panel_tint`, which ignores left and right
+entirely and is then mapped to a side through the cell config. **That mapping is the
+defect**, and it is why names and ratings stay put while heroes and outcome flip.
+
+So a blue-win rate compared across contributors is measuring a panel mapping as much as it
+is measuring the game, and the collector table above is not evidence about first pick in
+either direction until the mirrored rate is known. The rate, its Wilson interval and its
+correlates are measured in `side-audit-2026-07-31.md` (a read-only audit of every stored
+row against the draft frame's true blue/red plates). Note also that some rows attributed to
+another collector may be our own coming back through the pool - see the `contributor_uuid`
+entry below.
+
+So there IS a defect to point at, and it has to be measured before those samples mean
+anything. Beyond it three readings remain open: the advantage is real and their samples
+are too small; the three of us are drawn from pools that differ in some way that matters;
+or the effect is ours alone and something else explains it.
 
 ### What would settle it, and what NOT to do meanwhile
 
-**Their match count settles it and nothing else does.** At 150-200 matches each, their
-figure either converges on ours or it does not. Tactical Grounds is the natural place to
-collect that, since it shares modifiers with the current theme.
+**Their match count settles it, once the mirrored rate is known, and nothing else does.**
+At 150-200 matches each, their figure either converges on ours or it does not - but a
+comparison run before the audit is a comparison of two panel mappings, not of two pools.
+Tactical Grounds is the natural place to collect that, since it shares modifiers with the
+current theme.
 
 Do NOT hard-code a first-pick prior, and do not raise the intercept's weight. The model
 already estimates this per theme from the data, which is the correct treatment for a
-quantity that is 0.244 on one theme and -0.025 on the next. Writing in a fixed number
-would be choosing a value from one theme's sample - precisely the selection error this
-file exists to prevent.
+quantity that moves between +0.10 and +0.31 within one theme and sits at -0.025 on the
+next. Writing in a fixed number would be choosing a value from one theme's sample -
+precisely the selection error this file exists to prevent.
 
-Pick order is NOT stored. `match_hero.slot` is the position on the team plate, not the
-draft order, so nothing here can be checked against a per-match pick sequence. Recording
-draft order would make the hypothesis directly testable - whether the first-picked hero
-outperforms - and is the one schema change this question would justify.
+Pick order is NOT stored, and recording it is CLOSED as moot - see the entry below. It is
+a constant function of `(side, slot)`, so it carries nothing the model does not already
+have from side.
+
+## Data integrity, 2026-07-31 - three things that change how earlier numbers read
+
+None of these is a model finding. All three change what an existing number means, which is
+why they are in this file rather than only in a commit message.
+
+### Our own rows can be counted as somebody else's
+
+`install.instance_uuid` appears in `match.contributor_uuid` on rows the pool echoes back
+to us, so a row we collected can be read as an external collector's. Any per-contributor
+figure computed without accounting for this is partly comparing us against ourselves.
+
+**It has already cost one result.** A confound test that read p = 0.019 moved to
+**p = 0.13** once the attribution was corrected - from apparently significant to plainly
+null on nothing but a uuid. Treat every earlier per-contributor split, including the
+collector table above, as unaudited until it is recomputed on corrected attribution.
+
+### Scored accuracy is UNDERSTATED while mirrored rows exist
+
+`predicted_left` is written from the DRAFT screen before the fight. `outcome` is written
+from the summary panels afterwards. In a mirrored row those two refer to opposite frames,
+so the row is scored backwards - a correct call is recorded as a miss and a miss as a hit.
+
+Every mirrored row therefore costs two points of measured accuracy rather than one, so the
+figure is understated by roughly **twice the mirrored rate**. This is a floor on the real
+number, not a correction to apply by hand: the size of it is whatever the frame audit
+measures.
+
+`predicted_left` itself is CORRECT and must not be touched. It is draft-relative, and the
+draft screen is the one surface that does not flip. Any repair belongs on `match_hero.side`
+and `outcome`.
+
+### Pick order is CLOSED as moot - it IS the left bias restated
+
+The `draft_pick` cells are registered `left 1, right 2, right 3, left 4, left 5, right 6`.
+The plate number is therefore a constant function of `(side, slot)` - it is fixed by the
+layout, not observed per match.
+
+Two consequences, and they close the question:
+
+- It carries **no information the model does not already have from side.** Adding it is
+  adding a relabelling of a column already in the fit.
+- It **cannot explain the left bias**, because under a fixed layout "first pick" and "left"
+  are the same statement. A term that is definitionally equal to the thing it is meant to
+  explain explains nothing.
+
+So the schema change previously pre-registered for this is withdrawn. The first-pick
+hypothesis is not disproved by any of that - the intercept is still real and still
+theme-dependent - but pick order is not the route to settling it, and the cross-contributor
+count, after the audit, remains the only one.
 
 ## Re-open when the data arrives - pre-registered
 
@@ -345,8 +428,8 @@ passed at 3.2x SE on 61 matches and turned out to measure nothing.
 | **The confidence threshold** | Flourishing Wilds at ~200 of its own matches | Whether a line exists at all under the PRODUCTION path, and where. Validates itself as the new theme fills; no collection work needed. Round 4: selectivity confirmed real (permutation p = 0.000) but the specific line is still unearned |
 | ~~Calibration / under-confidence~~ | ~~600 predictions~~ | **CLOSED round 5** - trigger fired, tested online and out of sample, t = -0.57. The under-confidence is real and acting on it is worse. See round 5 |
 | **Bradley-Terry decay as the roster changes** | ongoing | The incumbent. Watch it does not rot |
-| **First pick as the blue-side advantage** | other contributors at ~150-200 matches EACH on a shared-modifier theme | Whether the +0.244 intercept on Flourishing Wilds appears on their machines too. Converges or it does not; nothing else settles it. Do not hard-code a prior meanwhile - the model already fits this per theme |
-| **Record the draft PICK ORDER** | before the next event | Not a test, a schema gap. `slot` is plate position, not pick order, so the first-pick hypothesis cannot be checked directly - e.g. whether the first-picked hero outperforms. The only schema change this question justifies |
+| **First pick as the blue-side advantage** | other contributors at ~150-200 matches EACH on a shared-modifier theme, AND the frame side audit run | Whether the Flourishing Wilds intercept - a moving +0.10 to +0.31, not the static +0.244 this row used to quote - appears on their machines too. Converges or it does not; nothing else settles it. **The audit is now a precondition**: before the mirrored rate is known, a cross-contributor comparison compares two panel mappings. Do not hard-code a prior meanwhile - the model already fits this per theme |
+| ~~Record the draft PICK ORDER~~ | ~~before the next event~~ | **CLOSED as moot, 2026-07-31** - the plate number is a constant function of `(side, slot)`, so it adds nothing to what side already gives the model, and it cannot explain the left bias because it is the left bias restated. See the data-integrity entries above |
 
 Rating evidence is scoped per EVENT, not per theme, because a player's skill does not
 change when the battlefield does. So unlike the hero model, that scoping survives a

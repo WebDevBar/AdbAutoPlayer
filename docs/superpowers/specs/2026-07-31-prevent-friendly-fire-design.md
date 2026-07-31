@@ -264,7 +264,7 @@ Per attempt, with the toggle on:
    (see below). Under the default that is cards 1 and 2 only; card 3 is evaluated ONLY when
    it is the configured choice, and is never used as a fallback for a flagged card.
 3. Take the first unflagged card in that order.
-4. If both are flagged: **classify the bottom-right control FIRST** (see "Classifying the
+4. If **every evaluated card** is flagged: **classify the bottom-right control FIRST** (see "Classifying the
    control" below) - it is either
    Refresh or the X, and it must be positively matched as one of them before anything is
    tapped. If it is Refresh: tap it, take a fresh screenshot, re-evaluate. If it is
@@ -276,7 +276,8 @@ Per attempt, with the toggle on:
    **The control is classified before every tap, not once.** An already-exhausted screen
    on the first pass would otherwise send a Refresh tap into the X and open the
    destructive give-up flow.
-6. When exhausted with both still flagged: **check the give-up precondition first** (see
+6. When exhausted with **every evaluated card** still flagged: **check the give-up
+   precondition first** (see
    "Never forfeit on one signal"). If it is not met, stop the mode instead. If it is,
    **positively match the X control** before
    tapping it - never tap the refresh coordinate on the assumption that it has become the
@@ -365,7 +366,7 @@ Supreme Arena.
 both modes used the same artwork with only the button box moving. Peer review disproved it
 by measurement: the Arena refresh template scores **0.36** against the Supreme Arena
 control, far below the 0.8 floor, so Supreme Arena's genuine Refresh would have classified
-as "neither" and stopped the mode every time both cards were flagged.
+as "neither" and stopped the mode every time all evaluated cards were flagged.
 
 Side by side the difference is plain: **Arena's arrow is anticlockwise and thin, Supreme
 Arena's is clockwise and thick.** Different icons.
@@ -461,6 +462,11 @@ never evaluated and never tapped, exactly as today.
 
 Arena has no equivalent setting, so its order is fixed: card 1, then card 2.
 
+**"Every evaluated card" means the cards in the active order** - two under Left, Middle and
+Arena; three under Right. The algorithm says "every evaluated card" rather than "both"
+because an earlier draft assumed two everywhere, which left the exhaustion transition
+undefined under Right.
+
 ## Settings
 
 One field per mode, so the two stay independently controllable as they are today:
@@ -537,7 +543,9 @@ Two reasons this is in scope rather than a nice-to-have:
   sword button 8012px, so any implementation that reintroduces an area-only rule must be
   caught.
 - Decision-table tests for the selection algorithm: card 1 clean; card 1 flagged and card 2
-  clean; both flagged with refreshes left; both flagged and exhausted.
+  clean; all evaluated cards flagged with refreshes left; all flagged and exhausted. Run
+  the table for each `Opponent Position` value, since Right evaluates THREE cards and the
+  two-card wording is what round 14 caught.
 - **Control classification**, which had no test at all: frames 01 and 05 are ready-made
   Refresh fixtures, 03 and 06 ready-made X fixtures. Each must classify correctly in its own
   mode.

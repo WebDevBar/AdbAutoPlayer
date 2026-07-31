@@ -183,7 +183,7 @@ Badge width is constant per mode regardless of column, which is a useful invaria
 
 ### Signal 2 - OCR
 
-OCR a crop of the **whole card**, and flag on "Friend" or "Guild Member".
+OCR the card's crop rectangle - defined below - and flag on "Friend" or "Guild Member".
 
 **Both crops are defined explicitly.** Leaving them as "a generous band" and "the whole
 card" was a leftover from the abandoned anchored-band design and is not implementable.

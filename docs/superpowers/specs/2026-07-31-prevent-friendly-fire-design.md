@@ -47,6 +47,8 @@ Measured from frames captured 2026-07-31, archived at
 | `04-give-up-confirmation-dialog` | "Give up this challenge?" with X (cancel) and tick (confirm) |
 | `05-supreme-arena-select-opponent-no-badges` | Supreme Arena baseline, no badges - the frame that proves a band reads empty |
 | `06-supreme-arena-friend-badge-right-card` | Supreme Arena, Friend badge on the right card |
+| `07-supreme-arena-guild-member-badge` | Supreme Arena, Guild Member on the right card - same band as Friend |
+| `08-supreme-arena-badge-middle-card` | Supreme Arena, Guild Member on the middle card - same width, 67px lower |
 
 ### Badges
 
@@ -104,45 +106,54 @@ Friend (green): g > 120  and  r < 110  and  g - r > 60  and  g - b > 40
 Guild  (cyan):  g > 130  and  b > 130  and  r < 110  and  |g - b| < 45  and  g - r > 60
 ```
 
-A card is flagged when, inside that card's **anchored band** (below), some single row
-contains a horizontal run of **>= 60 consecutive** badge-coloured pixels.
+A card is flagged when a **connected component** of badge-coloured pixels satisfies ALL of:
 
-Three properties of this rule are load-bearing, and each was established by measurement
-rather than choice:
+```
+area   >= 2000 px
+width  >= 100 px
+height <= 80 px
+width / height >= 2.0
+```
 
-**It must be a RUN, not a count.** On the Supreme Arena baseline frame, "is this colour
-present anywhere" matches 134 stray pixels from the title lettering and artwork. A badge
-is a solid bar; scattered pixels are not.
+The component's x centre assigns it to a card.
 
-**It must accept green OR cyan.** A green-only rule sails straight past Guild Member.
+**Shape, not position.** An earlier draft searched a y band anchored to the player-name
+row. Peer review killed that: nothing in the frames uniquely identifies the name row
+against the adjacent score, power and rank text, and "the band above it" has no defined
+extent - so the anchored detector was not implementable, and anchoring was the only thing
+excluding the sword-button false positives.
 
-**The band must be anchored per card, or the threshold is unusable.** Searching a loose
-y window catches the green "battle" sword buttons, which produce runs of **65-71px on
-cards carrying no badge** - above any threshold that still detects a Supreme Arena badge
-at 89-92. Measured over all eight frames:
+A badge is a **wide short bar**; the green battle button is a **blob**. That distinction
+needs no anchor, and it makes the vertical stagger irrelevant:
 
-| scope | true badges | everything else |
+| | w x h | aspect |
 |---|---|---|
-| loose y window (850-1300) | 89, 92, 177, 178, 247 | **65, 71** (sword buttons), 35, 7, 0 |
-| anchored band | 91, 177, 178, 247 | 35, 0 |
+| badges, all six observed | 191x42, 261x42, 193x41, 141x47, 193x54, 193x54 | **3.00 - 6.21** |
+| sword buttons | 111x158, 110x157 | **0.70** |
+| other artwork | 48x107 | 0.45 |
 
-Anchored, the separation is 91 against 35 and a threshold of 60 sits between them with
-margin on both sides. Unanchored, there is no threshold that works.
+The baseline frame produces no qualifying component at all.
+
+**Area alone would NOT work.** The largest badge is 7948px and the smallest sword button
+8012px - they overlap. Aspect ratio is what separates them, and a rule written on area
+would have passed every frame in this set while being wrong.
+
+Three further properties are load-bearing, each established by measurement:
+
+**It must be green OR cyan.** A green-only rule sails straight past Guild Member.
+
+**Connectivity is 8-way**, and components under 400px are discarded as specks before any
+shape test.
+
+**The predicate is exact, not a tolerance.** Codex demonstrated that a "within N of this
+RGB" formulation flips the answer with N - an 18px run at one setting, 92px at another -
+and one of those settings attacks the friend.
 
 Language-independent, costs microseconds, needs no template file.
 
-### The anchored band
+### Measured badge boxes
 
-Elements are fixed relative to their own card; only the card is staggered. So the band is
-derived per card from an anchor **detected in that frame** - the player-name row - rather
-than stored as absolute pixels.
-
-Do NOT hardcode a badge-to-name offset. Measured by eye at 59px on one Supreme Arena card
-and 70px on another; that spread is probably eyeballing rather than a real difference, and
-the way to stop guessing is for the implementation to locate the name row and take the
-band above it.
-
-Measured badge boxes, for fixture tests and for sanity-checking the anchor logic:
+For fixture tests and for validating a detection:
 
 | mode | card | badge | x | y |
 |---|---|---|---|---|
@@ -153,9 +164,7 @@ Measured badge boxes, for fixture tests and for sanity-checking the anchor logic
 | Supreme Arena | right | Guild | 759-948 | 981-1020 |
 | Supreme Arena | middle | Guild | 446-636 | 1048-1091 |
 
-Badge width is constant per mode regardless of column - ~190 in Supreme Arena, ~188 for
-Friend and ~258 for Guild in Arena - which is a useful invariant for validating a
-detection.
+Badge width is constant per mode regardless of column, which is a useful invariant.
 
 ### Signal 2 - OCR
 
@@ -179,10 +188,17 @@ Per attempt, with the toggle on:
    outside the player's power bracket. This is a deliberate product decision, not a
    detection limit.
 3. Take the first unflagged card, preferring card 1.
-4. If both are flagged: tap Refresh, take a fresh screenshot, and re-evaluate.
-5. Repeat until a card is taken **or the refresh control has become the X**. Do not count
+4. If both are flagged: **classify the bottom-right control FIRST** - it is either
+   Refresh or the X, and it must be positively matched as one of them before anything is
+   tapped. If it is Refresh: tap it, take a fresh screenshot, re-evaluate. If it is
+   already the X, go straight to step 6 without tapping Refresh.
+5. Repeat until a card is taken or the control classifies as the X. Do not count
    refreshes: the limit differs per mode (7 and 5) and could change in a patch. Exhaustion
-   is a visual fact.
+   is a visual fact, never an inferred one.
+
+   **The control is classified before every tap, not once.** An already-exhausted screen
+   on the first pass would otherwise send a Refresh tap into the X and open the
+   destructive give-up flow.
 6. When exhausted with both still flagged: **positively match the X control** before
    tapping it - never tap the refresh coordinate on the assumption that it has become the
    X. Then wait for the "Give up this challenge?" dialog and match it before tapping the

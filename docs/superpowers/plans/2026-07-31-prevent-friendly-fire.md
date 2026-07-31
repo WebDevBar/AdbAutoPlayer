@@ -1332,6 +1332,52 @@ def evaluate(
         f"-> {decision.action.value} ({decision.reason})"
     )
     return decision
+
+
+def confirms_take(
+    frame: np.ndarray,
+    mode: Mode,
+    position: OpponentPosition,
+    ocr_backend,
+    card: int,
+) -> bool:
+    """Second read: is `card` STILL clear on a fresh frame?
+
+    The mode has no timer, so a confirming read is free and the cost of being wrong
+    is not. A card seen clear once and flagged once is treated as flagged - the
+    optimistic read would defeat the whole feature.
+
+    Args:
+        frame: a SECOND screenshot, taken after the one that produced the decision.
+        mode: which screen.
+        position: the configured preference.
+        ocr_backend: anything exposing `detect_text_blocks`.
+        card: the card the first read chose.
+
+    Returns:
+        True only if both reads agree the card is clear.
+    """
+    order = preference_order(mode, position)
+    colour = cards_with_badges(frame, mode) & set(order)
+    ocr = _ocr_flags(frame, mode, [card], ocr_backend)
+    if card in (colour | ocr):
+        logging.warning(
+            f"[FF-02] second read disagrees on card {card + 1} - treating as flagged"
+        )
+        archive(frame, mode, f"DISAGREE-card{card + 1}")
+        return False
+    return True
+
+
+def screen_changed(before: np.ndarray, after: np.ndarray) -> bool:
+    """Whether a refresh actually redrew the cards.
+
+    A stalled refresh and an exhausted one look identical from a single frame, and
+    acting on the guess taps a control that forfeits an attempt.
+    """
+    if before.shape != after.shape:
+        return True
+    return bool(np.mean(np.abs(before.astype(np.int16) - after.astype(np.int16))) > 1.0)
 ```
 
 And export it:
@@ -1438,6 +1484,10 @@ from adb_auto_player.games.afk_journey.services.friendly_fire import (
 from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
     find_give_up_tick,
 )
+from adb_auto_player.games.afk_journey.services.friendly_fire.evaluate import (
+    confirms_take,
+    screen_changed,
+)
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
     CARD_X_RANGES,
 )
@@ -1515,6 +1565,7 @@ Methods:
             logging.error(f"[FF-35] {fail}")
             return False
 
+        retried_unknown = False
         for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
             self.handle_popup_messages()
             decision = ff_evaluate(
@@ -1524,14 +1575,39 @@ Methods:
                 self._ff_ocr(),
             )
             if decision.action is Action.TAKE:
-                return self._tap_arena_card(decision.card)
+                # Confirming read before committing to a battle. Free - no timer -
+                # and it is what catches a transient false negative.
+                self.sleep_navigation()
+                if confirms_take(
+                    self.get_screenshot(),
+                    FFMode.ARENA,
+                    OpponentPosition.Left,
+                    self._ff_ocr(),
+                    decision.card,
+                ):
+                    return self._tap_arena_card(decision.card)
+                continue  # disagreement: re-read the board rather than attack
             if decision.action is Action.STOP:
+                # An "unknown" control gets one re-read before the mode stops: a
+                # single bad frame should not end the run.
+                if "neither Refresh nor X" in decision.reason and not retried_unknown:
+                    retried_unknown = True
+                    self.sleep_navigation()
+                    continue
                 logging.warning(f"[FF-31] stopping: {decision.reason}")
                 return False
             if decision.action is Action.GIVE_UP:
                 return self._ff_give_up()
+
+            before = self.get_screenshot()
             self.tap(_ARENA_CONTROL_AT)
             self.sleep_navigation()
+            if not screen_changed(before, self.get_screenshot()):
+                logging.error(
+                    "[FF-37] the screen did not change after a refresh - stopping "
+                    "rather than assuming exhaustion, which would forfeit an attempt"
+                )
+                return False
             # Re-establish readiness after the refresh redraws the cards.
             try:
                 self.wait_for_template(
@@ -1653,6 +1729,10 @@ from adb_auto_player.games.afk_journey.services.friendly_fire import (
 from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
     find_give_up_tick,
 )
+from adb_auto_player.games.afk_journey.services.friendly_fire.evaluate import (
+    confirms_take,
+    screen_changed,
+)
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
     SA_TAP_POINTS,
 )
@@ -1697,6 +1777,7 @@ from adb_auto_player.ocr import RapidOCRBackend
 
     def _sa_choose_opponent_guarded(self) -> bool:
         """Pick an opponent that is neither a Friend nor a Guild Member."""
+        retried_unknown = False
         for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
             self.handle_popup_messages()
             decision = ff_evaluate(
@@ -1706,15 +1787,36 @@ from adb_auto_player.ocr import RapidOCRBackend
                 self._sa_ocr(),
             )
             if decision.action is Action.TAKE:
-                self._tap_sa_card(decision.card)
-                return True
+                self.sleep_navigation()
+                if confirms_take(
+                    self.get_screenshot(),
+                    FFMode.SUPREME_ARENA,
+                    self._sa_position(),
+                    self._sa_ocr(),
+                    decision.card,
+                ):
+                    self._tap_sa_card(decision.card)
+                    return True
+                continue  # disagreement: re-read rather than attack
             if decision.action is Action.STOP:
+                if "neither Refresh nor X" in decision.reason and not retried_unknown:
+                    retried_unknown = True
+                    self.sleep_navigation()
+                    continue
                 logging.warning(f"[FF-41] stopping: {decision.reason}")
                 return False
             if decision.action is Action.GIVE_UP:
                 return self._sa_give_up()
+
+            before = self.get_screenshot()
             self.tap(_SA_CONTROL_AT)
             self.sleep_navigation()
+            if not screen_changed(before, self.get_screenshot()):
+                logging.error(
+                    "[FF-47] the screen did not change after a refresh - stopping "
+                    "rather than assuming exhaustion, which would forfeit an attempt"
+                )
+                return False
         logging.warning("[FF-42] no non-friendly opponent after the round cap")
         return False
 ```

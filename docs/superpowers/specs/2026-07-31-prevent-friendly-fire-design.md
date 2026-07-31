@@ -222,7 +222,8 @@ Per attempt, with the toggle on:
    outside the player's power bracket. This is a deliberate product decision, not a
    detection limit.
 3. Take the first unflagged card, preferring card 1.
-4. If both are flagged: **classify the bottom-right control FIRST** - it is either
+4. If both are flagged: **classify the bottom-right control FIRST** (see "Classifying the
+   control" below) - it is either
    Refresh or the X, and it must be positively matched as one of them before anything is
    tapped. If it is Refresh: tap it, take a fresh screenshot, re-evaluate. If it is
    already the X, go straight to step 6 without tapping Refresh.
@@ -250,6 +251,37 @@ This is the only safe resolution: proceeding on the optimistic read would defeat
 feature, and treating disagreement as fatal would stop the mode over a single noisy frame.
 
 Being slow is free; being wrong is not. The mode has no timer.
+
+## Classifying the control
+
+The bottom-right control is Refresh or the X, and one of those forfeits a daily attempt.
+"Positively match it" is not implementable without numbers, so:
+
+**Search region** - the button face, measured in both states and identical whether it shows
+Refresh or X:
+
+| mode | x | y |
+|---|---|---|
+| Arena | 882-1052 | 1724-1864 |
+| Supreme Arena | 860-1029 | 1718-1859 |
+
+**Match the GLYPH, not the text.** The refresh state renders "Refresh : 7/7" or
+"Refresh : 5/5" beside a circular-arrow icon; the count varies by mode and the word is
+localised. The circular arrow and the X are neither. Two templates, cropped to the glyph
+only, matched inside the search region above.
+
+**Threshold and tie-break.** A confidence floor of 0.8 on each template, and then exactly
+one of these three outcomes:
+
+| result | meaning | action |
+|---|---|---|
+| refresh matches, X does not | refreshes remain | tap it |
+| X matches, refresh does not | exhausted | proceed to the give-up path |
+| both match, or neither matches | **unknown** | re-screenshot and classify once more; if still unknown, stop the mode |
+
+Both-match is treated as unknown rather than resolved by higher confidence. The two glyphs
+are visually unalike, so a double match means something is wrong with the read, and the
+cost of guessing is a forfeited attempt.
 
 ## Settings
 

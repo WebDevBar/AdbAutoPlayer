@@ -273,14 +273,25 @@ implementers produce the same file:
 
 | template file | cut from | crop box |
 |---|---|---|
-| `arena/refresh_glyph.png` | `01-friend-badge-middle-card-20260731.png` | x 940-1010, y 1745-1815 |
-| `arena/give_up_glyph.png` | `03-refresh-exhausted-x-button-friend-on-left-20260731.png` | x 940-1010, y 1745-1815 |
+| `arena/refresh_glyph.png` | `01-friend-badge-middle-card-20260731.png` | x 882-1052, y 1724-1864 |
+| `supreme_arena/refresh_glyph.png` | `05-supreme-arena-select-opponent-no-badges-20260731.png` | x 860-1029, y 1718-1859 |
+| `arena/give_up_glyph.png` | `03-refresh-exhausted-x-button-friend-on-left-20260731.png` | x 882-1052, y 1724-1864 |
 
-Both modes share these two templates: the glyph artwork is identical and only the button
-box moves, which is why the search region is per mode and the template is not.
+**The refresh glyph is NOT shared between the modes; the X is.** An earlier draft asserted
+that both modes used the same artwork and only the button box moved. That was wrong, and
+peer review disproved it by measurement: the Arena refresh template scores **0.36** against
+the Supreme Arena control, far below the 0.8 floor, so Supreme Arena's genuine Refresh
+would have classified as "neither" and stopped the mode every time both cards were flagged.
 
-Source frames are in `/mnt/vault/adbautoplayer/arena-friendly-fire/`. The crop boxes are
-recorded so the assets can be re-cut identically if lost or if the game restyles the icons.
+Looking at them side by side, the difference is plain: **Arena's arrow is anticlockwise and
+thin, Supreme Arena's is clockwise and thick.** They are different icons.
+
+The X, by contrast, cross-matches at **1.00** between the two modes, so one template serves
+both and `give_up_glyph.png` has no per-mode variant.
+
+The lesson is recorded because it nearly shipped twice: a claim that two assets are "the
+same artwork" is a measurement, not an observation, and this spec was wrong about it until
+someone matched them.
 
 **Threshold and tie-break.** A confidence floor of 0.8 on each template, and then exactly
 one of these three outcomes:

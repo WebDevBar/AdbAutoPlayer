@@ -626,6 +626,20 @@ def test_an_unknown_control_never_taps_anything():
     assert d.action is Action.STOP
 
 
+def test_an_excluded_card_is_never_taken_again():
+    """A card rejected by the confirming read must stay rejected, even if a later
+    frame reads clear - otherwise the loop can attack it on the next pass."""
+    d = decide((0, 1), set(), set(), "refresh", excluded=frozenset({0}))
+    assert d.action is Action.TAKE and d.card == 1
+
+
+def test_an_excluded_card_can_never_justify_forfeiting():
+    """Exclusion is one-signal evidence by definition, so it must not satisfy the
+    both-signals precondition for spending an attempt."""
+    d = decide((0, 1), {1}, {1}, "give_up", excluded=frozenset({0}))
+    assert d.action is Action.STOP
+
+
 def test_three_cards_all_flagged_is_handled_not_just_two():
     """Round 14: 'both are flagged' assumed two cards; Right evaluates three."""
     d = decide((2, 0, 1), {0, 1, 2}, {0, 1, 2}, "refresh")
@@ -692,6 +706,7 @@ def decide(
     flagged_colour: set[int],
     flagged_ocr: set[int],
     control: str,
+    excluded: frozenset[int] = frozenset(),
 ) -> Decision:
     """Choose an action.
 
@@ -700,11 +715,14 @@ def decide(
         flagged_colour: cards flagged by the colour arm.
         flagged_ocr: cards flagged by the OCR arm.
         control: "refresh", "give_up" or "unknown".
+        excluded: cards a CONFIRMING read has already rejected. These stay rejected
+            for the rest of the attempt - without that memory the loop re-evaluates
+            from scratch and can take a card the second read called friendly.
 
     Returns:
         The action to take, with a reason for the log.
     """
-    flagged = flagged_colour | flagged_ocr
+    flagged = flagged_colour | flagged_ocr | excluded
     for card in order:
         if card not in flagged:
             return Decision(Action.TAKE, card, f"card {card + 1} is clear")
@@ -718,6 +736,8 @@ def decide(
     # Forfeiting costs a daily attempt, so one signal is not enough to justify it.
     # A single detector agreeing with itself across every refresh is exactly what a
     # persistent false positive looks like.
+    # An excluded card was rejected by a DISAGREEMENT, which is one-signal evidence
+    # by definition, so it can never satisfy the both-signals precondition either.
     single_signal = [c for c in order if c not in (flagged_colour & flagged_ocr)]
     if single_signal:
         return Decision(
@@ -1297,6 +1317,7 @@ def evaluate(
     mode: Mode,
     position: OpponentPosition,
     ocr_backend,
+    excluded: frozenset[int] = frozenset(),
 ) -> Decision:
     """Read one select-opponent frame and decide what to do about it.
 
@@ -1305,6 +1326,7 @@ def evaluate(
         mode: which screen this is.
         position: the user's configured Opponent Position (ignored for Arena).
         ocr_backend: anything exposing `detect_text_blocks`.
+        excluded: cards already rejected by a confirming read this attempt.
 
     Returns:
         The action to take, with a reason for the log.
@@ -1313,7 +1335,7 @@ def evaluate(
     colour = cards_with_badges(frame, mode) & set(order)
     ocr = _ocr_flags(frame, mode, order, ocr_backend)
     control = classify_control(frame, mode)
-    decision = decide(order, colour, ocr, control)
+    decision = decide(order, colour, ocr, control, excluded)
 
     disagreement = colour ^ ocr
     outcome = "-".join(
@@ -1566,6 +1588,7 @@ Methods:
             return False
 
         retried_unknown = False
+        excluded: set[int] = set()
         for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
             self.handle_popup_messages()
             decision = ff_evaluate(
@@ -1573,6 +1596,7 @@ Methods:
                 FFMode.ARENA,
                 OpponentPosition.Left,  # Arena has no position setting
                 self._ff_ocr(),
+                frozenset(excluded),
             )
             if decision.action is Action.TAKE:
                 # Confirming read before committing to a battle. Free - no timer -
@@ -1586,7 +1610,11 @@ Methods:
                     decision.card,
                 ):
                     return self._tap_arena_card(decision.card)
-                continue  # disagreement: re-read the board rather than attack
+                # Remember the rejection for the rest of this attempt. Without it the
+                # next iteration starts fresh and can take the very card the second
+                # read called friendly.
+                excluded.add(decision.card)
+                continue
             if decision.action is Action.STOP:
                 # An "unknown" control gets one re-read before the mode stops: a
                 # single bad frame should not end the run.
@@ -1778,6 +1806,7 @@ from adb_auto_player.ocr import RapidOCRBackend
     def _sa_choose_opponent_guarded(self) -> bool:
         """Pick an opponent that is neither a Friend nor a Guild Member."""
         retried_unknown = False
+        excluded: set[int] = set()
         for _ in range(_MAX_FRIENDLY_FIRE_ROUNDS):
             self.handle_popup_messages()
             decision = ff_evaluate(
@@ -1785,6 +1814,7 @@ from adb_auto_player.ocr import RapidOCRBackend
                 FFMode.SUPREME_ARENA,
                 self._sa_position(),
                 self._sa_ocr(),
+                frozenset(excluded),
             )
             if decision.action is Action.TAKE:
                 self.sleep_navigation()
@@ -1797,7 +1827,8 @@ from adb_auto_player.ocr import RapidOCRBackend
                 ):
                     self._tap_sa_card(decision.card)
                     return True
-                continue  # disagreement: re-read rather than attack
+                excluded.add(decision.card)
+                continue
             if decision.action is Action.STOP:
                 if "neither Refresh nor X" in decision.reason and not retried_unknown:
                     retried_unknown = True

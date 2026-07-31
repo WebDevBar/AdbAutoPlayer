@@ -299,23 +299,44 @@ cost of guessing is a forfeited attempt.
 
 Reached only from step 6, and it spends an attempt, so every element is pinned.
 
+**The dialog is detected by its green confirm tick**, not by its sheet and not by its text.
+
+An earlier draft matched "the blank upper sheet, which is the same in every language".
+That was wrong twice over, and peer review caught both: the crop it specified
+(x 300-800, y 900-1000) actually CONTAINED the sentence "Give up this challenge?", so it
+was language-dependent after all; and a blank cream rectangle is a useless template
+regardless, because it carries no information and would match many places at high
+confidence. Measured: the sheet has a pixel standard deviation of **4.8**, the tick
+**54.5**.
+
 | element | geometry |
 |---|---|
-| dialog template `arena/give_up_dialog.png` | cut from `04-give-up-confirmation-dialog-20260731.png`, x 300-800, y 900-1000 - the blank upper sheet |
-| search region for it | x 200-900, y 850-1050 |
-| confirm tick, green circle | x 786-946, y 1163-1320, **tap centre (866, 1241)** |
+| template `arena/give_up_confirm.png` | cut from `04-give-up-confirmation-dialog-20260731.png`, x 786-947, y 1163-1321 |
+| search region | x 700-1010, y 1100-1380 |
+| confidence floor | 0.8 |
+| tap target | the **matched centre**, not a fixed point. Observed at (866, 1241) |
 | cancel button, cream circle | x 500-779, y 1150-1331, centre (639, 1240) |
 
-Confidence floor 0.8, as for the control.
+Three properties make this the right anchor:
 
-**The dialog must match before the tick is tapped.** If it does not appear within the
-normal navigation timeout, stop the mode - do not tap (866, 1241) hoping. That coordinate
-is the confirm tick only while the dialog is up; without it the point is bare background
-in Arena and a card in Supreme Arena.
+**It is language-independent** - an icon, not a word.
 
-The template is the blank sheet rather than the words "Give up this challenge?", because
-the sheet is language-independent and the sentence is not. The cancel button's geometry is
-recorded for one reason: so an implementation can assert it is not tapping it.
+**It is feature-rich**, so the confidence floor means something.
+
+**It is the tap target**, so detection and action cannot disagree. Tapping a matched centre
+removes the failure where the dialog appears shifted and a hardcoded coordinate lands
+somewhere else.
+
+On the observed frame, every pixel passing the Friend-green predicate lies inside
+x 786-946, y 1163-1320 - the tick and nothing else - so the search region cannot be
+satisfied by anything else on that screen.
+
+**If the tick does not match within the normal navigation timeout, stop the mode.** Do not
+tap hoping: without the dialog, that area is bare background in Arena and a card in
+Supreme Arena.
+
+The cancel button's geometry is recorded for one reason: so an implementation can assert
+it is not tapping it.
 
 ## Settings
 

@@ -4,6 +4,8 @@ import numpy as np
 
 from adb_auto_player.games.afk_journey.services.solstice import frameside as mod
 from adb_auto_player.games.afk_journey.services.solstice.frameside import (
+    Verdict,
+    classify,
     read_frame_sides,
 )
 
@@ -81,3 +83,30 @@ def test_unidentified_cell_is_omitted(monkeypatch):
     blue, red = read_frame_sides(frame, _Cfg(), object())
     assert blue == frozenset()
     assert red == frozenset()
+
+
+# --- classifying a stored row against its frame ----------------------------
+
+_B = frozenset({"lucca", "perseus", "gerda"})
+_R = frozenset({"talene", "lilymay", "koko"})
+
+
+def test_agree_when_frame_blue_matches_row_left():
+    assert classify(_B, _R, _B, _R) is Verdict.AGREE
+
+
+def test_mirrored_when_frame_blue_matches_row_right():
+    assert classify(_B, _R, _R, _B) is Verdict.MIRRORED
+
+
+def test_unreadable_when_the_frame_gave_fewer_than_six():
+    assert classify(frozenset({"lucca"}), _R, _B, _R) is Verdict.UNREADABLE
+
+
+def test_incomplete_when_the_row_has_fewer_than_six():
+    assert classify(_B, _R, frozenset({"lucca"}), _R) is Verdict.INCOMPLETE
+
+
+def test_partial_when_both_are_complete_but_neither_orientation_matches():
+    other = frozenset({"lucca", "perseus", "koko"})
+    assert classify(_B, _R, other, _R) is Verdict.PARTIAL

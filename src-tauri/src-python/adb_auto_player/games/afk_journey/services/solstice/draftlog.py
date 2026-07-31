@@ -35,6 +35,46 @@ from dataclasses import dataclass
 # traced back to a specific cell.
 SIDE_LABELS = {"left": "Blue", "right": "Red"}
 
+# The colour class each side's live-log lines are wrapped in. Both are already bold in
+# LogEntry.svelte, so one span carries colour and weight together.
+_SIDE_CLASS = {"left": "sc-blue", "right": "sc-red"}
+
+# The game drafts in a fixed order - 1 Blue, 2 Red, 3 Red, 4 Blue, 5 Blue, 6 Red. Blue
+# drafting first is a rule of the mode, confirmed by the operator on 2026-07-31, and it
+# never depends on rank or seed.
+#
+# CRUCIAL: the draft screen ALREADY numbers its cells 1-6 across both teams, so a
+# `draft_pick` read's slot IS the plate number and must be printed as-is. The cell
+# registry proves it: draft_pick is left 1, right 2, right 3, left 4, left 5, right 6.
+# Only the per-side screens (summary_hero, prematch_pick) number 1-3 within a side and
+# need translating. An earlier version of this table remapped every read and would have
+# printed right-slot-2 as "RED 3" and right-slot-3 as "RED 6".
+_PER_SIDE_CELL_TYPES = frozenset({"summary_hero", "prematch_pick"})
+
+_PER_SIDE_TO_PLATE = {
+    ("left", 1): 1,
+    ("left", 2): 4,
+    ("left", 3): 5,
+    ("right", 1): 2,
+    ("right", 2): 3,
+    ("right", 3): 6,
+}
+
+
+def plate_number(read: "PickRead") -> int:
+    """The number printed on this pick's plate, 1-6.
+
+    Args:
+        read: One cell read, from any of the pick screens.
+
+    Returns:
+        The plate number, or the raw slot when the pair is not one of the six - a
+        malformed read should not invent a plate.
+    """
+    if read.cell_type in _PER_SIDE_CELL_TYPES:
+        return _PER_SIDE_TO_PLATE.get((read.side, read.slot), read.slot)
+    return read.slot
+
 # 1 left, 2 right, 3 right, 4 left, 5 left, 6 right - a snake draft. The registry
 # carries this per cell; it is repeated here only so the log can be ordered before any
 # cell has been read.
@@ -100,20 +140,42 @@ def newly_locked(seen: dict[int, str], reads: list[PickRead]) -> list[PickRead]:
 
 
 def format_pick(read: PickRead) -> str:
-    """One log line: who picked what, and how sure the read is.
+    """One live-log line per pick: `BLUE 1: Lucca`, in that side's colour.
 
-    `[score/margin]`. Score is how well the icon matched, 0 to 1. Margin is the gap to
-    the runner-up, which is the number that catches lookalikes: two similar heroes can
-    both score 0.9, and only the margin says whether the top answer was actually
-    distinguishable. Both are kept because the accept rule applies a threshold to each,
-    and a line that says only 'picked: Lorsan' cannot be audited afterwards.
+    The plate number rather than the slot, because it is what the screen shows and what
+    a person is comparing against. Falls back to the slot if the (side, slot) pair is
+    not one of the six - a malformed read should not invent a plate.
+
+    The match scores are NOT here. They live in `format_pick_audit`, which goes to the
+    debug log: the live log is read while a draft is running, and `[0.961/0.403]` is
+    never the thing being read for. The debug log keeps every line, so nothing is lost.
+    """
+    label = SIDE_LABELS.get(read.side, read.side).upper()
+    number = plate_number(read)
+    shown = read.name or read.slug or "?"
+    text = f"{label} {number}: {shown}"
+    css = _SIDE_CLASS.get(read.side)
+    if css is None:
+        return text
+    return f'<span class="{css}">{text}</span>'
+
+
+def format_pick_audit(read: PickRead) -> str:
+    """The same pick with the evidence, for the debug log.
+
+    Score is how well the icon matched, 0 to 1. Margin is the gap to the runner-up,
+    which is the number that catches lookalikes: two similar heroes can both score 0.9,
+    and only the margin says whether the top answer was distinguishable. Both are kept
+    because the accept rule applies a threshold to each, and a line that says only
+    'picked: Lorsan' cannot be audited afterwards.
 
     Which of the two geometries produced the read is NOT in the line - it is counted
     and reported in the heartbeat, so per-pick noise stays out of the log.
     """
     label = SIDE_LABELS.get(read.side, read.side)
+    number = plate_number(read)
     shown = read.name or read.slug or "?"
-    return f"{label} picked: {shown} [{read.score:.3f}/{read.margin:.3f}]"
+    return f"{label} {number} picked: {shown} [{read.score:.3f}/{read.margin:.3f}]"
 
 
 def format_final(reads: list[PickRead]) -> str:

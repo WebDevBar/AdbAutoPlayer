@@ -34,6 +34,7 @@ from ..services.solstice.draftlog import (
     better,
     format_merged,
     format_pick,
+    format_pick_audit,
     MAX_PICKS_PER_SIDE,
     merge_screens,
     newly_locked,
@@ -1536,7 +1537,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 except Exception as exc:  # noqa: BLE001 - never worth a match
                     logging.debug(f"[SC-77] pool read failed: {exc}")
             for pick in newly:
+                # Two lines, two audiences: the coloured one-liner for whoever is
+                # watching the draft, and the scores in the debug log for anyone
+                # reconstructing a bad read afterwards.
                 logging.info(format_pick(pick))
+                logging.debug(format_pick_audit(pick))
                 settled[pick.slot] = pick
 
             # Odds after every pick from the fourth onward - the point at which enough
@@ -1998,13 +2003,15 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 self.swipe_right(y=y, sx=x, ex=x + offset, duration=0.4)
 
             self._bet_this_cycle = True
-            logging.info(
+            # DEBUG, not INFO: the offset and the exact confidence are the audit trail
+            # for reconstructing a stake afterwards, and the debug log already keeps
+            # every line. The coloured line below carries what a person watching the
+            # live log actually needs, so printing both was one line of noise per bet.
+            logging.debug(
                 f"[SC-94] staked on {side} at {confidence * 100:.0f}% "
                 f"- handle dragged {offset}px from centre"
             )
-            # Said again, loudly and in colour, AFTER the drag has happened. The line
-            # above is the audit trail; this one is for the person watching the log
-            # while the countdown runs.
+            # Loud, in colour, and AFTER the drag has happened.
             logging.info(f"[SC-94] {emphasise_bet(side)}")
         except Exception as exc:  # a bet is never worth a match
             logging.warning(f"[SC-94] could not place the bet: {exc}")

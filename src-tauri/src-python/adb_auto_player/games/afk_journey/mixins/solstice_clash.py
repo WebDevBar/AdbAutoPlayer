@@ -262,6 +262,36 @@ CHAT_DRAG_TO_Y = 620
 CHAT_DRAG_SECONDS = 2.0
 
 
+def _market_by_trio(sample, blue_trio) -> dict:
+    """The betting pools, restated against the canonical trios.
+
+    All FOUR fields are None when orientation is unresolved. `blue_trio == 1` is not
+    a sufficient test: it makes None behave like 2, which files blue's own market
+    against the other composition - a wrong answer wearing the shape of a right one.
+
+    Args:
+        sample: The draft-time market reading, blue-relative.
+        blue_trio: Which trio was ours, or None.
+
+    Returns:
+        The four trio-relative fields for `OddsSample`.
+    """
+    if blue_trio is None:
+        return {
+            "trio_1_pool": None,
+            "trio_2_pool": None,
+            "trio_1_odds": None,
+            "trio_2_odds": None,
+        }
+    blue_first = blue_trio == 1
+    return {
+        "trio_1_pool": sample.left_pool if blue_first else sample.right_pool,
+        "trio_2_pool": sample.right_pool if blue_first else sample.left_pool,
+        "trio_1_odds": sample.left_odds if blue_first else sample.right_odds,
+        "trio_2_odds": sample.right_odds if blue_first else sample.left_odds,
+    }
+
+
 def _trio_of(hero, trio_1) -> int:
     """Which canonical trio this summary hero belongs to.
 
@@ -1416,7 +1446,6 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # is how match 1476 came to announce the wrong verdict while storing the right
         # heroes. `trios` is None when the read cannot form two complete trios.
         trios, blue_trio, resolve_margin = self._resolve_orientation(read)
-        blue_is_trio_1 = blue_trio == 1
         # The last market reading before the picks locked, stored against the match.
         # `record_odds` and the table it writes to have existed since the schema was
         # written and were never used - the pools were visible on screen the whole time.
@@ -1430,21 +1459,11 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         .isoformat(timespec="seconds")
                         .replace("+00:00", "Z"),
                         # The pools are read during the DRAFT, so they are
-                        # blue-relative - and blue is trio `blue_panel` below. When
-                        # orientation is unresolved they are recorded against no trio
-                        # rather than guessed onto one.
-                        trio_1_pool=(
-                            sample.left_pool if blue_is_trio_1 else sample.right_pool
-                        ),
-                        trio_2_pool=(
-                            sample.right_pool if blue_is_trio_1 else sample.left_pool
-                        ),
-                        trio_1_odds=(
-                            sample.left_odds if blue_is_trio_1 else sample.right_odds
-                        ),
-                        trio_2_odds=(
-                            sample.right_odds if blue_is_trio_1 else sample.left_odds
-                        ),
+                        # blue-relative. `_market_by_trio` returns all-None when
+                        # orientation is unresolved: a bare `blue_trio == 1` test
+                        # treats "unknown" as "blue is trio 2" and silently files
+                        # blue's market against the other composition.
+                        **_market_by_trio(sample, blue_trio),
                         spectators=getattr(self, "_spectators", None),
                     ),
                 )

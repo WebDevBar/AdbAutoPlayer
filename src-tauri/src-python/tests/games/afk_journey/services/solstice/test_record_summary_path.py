@@ -194,13 +194,35 @@ def test_the_call_result_is_stated_in_our_frame_not_the_panels(
 def test_an_unresolvable_orientation_withholds_the_verdict(
     bot, store, monkeypatch, caplog
 ):
-    """Refused, not guessed. A coin-flip HIT/MISS is worse than none."""
-    bot._pending_draft_trios = (frozenset(TRIO_A), frozenset(TRIO_B))
+    """Refused, not guessed. A coin-flip HIT/MISS is worse than none.
+
+    The market is supplied here ON PURPOSE. An earlier version of this test omitted
+    it and therefore passed while `blue_trio == 1` was quietly treating None as
+    "blue is trio 2", filing blue's own pools against the other composition.
+    """
     bot._pending_prediction = (0.9, "model", 6)
     bot._pending_draft_trios = None  # nothing carried: no draft to anchor against
+    bot._pool_read = types.SimpleNamespace(
+        left_pool=100,
+        right_pool=50,
+        left_odds=1.5,
+        right_odds=2.5,
+        crowd_probability=0.66,
+    )
+    bot._spectators = 12
     with caplog.at_level("INFO"):
         _record(bot, monkeypatch, _read(TRIO_A, TRIO_B, "left"))
 
     text = "\n".join(caplog.messages)
     assert "withheld" in text
-    assert _last(store)["blue_trio"] is None
+    row = _last(store)
+    assert row["blue_trio"] is None
+    # The trios and the winner still stand - they need no orientation.
+    assert row["winning_trio"] == 1
+    # The market does NOT. Every field, not just the ones that happen to differ.
+    samples = store.odds_for(row["id"])
+    assert samples
+    assert samples[0].trio_1_pool is None
+    assert samples[0].trio_2_pool is None
+    assert samples[0].trio_1_odds is None
+    assert samples[0].trio_2_odds is None

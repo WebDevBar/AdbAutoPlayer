@@ -246,8 +246,45 @@ Scoring uses `predicted_trio_1 >= 0.5` against `winning_trio == 1`, which needs 
 all and works for pulled rows too. The blue-relative view exists only for humans reading a
 log, and it is NULL exactly when we have no right to it.
 
-The 1,400+ existing `predicted_left` values migrate in the same atomic step: with
-`blue_trio` established from the sidecar, `predicted_trio_1` is a mechanical rewrite.
+**The migration of existing predictions is NOT mechanical for every row, and round 6
+caught the claim that it was.** Both `record_heroes` call sites are on the summary screen
+(`solstice_clash.py:603`, `solstice_clash.py:1344`), so the stored `match_hero.side` is
+panel-derived - it is the thing that mirrors. A row absent from the sidecar therefore has
+no orientation evidence at all, and `predicted_left` cannot be pointed at a trio.
+
+What separates cleanly, and is the reason the canonical shape is worth having:
+
+| value | needs orientation? | why |
+|---|---|---|
+| `winning_trio` | **NO** | the winner and the heroes are read from the SAME panel pair in the same pass. "The trio in this panel won" survives a swap intact. |
+| `blue_trio` | yes | it ties the summary back to the draft, which is exactly the link mirroring breaks. |
+| `predicted_trio_1` | yes | the prediction was made on the draft-left trio. |
+
+So the outcome data - the part the model trains on - migrates for every complete row with
+no sidecar at all. Only the blue-relative values need a verdict:
+
+- **`agree` (846 rows)** - legacy left is blue. `blue_trio` and `predicted_trio_1` follow.
+- **`mirrored` (76 rows)** - legacy left is red. Both invert.
+- **absent from the sidecar (~150 decisive complete predicted rows), plus `partial` (4),
+  `unreadable` (2), `incomplete` (1)** - `blue_trio = NULL` and `predicted_trio_1 = NULL`.
+  Their trios and winner still migrate and still train the model; only their contribution
+  to local self-accuracy is lost. **We do not guess.** 8% of audited rows were mirrored, so
+  a guess would be wrong roughly one row in twelve, silently.
+
+**Nothing is destroyed.** Before the columns are dropped, the migration copies
+`(match_id, legacy_side_of_each_hero, outcome, predicted_left)` verbatim into
+`legacy_side_snapshot`, an append-only table it never reads again. If better orientation
+evidence ever appears - retained frames, a re-push, a contributor's copy - those 150 rows
+can be resolved later from the snapshot rather than being gone. It also makes the
+migration auditable after the fact, which a destructive reshape otherwise is not.
+
+**Rows that cannot form two complete trios do not enter the canonical shape at all.**
+Row 625 is the case: decided, `predicted_left=0.47748`, but five identified heroes. It
+cannot have a `winning_trio` because one of its trios does not exist. It goes to
+`legacy_side_snapshot` and its `match` row is marked `canonical_state='unrepresentable'`,
+excluded from fitting, scoring and sync. That is also what stops the migration predicate
+looping on it forever (round 2's first blocker) - "done" means every row is either
+canonical or explicitly unrepresentable, never "still waiting".
 
 `scored_predictions` (`store.py:770-781`) currently selects every decisive row with a
 prediction, synced included. Under the new column that is CORRECT rather than a bug - a
@@ -500,8 +537,19 @@ and 7 are one client release. The list below is the order of WORK, not of shippi
 3. **Parts 1-4** - the recording fix.
 4. **Parts 6, 7** - the fit and the reconciliation.
 5. Ship all of the above together. Nothing above may reach a user alone.
-6. **Part 5** - the server schema and the dual-version API phase. Separate repo, separate
-   deploy, and the dual-version window is exactly what lets these two land independently.
+6. **Part 5 - the server schema and the dual-version phase, which must be DEPLOYED
+   BEFORE the client of step 5 reaches anyone.** Round 6 caught the order being stated
+   backwards. Production accepts only version 4 today (`gameretro-adb-api/app/config.py:24`),
+   so a v5 client shipped first would fail every push against a server that has never heard
+   of the trio contract. The server accepting BOTH 4 and 5 is what makes the client release
+   independent - the window has to exist before the client needs it, not after.
+
+   **Pull must also become versioned, and today it is not.** `sync.py:264` sends no schema
+   version on the GET at all, so "pull returns the shape matching the requested version"
+   has no mechanism behind it. The client sends its version as a query parameter; a request
+   without one is treated as version 4, which is exactly what every already-installed
+   client is. No negotiation and no fallback: the client asks for the one shape it can
+   parse, and old clients keep getting the old shape until they are replaced.
 7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach. Stays gated on
    explicit approval: it writes to production and no automatic path should.
 

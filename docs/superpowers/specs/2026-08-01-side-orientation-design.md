@@ -167,13 +167,28 @@ were two independent side labels - `outcome` said left/right and `match_hero.sid
 left/right - and nothing forced them to agree. Replace both with one trio identity plus one
 annotation and there is nothing left to contradict.
 
+**`match_hero` is the ONLY place a composition lives.** Each hero row carries
+`trio` (1 or 2) and keeps its `slot`. The row itself stores no trio columns.
+
 | column | meaning |
 |---|---|
-| `trio_1`, `trio_2` | canonically sorted, exactly as `comps_key` already sorts them |
+| `match_hero.trio` | 1 or 2, canonically assigned - the sole record of who played |
 | `winning_trio` | 1 or 2 |
 | `blue_trio` | 1, 2, or NULL when we did not watch the draft |
 
-`match_hero` carries `trio` (1 or 2) and keeps its `slot`.
+The first draft ALSO put `trio_1`/`trio_2` on the match row, and review caught that this
+does not make the bug unrepresentable - it moves it. With the composition stored twice, a
+row could say `trio_1 = (A,B,C)` while its `trio=1` hero rows were `(D,E,F)`, and
+`winning_trio` would point into a contradiction. That is the same defect as 1476 wearing
+different column names.
+
+So the composition is stored once. `trio_1` and `trio_2` are DERIVED by the canonical sort
+whenever they are needed - the backfill and `comps_key` already do exactly that. Anything
+that wants them as columns must be a materialised view or a denormalisation with a
+constraint, never a second writable source.
+
+Which trio is 1 and which is 2 is decided by the same sort `comps_key` uses, so the
+assignment is a pure function of the heroes and cannot drift from it.
 
 **Nothing local is lost.** `blue_trio` points at whichever trio was blue, so left/right is
 fully recoverable for any match we spectated, and with `slot` so are the plate numbers.
@@ -206,9 +221,17 @@ exists and must be used.
 
 **Do not gate it on a column check.** `_schema_is_current` skips `migrate.apply()` when
 every column is present, which is exactly why the `comps_key` backfill silently never ran
-after its columns landed and 50 pulled rows stayed keyless across two upgrades. A shape
-change needs a "not done yet" predicate - a decided row whose `trio_1` is NULL - matching
-the backfill's own predicate so it cannot loop.
+after its columns landed and 50 pulled rows stayed keyless across two upgrades.
+
+A shape change needs a "not done yet" predicate, and it must carry the SAME completeness
+requirements the backfill uses (`store.py:342`): decided outcome AND three identified
+heroes on each side. "Decided and `trio` unassigned" is not enough - row 625 is decided
+with five heroes, can never be assigned, and would send the migration round on every
+launch forever. Review caught exactly that loop.
+
+The predicate is therefore: a row with `outcome IN ('left','right')`, three identified
+heroes per side, and no `trio` assignment. Row 625 fails the hero count, is skipped by
+both the migration and the predicate, and the check settles.
 
 It must also survive a database in any prior state. The collaborator's was old enough to
 fail with `no such column: predicted_left`.
@@ -366,11 +389,29 @@ synced 1109, 1314 and 1317.
 
 ## Ordering
 
-Parts 1-4 are the client fix and stop new corruption. Part 5 is the server schema. Parts
-6-7 depend on 5. Part 8 depends on 1-5 being live, because a repaired row must push into
-the new shape.
+Review caught the first draft ordering Part 8 AFTER Part 4b, which cannot work: the repair
+updates `match_hero.side` and `match.outcome` (`solstice_frame_side_audit.py:713`) and 4b
+removes both. Worse, a 4b migration that ran first could not derive `blue_trio` correctly
+for the 76 mirrored rows, because treating legacy `left` as blue is precisely what is
+wrong with them.
 
-The audit must have run before Part 8, which it has - `side-audit-2026-08-01.json`.
+Part 8 therefore splits, and the local repair comes FIRST:
+
+1. **Part 1** - the audit. Already run: `side-audit-2026-08-01.json`.
+2. **Part 8a - local repair, on the OLD columns.** Flip `match_hero.side` and
+   `outcome` on the 76 mirrored rows while those columns still exist. After this every
+   local row is draft-anchored and `left` genuinely means blue.
+3. **Part 4b** - the local shape change. Only now can it set `blue_trio` by reading the
+   legacy `left` side, because step 2 made that reading true.
+4. **Parts 1-4** - the recording fix, stopping new corruption.
+5. **Part 5** - the server schema and the dual-version API phase.
+6. **Parts 6, 7** - the fit and the reconciliation, both depending on 5.
+7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach, using the
+   absolute correction path Part 8 describes.
+
+The alternative - having the 4b migration consume the audit verdicts directly and
+establish `blue_trio` absolutely - is workable but puts vision evidence inside a schema
+migration. Repairing first keeps the migration mechanical.
 
 ## Risks
 

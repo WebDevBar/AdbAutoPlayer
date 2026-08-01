@@ -336,6 +336,11 @@ def audit(
 ) -> list[Row]:
     """Classify every saved draft frame against its stored row.
 
+    A frame whose match id is not in the database is DROPPED rather than reported:
+    there is no stored orientation for it to disagree with, and counting it would put
+    rows nobody audited into the denominator of every rate in the report. That is why
+    `Verdict` carries no `no_row` member.
+
     Args:
         db_path: heroes.sqlite, opened read-only.
         frame_dir: Where `draft-<match_id>.png` files live.
@@ -718,6 +723,9 @@ def swap_sides(con: sqlite3.Connection, match_id: int) -> None:
     ratings and ranks (draft-derived). Swapping any of them would move correct data
     onto the wrong side.
 
+    Does NOT commit. The caller owns the transaction, because a repair spanning several
+    matches has to land or not land as a whole - see `repair`.
+
     Args:
         con: An open, writable connection.
         match_id: The match to flip.
@@ -739,7 +747,6 @@ def swap_sides(con: sqlite3.Connection, match_id: int) -> None:
         " WHEN 'right' THEN 'left' ELSE outcome END WHERE id=?",
         (match_id,),
     )
-    con.commit()
 
 
 def snapshot(db_path: Path) -> Path:
@@ -798,6 +805,10 @@ def repair(db_path: Path, rows: list[Row], log_path: Path) -> int:
     is evidence that the stored orientation is wrong, and repairing on a frame we could
     not read would put the reader's failures into the data.
 
+    The whole repair is ONE transaction. `swap_sides` used to commit per match, so a
+    failure partway through left the early matches flipped, the rest not, and no log at
+    all - the worst state to recover from. The snapshot remains the outer safety net.
+
     Args:
         db_path: The live database.
         rows: The audit's rows.
@@ -821,9 +832,15 @@ def repair(db_path: Path, rows: list[Row], log_path: Path) -> int:
                 f" [{', '.join(row.row_right)}]"
             )
             swap_sides(con, row.match_id)
+        # Written BEFORE the commit so no committed repair can exist without its
+        # record; if this write fails the rollback below undoes every swap.
+        log_path.write_text("\n".join(log) + "\n", encoding="utf-8")
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
     finally:
         con.close()
-    log_path.write_text("\n".join(log) + "\n", encoding="utf-8")
     return len(targets)
 
 

@@ -125,3 +125,15 @@ def test_incomplete_when_the_row_has_fewer_than_six():
 def test_partial_when_both_are_complete_but_neither_orientation_matches():
     other = frozenset({"lucca", "perseus", "koko"})
     assert classify(_B, _R, other, _R) is Verdict.PARTIAL
+
+
+def test_verdict_has_no_no_row_member():
+    """A frame with no stored row is dropped by the audit, never classified."""
+    assert "NO_ROW" not in Verdict.__members__
+    assert [member.value for member in Verdict] == [
+        "agree",
+        "mirrored",
+        "partial",
+        "unreadable",
+        "incomplete",
+    ]

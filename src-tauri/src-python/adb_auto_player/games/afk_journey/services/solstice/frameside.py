@@ -47,14 +47,19 @@ def read_frame_sides(
 
 
 class Verdict(StrEnum):
-    """What one frame says about one stored row."""
+    """What one frame says about one stored row.
+
+    There is deliberately no `no_row` member. A frame whose match id is absent from the
+    database is dropped by the audit's work list rather than classified: it has no
+    stored orientation to disagree with, and giving it a verdict would put rows nobody
+    audited into the denominator of every rate in the report.
+    """
 
     AGREE = "agree"
     MIRRORED = "mirrored"
     PARTIAL = "partial"
     UNREADABLE = "unreadable"
     INCOMPLETE = "incomplete"
-    NO_ROW = "no_row"
 
 
 def classify(

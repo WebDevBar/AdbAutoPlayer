@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
+from .matchkey import comps_key
 from .odds import themes_sharing_modifiers
 from .paths import resource_file
 
@@ -139,6 +140,40 @@ _HERO_STATUSES = frozenset({"identified", "unknown"})
 _POOL_STATUSES = frozenset({"identified", "unknown", "banned"})
 _OUTCOMES = frozenset({"left", "right", "draw"})
 POOL_SIZE = 20  # the draft grid is always 5x4
+_SIDE_SIZE = 3  # every Solstice Clash comp is exactly three heroes
+
+# The only event this client records. Was a bare literal in three places; the
+# mixin needs it too, and a fourth copy is how they start disagreeing.
+EVENT_SLUG = "solstice-clash"
+
+# Two captures belong to the SAME occurrence when they fall within this many
+# seconds of each other. Single-linkage: a capture within the window of two
+# clusters bridges them into one, which is what makes the result independent of
+# arrival order.
+#
+# MUST match WINDOW_SECONDS in app/occurrence.py on the server. `comps_key`
+# carries no time at all - deliberately, because a bucket splits at its
+# boundaries - so this window is the ONLY thing separating one match seen twice
+# from a genuine rematch between the same two trios. If the client's window and
+# the server's disagree, the client either withholds bridging evidence or pushes
+# a duplicate the server then has to unpick.
+WINDOW_SECONDS = 120
+
+
+def _parse_stamp(value) -> datetime | None:
+    """Parse a stored ISO timestamp, or None when it is missing or unusable.
+
+    A naive value is read as UTC rather than rejected. Every writer in this
+    codebase stores UTC, and this window is a local dedupe heuristic - refusing to
+    coalesce is a worse failure than assuming the timezone every row already has.
+    """
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 def _as_stamp(value) -> str | None:
@@ -356,6 +391,193 @@ class MatchStore:
             con.execute(
                 "UPDATE match SET natural_key=? WHERE id=?", (natural_key, match_id)
             )
+
+    def _event_slug_for(self, con: sqlite3.Connection, match_id: int) -> str | None:
+        """`match.event_id` first, then `theme_id -> theme.event_id`, else None.
+
+        The fallback is not hypothetical: 120 of 1,200 keyed rows carry a NULL
+        `event_id` and every one of them resolves through its theme. A row that
+        resolves through neither keeps `comps_key` NULL and stays out of the pool -
+        an unattributable match is not identity we can compute.
+        """
+        row = con.execute(
+            "SELECT event_id, theme_id FROM match WHERE id=?", (match_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        if row[0] is not None:
+            found = con.execute(
+                "SELECT slug FROM event WHERE id=?", (row[0],)
+            ).fetchone()
+            if found is not None:
+                return str(found[0])
+        if row[1] is not None:
+            found = con.execute(
+                "SELECT e.slug FROM theme t JOIN event e ON e.id = t.event_id"
+                " WHERE t.id=?",
+                (row[1],),
+            ).fetchone()
+            if found is not None:
+                return str(found[0])
+        return None
+
+    def _bridged_roots(
+        self,
+        con: sqlite3.Connection,
+        key: str,
+        at: datetime,
+        exclude: int | None = None,
+    ) -> list[int]:
+        """Active local rows on `key` whose bounds are within the window of `at`.
+
+        Bounds are sufficient for single-linkage in one dimension: the nearest point
+        of a cluster to any new capture is always one of its two extremes.
+
+        Only SUPERSESSION ROOTS are candidates. A row already superseded is not a
+        cluster of its own, and linking to it would build a chain the analysis
+        filters have to walk instead of a single hop.
+
+        Returns:
+            Root ids, EARLIEST FIRST. The caller merges into the first.
+        """
+        rows = con.execute(
+            "SELECT id, COALESCE(captures_min_at, captured_at),"
+            "       COALESCE(captures_max_at, captured_at)"
+            "  FROM match"
+            " WHERE comps_key=? AND origin='local' AND superseded_by IS NULL",
+            (key,),
+        ).fetchall()
+        hits: list[tuple[datetime, int]] = []
+        for match_id, low_raw, high_raw in rows:
+            if exclude is not None and int(match_id) == exclude:
+                continue
+            low, high = _parse_stamp(low_raw), _parse_stamp(high_raw)
+            if low is None or high is None:
+                continue
+            if (low - at).total_seconds() > WINDOW_SECONDS:
+                continue
+            if (at - high).total_seconds() > WINDOW_SECONDS:
+                continue
+            hits.append((low, int(match_id)))
+        hits.sort()
+        return [match_id for _low, match_id in hits]
+
+    def match_by_comps_key(self, key: str, near: str | None = None) -> int | None:
+        """An existing local row already holding this identity, or None.
+
+        `near` applies the same window `finalise_identity` uses, and passing it is
+        the correct call in every live path. `comps_key` carries NO time, so two
+        matches between the same two trios a day apart share it - that is a GENUINE
+        REMATCH, which the server keeps as a separate occurrence. An unbounded
+        lookup would make this client refuse to record any rematch, ever.
+        """
+        at = _parse_stamp(near)
+        with self._connect() as con:
+            if at is None:
+                row = con.execute(
+                    "SELECT id FROM match"
+                    " WHERE comps_key=? AND origin='local' AND superseded_by IS NULL"
+                    " ORDER BY id LIMIT 1",
+                    (key,),
+                ).fetchone()
+                return int(row[0]) if row else None
+            roots = self._bridged_roots(con, key, at)
+        return roots[0] if roots else None
+
+    def finalise_identity(self, match_id: int) -> None:
+        """Compute this row's canonical identity, now that its heroes are known.
+
+        `record_match()` cannot do this. The spectate flow creates the row before
+        the heroes exist, so `comps_key` is not computable there; a provisional row
+        keeps it NULL and the push gate excludes it.
+
+        Two outcomes. If no existing local occurrence is within the window, the row
+        starts one: `comps_key` is stored and the capture bounds are initialised to
+        its own capture time. Otherwise the row joins the EARLIEST occurrence it
+        bridges - that occurrence's bounds widen to cover everything merged into it,
+        every other bridged occurrence is folded in, and this row is marked
+        `superseded_by` the survivor.
+
+        Hero rows, the draft frame and the odds sample all STAY on the superseded
+        row. They are this install's own evidence, and the side-integrity audit
+        reads them.
+        """
+        with self._connect() as con:
+            event_slug = self._event_slug_for(con, match_id)
+            if event_slug is None:
+                return
+            sides: dict[str, list[str]] = {"left": [], "right": []}
+            for side, slug in con.execute(
+                "SELECT side, hero_slug FROM match_hero"
+                " WHERE match_id=? AND hero_slug IS NOT NULL",
+                (match_id,),
+            ):
+                if side in sides:
+                    sides[side].append(str(slug))
+            if len(sides["left"]) != _SIDE_SIZE or len(sides["right"]) != _SIDE_SIZE:
+                return
+
+            key = comps_key(event_slug, sides["left"], sides["right"])
+            con.execute(
+                "UPDATE match SET comps_key=?,"
+                " captures_min_at=COALESCE(captures_min_at, captured_at),"
+                " captures_max_at=COALESCE(captures_max_at, captured_at)"
+                " WHERE id=?",
+                (key, match_id),
+            )
+            row = con.execute(
+                "SELECT captured_at FROM match WHERE id=?", (match_id,)
+            ).fetchone()
+            at = _parse_stamp(row[0]) if row is not None else None
+            if at is None:
+                return
+
+            bridged = self._bridged_roots(con, key, at, exclude=match_id)
+            if not bridged:
+                return
+            target, absorbed = bridged[0], bridged[1:]
+            self._widen_bounds(con, target, [match_id, *bridged])
+            for absorbed_id in absorbed:
+                # One level deep: rows already pointing at an occurrence this
+                # capture absorbed must follow it, or they hang off a row that is
+                # itself no longer active and every filter has to walk a chain.
+                con.execute(
+                    "UPDATE match SET superseded_by=? WHERE superseded_by=?",
+                    (target, absorbed_id),
+                )
+                con.execute(
+                    "UPDATE match SET superseded_by=? WHERE id=?",
+                    (target, absorbed_id),
+                )
+            con.execute(
+                "UPDATE match SET superseded_by=? WHERE id=?", (target, match_id)
+            )
+
+    def _widen_bounds(
+        self, con: sqlite3.Connection, target: int, members: list[int]
+    ) -> None:
+        """Set `target`'s bounds to the extremes across every merged member.
+
+        Compared as PARSED instants, never as strings. This database holds both the
+        `...Z` and the `...+00:00` spelling of the same moment, and `Z` sorts after
+        `+` - so SQL MIN()/MAX() picks the wrong row at exactly the tie the bounds
+        exist to record. The stored spelling is written back unchanged.
+        """
+        placeholders = ",".join("?" * len(members))
+        rows = con.execute(
+            "SELECT COALESCE(captures_min_at, captured_at),"
+            "       COALESCE(captures_max_at, captured_at)"
+            f"  FROM match WHERE id IN ({placeholders})",
+            members,
+        ).fetchall()
+        lows = [(_parse_stamp(r[0]), r[0]) for r in rows if _parse_stamp(r[0])]
+        highs = [(_parse_stamp(r[1]), r[1]) for r in rows if _parse_stamp(r[1])]
+        if not lows or not highs:
+            return
+        con.execute(
+            "UPDATE match SET captures_min_at=?, captures_max_at=? WHERE id=?",
+            (min(lows)[1], max(highs)[1], target),
+        )
 
     def set_outcome(self, match_id: int, outcome: str, source: str) -> None:
         with self._connect() as con:
@@ -602,10 +824,19 @@ class MatchStore:
 
         - `origin='local'` - never echo back rows we PULLED, or every contributor
           re-uploads everyone else's data forever.
-        - `natural_key IS NOT NULL` - incomplete matches have no identity.
+        - `comps_key IS NOT NULL` - a row whose heroes were never read has no
+          identity. This replaced `natural_key IS NOT NULL`: the local key is now
+          the outcome-free one, and `natural_key` is only ever the SERVER's answer,
+          adopted after a successful push. Gating on it would mean nothing was
+          pushable until it had already been pushed.
         - `pushed_at IS NULL` - per row, NOT a timestamp watermark. A match is
           inserted before its heroes are read, so it becomes syncable later than
           it was created; a watermark would leave it permanently behind.
+
+        There is deliberately NO supersession term. A locally superseded row is
+        STILL PUSHED: the server is the sole deduplicator, and a row this client
+        folded into another is exactly the bridging evidence the server needs to
+        reach the same conclusion. Withholding it starves the reconciliation.
         """
         with self._connect() as con:
             rows = con.execute(
@@ -626,7 +857,7 @@ class MatchStore:
                 " LEFT JOIN match_odds o ON o.id = ("
                 "   SELECT id FROM match_odds WHERE match_id = match.id"
                 "   ORDER BY sampled_at DESC, id DESC LIMIT 1)"
-                " WHERE origin='local' AND natural_key IS NOT NULL"
+                " WHERE origin='local' AND comps_key IS NOT NULL"
                 "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"
                 " ORDER BY match.id LIMIT ?",
                 (limit,),
@@ -643,7 +874,7 @@ class MatchStore:
                         "local_id": r[0],
                         "source": r[2],
                         "captured_at": r[3],
-                        "event_slug": "solstice-clash",
+                        "event_slug": EVENT_SLUG,
                         # The raw screen read, never a slug: identity is the
                         # server's to decide.
                         "theme_ocr": r[4],
@@ -790,7 +1021,7 @@ class MatchStore:
                     continue
                 event = con.execute(
                     "SELECT id FROM event WHERE slug=?",
-                    (row.get("event_slug") or "solstice-clash",),
+                    (row.get("event_slug") or EVENT_SLUG,),
                 ).fetchone()
                 if event is None:
                     continue
@@ -855,7 +1086,7 @@ class MatchStore:
         self,
         captured_at: str,
         ocr_name: str | None = None,
-        event_slug: str = "solstice-clash",
+        event_slug: str = EVENT_SLUG,
     ) -> tuple[int | None, int | None, str | None]:
         """Return (event_id, theme_id, resolved_by) for a capture, from the WINDOW.
 

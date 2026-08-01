@@ -46,7 +46,7 @@ from ..services.solstice.details_screen import (
     load_replay_template,
 )
 from ..services.solstice.icons import IconLibrary
-from ..services.solstice.matchkey import is_complete, natural_key
+from ..services.solstice.matchkey import comps_key, is_complete
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
@@ -74,6 +74,7 @@ from ..services.solstice.screens import (
     load_templates,
 )
 from ..services.solstice.store import (
+    EVENT_SLUG,
     AuditRow,
     HeroSlot,
     MatchRecord,
@@ -187,7 +188,7 @@ MAX_SIGNAL_DISAGREEMENT = 30
 #   SC-30  sync call failed (shared with Mode A)
 #   SC-35  sync status / summary (shared with Mode A)
 #   SC-40  match recorded                              info
-#   SC-41  already recorded - the natural_key backstop  debug   benign
+#   SC-41  already recorded - the comps_key backstop    debug   benign
 #   SC-42  wrong screen resolution, refused to run      raises
 #   SC-43  periodic heartbeat                           info
 #   SC-45  device connection lost, collection stopped   raises
@@ -408,7 +409,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
         # armed == "ready to record". Set False after a record and back to True
         # only when the screen goes away, so one viewing yields one row however
-        # long it stays up. natural_key is the second layer, for a REOPENED
+        # long it stays up. comps_key is the second layer, for a REOPENED
         # screen, which this one cannot see.
         armed = True
         recorded = skipped = 0
@@ -563,11 +564,18 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             return False
 
         captured_at = datetime.now(UTC).isoformat(timespec="seconds")
-        key = natural_key(read.winner, left, right, captured_at)
-        if self._store.match_by_natural_key(key) is not None:
+        # comps_key, not the old outcome-and-time key: the backstop's whole job
+        # is recognising a match we already recorded, and an orientation-sensitive
+        # key cannot do that - the same fight seen from the other side keys
+        # differently and the backstop never fires. `near` is required, because
+        # comps_key carries no time: two matches between the same trios a day
+        # apart are a genuine rematch, and an unbounded lookup would refuse to
+        # record one ever again.
+        key = comps_key(EVENT_SLUG, left, right)
+        if self._store.match_by_comps_key(key, near=captured_at) is not None:
             logging.debug(
                 f"[SC-41] already recorded ({key[:19]}...), skipping - this "
-                f"is the natural_key backstop, not a failure"
+                f"is the comps_key backstop, not a failure"
             )
             return False
 
@@ -611,7 +619,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 for h in read.heroes
             ],
         )
-        self._store.set_natural_key(match_id, key)
+        self._store.finalise_identity(match_id)
 
         logging.info(
             f"[SC-40] recorded match {match_id}: {read.winner} won, "
@@ -1322,13 +1330,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 logging.info(f"tuned {confirmed} on the summary screen")
         self._store.record_heroes(match_id, slots)
 
-        # The key can only be computed HERE, not at insert: the match row is
-        # written before the summary is read, so the heroes and the outcome -
-        # everything the key is made of - are not known until now.
+        # Identity can only be finalised HERE, not at insert: the match row is
+        # written before the summary is read, so the heroes it is made of are not
+        # known until now.
         #
-        # Incomplete matches deliberately keep natural_key NULL and are never
-        # pushed. A half-read match with a key could claim identity over the good
-        # version of the same match, because the first submission wins.
+        # Incomplete matches deliberately keep comps_key NULL and are never
+        # pushed. The outcome is not part of comps_key, but it is still checked:
+        # a match with no decided winner is not evidence the pool can use, and
+        # pushing it would put an unusable row in front of the good one.
         left_slugs = [
             s_.hero_slug for s_ in slots if s_.side == "left" and s_.hero_slug
         ]
@@ -1336,10 +1345,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             s_.hero_slug for s_ in slots if s_.side == "right" and s_.hero_slug
         ]
         if read.winner and is_complete(left_slugs, right_slugs, read.winner):
-            self._store.set_natural_key(
-                match_id,
-                natural_key(read.winner, left_slugs, right_slugs, captured_at),
-            )
+            self._store.finalise_identity(match_id)
 
         # Only long-press-OCR-confirmed identities may seed this - see confirmed_sides().
         confirmed_by_side = confirmed_sides(slots)

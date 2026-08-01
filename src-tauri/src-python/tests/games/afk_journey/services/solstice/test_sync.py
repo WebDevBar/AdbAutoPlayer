@@ -134,11 +134,18 @@ def _seed_pushable(store, n=1):
 
     ids = []
     for i in range(n):
+        captured_at = f"2026-07-25T{i:02d}:10:00+00:00"
+        # The event/theme have to be RESOLVED, not left NULL: the push gate is
+        # `comps_key IS NOT NULL`, and `comps_key` is computed from the event
+        # slug plus the two trios, so an unattributed row is never pushable.
+        event_id, theme_id, resolved_by = store.resolve_theme(captured_at)
         mid = store.record_match(
             MatchRecord(source="spectate_summary",
-                        captured_at=f"2026-07-25T{i:02d}:10:00+00:00",
+                        captured_at=captured_at,
                         theme="Converging Paths", outcome="left",
-                        outcome_source="observed")
+                        outcome_source="observed",
+                        event_id=event_id, theme_id=theme_id,
+                        theme_resolved_by=resolved_by)
         )
         store.record_heroes(mid, [
             HeroSlot(side="left", slot=j, hero_slug=s, art_ref=None,
@@ -149,7 +156,7 @@ def _seed_pushable(store, n=1):
                      status="identified")
             for j, s in enumerate(("antandra", "arden", "atalanta"))
         ])
-        store.set_natural_key(mid, f"sha256:local{i:04d}")
+        store.finalise_identity(mid)
         ids.append(mid)
     return ids
 

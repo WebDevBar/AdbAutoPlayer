@@ -875,9 +875,14 @@ the edge no matter which container is running or when it starts:
    already configured elsewhere).
 2. **Verify unreachable** before going further - do not take the UI's word for it:
    ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' https://gameretro.net/v1/matches
+   curl -s -o /dev/null -w '%{http_code}\n' https://gameretro.net/adb/v1/matches
    ```
-   Expect 404 or 503. A 200 or a 401 means the route is still live and the migration must
+   **The path is `/adb`, with Strip Path ON** (`docs/DEPLOY.md` section 3): the app serves
+   `/v1/...` and Traefik strips the prefix. Probing `https://gameretro.net/v1/matches`
+   returns 404 whether or not the route exists, so it would wave the destructive migration
+   through with production still live.
+
+   Expect 404 or 503. A 200 or a 401 means the route is still up and the migration must
    not start.
 3. `git push origin main` and let Dokploy build and deploy normally. Nothing can reach it.
 4. `docker exec gameretro-adb-o8cxcd-api-1 alembic upgrade head`
@@ -1260,7 +1265,7 @@ Expected: FAIL on every test - `no such column: winning_trio`.
 
 - [ ] **Step 4: Update `schema.sql`**
 
-In `match`: delete `left_player`, `left_rating`, `left_rank`, `right_player`, `right_rating`, `right_rank`, `outcome`, and (from `ADD_COLUMNS`) `predicted_left`. Add:
+In `match`: delete `left_rating`, `left_rank`, `right_rating`, `right_rank`, `outcome`, and (from `ADD_COLUMNS`) `predicted_left`. **`left_player` and `right_player` STAY** - they are free-text provenance belonging to no trio, and the spec keeps them deliberately. Do not drop them. Add:
 
 ```sql
   -- WHICH trio won, and which one was ours. Not a side: a side is a label that can
@@ -1277,11 +1282,34 @@ In `match`: delete `left_player`, `left_rating`, `left_rank`, `right_player`, `r
   canonical_state TEXT CHECK(canonical_state IN ('canonical','unrepresentable')),
 ```
 
-Keep `left_player` / `right_player`. They are provenance, belong to no trio, and are never repaired.
-
 In `match_hero`: `side TEXT NOT NULL` becomes `trio INTEGER NOT NULL CHECK(trio IN (1,2))`; add `CHECK(slot IN (1,2,3))`; `UNIQUE(match_id, side, slot)` becomes `UNIQUE(match_id, trio, slot)`; add `UNIQUE(match_id, hero_slug)`.
 
 In `match_odds`: `left_pool`/`right_pool`/`left_odds`/`right_odds` become `trio_1_pool`/`trio_2_pool`/`trio_1_odds`/`trio_2_odds`.
+
+**`data/solstice_clash/views.sql` must be rewritten in this same step, and its execution
+resequenced.** `hero_matchup` references `m.outcome` and `h.side` throughout (`views.sql:44-68`),
+and `_apply` executes `views.sql` at `migrate.py:285` - BEFORE the backfill at :331 and
+before the reshape. So a fresh database on the new schema fails there immediately, and an
+upgraded one fails on its next launch when the view is recreated against columns that no
+longer exist. Neither failure is subtle, but both happen before anything this plan adds gets
+a chance to run.
+
+Rewrite the view onto `winning_trio` and `trio`. The translation is direct, because the view
+is ALREADY orientation-free in spirit - it asks whether the side holding the
+lexicographically smaller hero won:
+
+```sql
+SUM(c.winning_trio IS NOT NULL AND (c.winning_trio = 1) =  (l.hero_slug < r.hero_slug)) AS a_wins,
+```
+
+`winning_trio = 1` IS "the smaller composition won", so the comparison it was expressing by
+hand now falls out of the schema. Replace the completeness subqueries' `h.side = 'left'` /
+`'right'` with `h.trio = 1` / `2`, the joins likewise, and `m.outcome IN ('left','right','draw')`
+with a `winning_trio IS NOT NULL OR <draw marker>` test - carry draws however the reshape
+represents them, and state that choice in the view's own comment.
+
+Then move the `con.executescript(open(VIEWS).read())` call at `migrate.py:285` to AFTER
+`_reshape_to_trios(con)`, so views are only ever built against the finished shape.
 
 Replace `idx_match_hero_side` with `idx_match_hero_trio ON match_hero(match_id, trio, hero_slug)` and `idx_match_outcome` with `idx_match_winning_trio ON match(winning_trio)`. Bump `SCHEMA_VERSION` to 6.
 
@@ -1336,7 +1364,7 @@ Expected: 9 passed
 - [ ] **Step 7: Verify against a COPY of the real database**
 
 ```bash
-cp ~/.local/share/com.AdbAutoPlayer.AdbAutoPlayer/0/data/heroes.sqlite /tmp/heroes-copy.sqlite
+cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-copy.sqlite
 python3 data/solstice_clash/migrate.py /tmp/heroes-copy.sqlite
 sqlite3 /tmp/heroes-copy.sqlite \
   "SELECT canonical_state, count(*) FROM match GROUP BY 1;
@@ -1813,7 +1841,7 @@ For each `comps_key` held by more than one ROW IN THE LOCAL DATABASE - not "more
 - [ ] **Step 4: Run to verify it passes, then verify against a copy of the real database**
 
 ```bash
-cp ~/.local/share/com.AdbAutoPlayer.AdbAutoPlayer/0/data/heroes.sqlite /tmp/heroes-recon.sqlite
+cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-recon.sqlite
 python3 data/solstice_clash/migrate.py /tmp/heroes-recon.sqlite
 sqlite3 /tmp/heroes-recon.sqlite \
   "SELECT count(*) FROM match WHERE superseded_by IS NOT NULL;
@@ -1912,7 +1940,7 @@ The `--apply` path mutated `match_hero.side` and `match.outcome` (:713). Those c
 - [ ] **Step 3: Run each against a migrated copy**
 
 ```bash
-cp ~/.local/share/com.AdbAutoPlayer.AdbAutoPlayer/0/data/heroes.sqlite /tmp/heroes-scripts.sqlite
+cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-scripts.sqlite
 python3 data/solstice_clash/migrate.py /tmp/heroes-scripts.sqlite
 for s in solstice_side_audit solstice_crowd_agreement solstice_walkforward; do
   uv run python src-tauri/src-python/scripts/$s.py --db /tmp/heroes-scripts.sqlite \
@@ -2004,4 +2032,5 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
-8. **Task 3 Step 1 uses the OPERATOR'S database**, `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`, on a copy. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
+8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
+9. **`views.sql` is part of the schema change, not an afterthought.** `hero_matchup` reads `outcome` and `side`, and `_apply` builds it before the reshape - so both a fresh install and the second launch of an upgraded one fail at `migrate.py:285` unless the view is rewritten and its execution moved after `_reshape_to_trios`.

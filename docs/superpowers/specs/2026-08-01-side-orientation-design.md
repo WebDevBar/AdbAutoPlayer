@@ -468,23 +468,53 @@ A one-off pass, run at startup alongside the existing backfill:
 
 ## Part 8 - repairing the 76
 
-`scripts/solstice_frame_side_audit.py` already classifies and can repair, gated behind
-`--apply`, and its sidecar carries the 76 verdicts. Two corrections needed first:
+**LOCALLY there is no separate repair step, and round 9 caught this section still
+describing one.** `scripts/solstice_frame_side_audit.py --apply` mutating `match_hero.side`
+and `match.outcome` cannot happen: those columns are gone by the time anything the operator
+runs could touch them, and the reshape is automatic on launch. The sidecar's 76 verdicts are
+consumed INSIDE the atomic migration, which is the only thing that ever acts on them. The
+script keeps its classify/report role and loses `--apply` entirely.
 
-- Its documented assumption that summary-header names are "side-correct"
-  (lines 722-724) is contradicted by 1476 and must be removed. Names are not repaired.
-- Only `match_hero.side` and `match.outcome` are touched. `predicted_left` is draft-relative
-  and already correct - flipping it would re-break the pairing.
+One correction it does still need: its documented assumption that summary-header names are
+"side-correct" (lines 722-724) is contradicted by 1476 and must be removed. Names are never
+repaired.
 
-Their `comps_key` does not change - identity is orientation-free - so a correction is an
-update to an existing row, never a new one.
+**What remains under Part 8 is the POOL, and only the pool** - the server rows `0006` did
+not reach. `comps_key` does not change there either (identity is orientation-free), so a
+correction is an update to an existing row, never a new one.
 
 **How many rows reach the server is answered below, not here.** An earlier draft said all
 76 must be pushed; that was written before we discovered `0006` had already corrected most
 of them, and following it would re-corrupt roughly 70 repaired rows.
 
-**This is the one step that mutates data the operator can see.** It runs only on an
-explicit go-ahead, after a `pg_dump` and a local snapshot.
+**That pool correction is the one step that mutates data the operator can see.** It runs
+only on an explicit go-ahead, after a `pg_dump`.
+
+### The dropped columns must leave the migration machinery too
+
+Round 9 found the concrete way this bites. `ADD_COLUMNS` in `data/solstice_clash/migrate.py`
+still declares `("match", "predicted_left", "REAL")` at line 46. That list exists to upgrade
+databases predating a column - so the launch AFTER the reshape re-adds `predicted_left` as an
+empty column, and every later launch sees a schema that looks current while the value is
+gone. The reshape must delete the dropped columns from `ADD_COLUMNS` and from `schema.sql`
+in the same change, and a test must assert that running `migrate.apply()` twice leaves no
+removed column present.
+
+**Every shipped consumer of the dropped columns is migrated or retired in the same binary**
+- the "one release" rule covers the app, and these are not the app:
+
+| consumer | disposition |
+|---|---|
+| `scripts/solstice_side_audit.py:65` | rewrite onto `trio` / `winning_trio` |
+| `scripts/solstice_crowd_agreement.py:74` | rewrite onto `predicted_trio_1` / `winning_trio` |
+| `scripts/solstice_frame_side_audit.py:260` | reads legacy `side` to CLASSIFY; it must read `legacy_side_snapshot` after the reshape, since that is where the pre-migration sides now live |
+| `scripts/solstice_walkforward.py` | check and rewrite - it scores predictions |
+| `scripts/dry_run_draft_log.py` | check; draft-side only, likely unaffected |
+| `data/solstice_clash/migrate.py:46` + `schema.sql` | drop the obsolete entries, as above |
+
+None of these run on a user's machine, so they cannot break a contributor's install - but
+they are how every question in this document was answered, and a reshape that silently
+breaks all five leaves no way to check its own work.
 
 ### The pool needs ~6 rows corrected, not 76
 

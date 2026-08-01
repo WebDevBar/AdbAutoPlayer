@@ -528,8 +528,22 @@ instead of silently nulling the pool.
 **A `mirrored` verdict alone does NOT mean invert.** `0006` already swapped the rows it
 reached, and a swapped row's heroes now match the draft orientation, so it maps NAIVELY.
 Only a row that is mirrored AND was never corrected needs the inversion. `0006` recorded
-exactly this: `match_merge_log.orientation_verdict` is `'CORRECTED'` for every survivor it
-swapped. **Both cases are covered, and review round 6 wrongly flagged this as a gap** - so
+exactly this in `match_merge_log.orientation_verdict`.
+
+**The stored value is the string `'frame_corrected'`, NOT `'CORRECTED'`.** The module-level
+names in `0006_backfill_identity.py:71-73` are not the values:
+
+```python
+CONFIRMED  = "frame_confirmed"
+CORRECTED  = "frame_corrected"      # <- this is what lands in the column
+UNRESOLVED = "orientation_unresolved"
+```
+
+Comparing against `'CORRECTED'` matches nothing, so **every** mirrored row would take the
+inverted mapping - all ~76 rather than the ~6, re-corrupting the ~70 that `0006` already
+repaired. That is the precise disaster the whole ordering discussion exists to prevent, and
+review round 15 caught the plan walking into it. Write the literal `'frame_corrected'`, and
+assert the count of matching rows is in the expected range before the migration proceeds. **Both cases are covered, and review round 6 wrongly flagged this as a gap** - so
 the second branch is worth naming explicitly:
 
 - a group with superseded members logs one row per member, inside the loop, carrying the
@@ -540,13 +554,14 @@ the second branch is worth naming explicitly:
   rewrote would be the ones with no log line at all."*
 
 So there is no corrected survivor without a log line, and the lookup below is sound. Confirm
-it on the restored dump anyway - count `orientation_verdict = 'CORRECTED'` rows and check it
-against the number of swaps `0006` should have made.
+it on the restored dump anyway - count `orientation_verdict = 'frame_corrected'` rows and
+check it against the number of swaps `0006` should have made. **If that count is zero, the
+literal is wrong and the migration must not run**: it would invert every mirrored row.
 
 So:
 
 ```
-invert = (verdict == "mirrored") and survivor was NOT 'CORRECTED' in match_merge_log
+invert = (verdict == "mirrored") and survivor was NOT 'frame_corrected' in match_merge_log
 ```
 
 That is the derivation the spec asks for, and it is why the target set comes out at roughly
@@ -609,6 +624,7 @@ def test_wire_left_trio_is_the_draft_left_trio_not_the_stored_one():
     exactly what round 8 caught, so this asserts on what the migration DERIVES.
     """
     by_side = {"left": ["m", "n", "o"], "right": ["a", "b", "c"]}   # left sorts as trio 2
+    # 'frame_corrected' is the stored literal - see 0006_backfill_identity.py:72.
     naive = h.canonicalise_row(by_side=by_side, outcome="left", left_rating=100,
                                right_rating=200, predicted_left=0.8, mirrored=False)
     assert naive["wire_left_trio"] == 2          # stored-left is the draft-left
@@ -618,6 +634,17 @@ def test_wire_left_trio_is_the_draft_left_trio_not_the_stored_one():
     assert inverted["wire_left_trio"] == 1       # draft-left is the OTHER trio
     # and it agrees with where the draft-relative group actually went
     assert inverted["trio_1_rating"] == 100
+
+
+def test_an_already_corrected_row_is_not_inverted_again():
+    """0006 swapped the rows it reached, so those map NAIVELY. Inverting them again
+    re-corrupts about seventy repaired rows - and the plan very nearly did, by
+    comparing against 'CORRECTED' when the stored literal is 'frame_corrected'."""
+    assert h.should_invert(verdict="mirrored", merge_verdict="frame_corrected") is False
+    assert h.should_invert(verdict="mirrored", merge_verdict=None) is True
+    assert h.should_invert(verdict="agree", merge_verdict=None) is False
+    # The literal that would have silently disabled the whole guard:
+    assert h.should_invert(verdict="mirrored", merge_verdict="CORRECTED") is True
 
 
 def test_a_shared_comps_key_outside_the_window_gets_no_verdict():
@@ -757,14 +784,14 @@ to `captured_at` for both when they are NULL.
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_migration_0007.py -v`
-Expected: 9 passed
+Expected: 10 passed
 
 - [ ] **Step 6: Write the Alembic migration**
 
 `migrations/versions/0007_canonical_trios.py`, `down_revision = "0006"`. Structure, in one transaction:
 
 1. `op.add_column` every new column from Task 2, all nullable - including `wire_left_trio`.
-2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND its capture interval widened by 120 seconds - `captures_min_at`/`captures_max_at`, NOT `captured_at` - refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
+2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND its capture interval widened by 120 seconds - `captures_min_at`/`captures_max_at`, NOT `captured_at` - refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'frame_corrected'` - the literal, not the Python constant name.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
 4. Populate `wire_left_trio`. It is **NOT** simply the trio the `side='left'` heroes form - see the rule below, which round 8 corrected. It is the same `draft_left_is` value `canonicalise_row` already computes, so return it from there rather than deriving it twice. Then `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
@@ -1172,7 +1199,11 @@ from adb_auto_player.games.afk_journey.services.solstice.odds import fit, load_m
 from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
 
 store = MatchStore(Path("/tmp/heroes-golden.sqlite"))
-matches = load_matches(store)
+# LOCAL ROWS ONLY. matches_for_fit does not filter origin, so an unfiltered capture
+# mixes in synced rows - and Task 10 deliberately CHANGES how those contribute, so a
+# mixed baseline would make "the fit is unchanged" false by construction and the test
+# would be asserting something untrue. Round 15 caught this.
+matches = [m for m in load_matches(store) if m.origin == "local"]
 theme_id = matches[0].theme_id
 result = fit(matches, theme_id=theme_id)
 out = Path("src-python/tests/games/afk_journey/services/solstice/data/golden_fit.json")
@@ -1185,6 +1216,10 @@ out.write_text(json.dumps({
 print(f"{len(matches)} matches, {len(result.beta)} coefficients")
 EOF
 ```
+
+`load_matches` may not expose `origin` today; if it does not, filter by selecting the local
+`match.id` set from the database directly and keeping only those. **Do not skip the filter** -
+the whole claim of Task 10's test is about a population with no pooled rows in it.
 
 Adjust the call shapes to whatever `load_matches` and `fit` actually take - read them first.
 Commit this file on its own before proceeding, so it cannot be silently regenerated later:
@@ -1584,7 +1619,17 @@ represents them, and state that choice in the view's own comment.
 Then move the `con.executescript(open(VIEWS).read())` call at `migrate.py:285` to AFTER
 `_reshape_to_trios(con)`, so views are only ever built against the finished shape.
 
-Replace `idx_match_hero_side` with `idx_match_hero_trio ON match_hero(match_id, trio, hero_slug)` and `idx_match_outcome` with `idx_match_winning_trio ON match(winning_trio)`. Bump `SCHEMA_VERSION` to 6.
+**The two replacement indexes must NOT go in `schema.sql`.** `_apply` runs `schema.sql`
+before `ADD_COLUMNS` and before `_reshape_to_trios`, and `CREATE TABLE IF NOT EXISTS` does
+not add columns to an existing table - so `CREATE INDEX ... (trio)` or `... (winning_trio)`
+aborts the whole migration on any legacy database, before the reshape that would have created
+those columns. Round 15 caught this; it would have failed every Task 7 test.
+
+Delete `idx_match_hero_side` and `idx_match_outcome` from `schema.sql` and create
+`idx_match_hero_trio ON match_hero(match_id, trio, hero_slug)` and
+`idx_match_winning_trio ON match(winning_trio)` **after** `_reshape_to_trios`, using the same
+shape-aware sequencing `idx_match_pushable` and `idx_match_comps_key` already use. Bump
+`SCHEMA_VERSION` to 6.
 
 Add:
 
@@ -2204,7 +2249,46 @@ def test_a_fit_with_no_pooled_rows_is_unchanged(golden_local_matches, golden_coe
 Run: `uv run pytest tests/games/afk_journey/services/solstice/test_odds_intercept.py -v`
 Expected: FAIL - the intercept column is unconditionally 1.0.
 
-- [ ] **Step 3: Confirm the golden baseline captured in Task 6 Step 0 is present**
+- [ ] **Step 3: Add the fixtures, and confirm the baseline from Task 6 Step 0 is present**
+
+Task 6 commits `golden_fit.json`; nothing yet turns it into the `golden_local_matches` and
+`golden_coefficients` the test names. Add to
+`tests/games/afk_journey/services/solstice/conftest.py`:
+
+```python
+import json
+from pathlib import Path
+
+import pytest
+
+from adb_auto_player.games.afk_journey.services.solstice.odds import Match
+
+_GOLDEN = Path(__file__).parent / "data" / "golden_fit.json"
+
+
+@pytest.fixture
+def _golden():
+    return json.loads(_GOLDEN.read_text())
+
+
+@pytest.fixture
+def golden_local_matches(_golden):
+    """The LOCAL-ONLY population the baseline was fitted on. Rehydrated from the
+    committed file rather than re-read from the database, which has since been
+    reshaped."""
+    return [Match(**m) for m in _golden["matches"]]
+
+
+@pytest.fixture
+def golden_coefficients(_golden):
+    import numpy as np
+    return np.array(_golden["beta"])
+```
+
+`Match(**m)` must round-trip, so `golden_fit.json` has to store fields the dataclass still
+accepts. `blue_trio` is added in Task 8 with a default, so a file written before it exists
+still loads - confirm that rather than assuming it.
+
 
 It is `tests/games/afk_journey/services/solstice/data/golden_fit.json`, committed before any
 schema or `odds.py` change. **It cannot be captured here** - round 14 caught that: by Task 10
@@ -2494,7 +2578,8 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
-12. **The golden baseline is captured in Task 6 Step 0, before ANY schema or `odds.py` change**, and `load_matches` is re-pointed in Task 8 alongside `matches_for_fit` rather than in Task 10. Both are ordering constraints: after the reshape the legacy fit cannot run, and a `matches_for_fit` whose shape has changed breaks positional unpacking immediately.
+13. **The `0006` correction marker is the literal `'frame_corrected'`**, not `'CORRECTED'` - that is the Python constant's NAME (`0006_backfill_identity.py:72`). Comparing against the wrong string matches nothing and inverts all ~76 mirrored rows instead of ~6, re-corrupting the ~70 already repaired. Assert the match count is non-zero before proceeding.
+12. **The golden baseline is captured in Task 6 Step 0 from LOCAL ROWS ONLY, before ANY schema or `odds.py` change**, and `load_matches` is re-pointed in Task 8 alongside `matches_for_fit` rather than in Task 10. An unfiltered baseline includes synced rows, whose contribution Task 10 deliberately changes, which would make its "the fit is unchanged" assertion false by construction. Both are ordering constraints: after the reshape the legacy fit cannot run, and a `matches_for_fit` whose shape has changed breaks positional unpacking immediately.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
 11. **`wire_left_trio` exists only so version-4 pull is byte-compatible, and it is the DRAFT-left trio.** For an uncorrected mirrored row that is the opposite of the trio whose heroes were stored on the left - orienting on the stored side would emit a row whose heroes and ratings disagree. It is the same value `canonicalise_row` computes for the draft-relative group, returned rather than re-derived. Read by `to_v4_wire` alone; nothing in the v5, ingest or fit paths may touch it, and it is deleted when version 4 support is dropped.
 10. **Every recording path must end in `finalise_summary` or `mark_unrepresentable`.** A row left with `canonical_state IS NULL` is read by the Task 7 predicate as "the reshape has not run", so the migration re-runs on every launch.

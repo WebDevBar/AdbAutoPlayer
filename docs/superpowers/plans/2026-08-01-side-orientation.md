@@ -248,7 +248,9 @@ def _match(seeded, **kw):
 
 
 def _hero(seeded, match, trio, slot, slug):
-    h = MatchHero(match_id=match.id, trio=trio, slot=slot, hero_slug=slug, status="identified")
+    # `match.seq` - Match's primary key is seq, not id - and MatchHero has NO status
+    # column server-side; status is this machine's evidence and stays on the client.
+    h = MatchHero(match_id=match.seq, trio=trio, slot=slot, hero_slug=slug)
     seeded.add(h)
     return h
 
@@ -364,7 +366,8 @@ Replace the `__table_args__` outcome check with:
         ),
 ```
 
-In `MatchHero`, replace the `side` column and its constraints:
+In `MatchHero`, replace the `side` column and its constraints. Note it has no `status`
+column and `match_id` targets `match.seq` - the `Match` primary key is `seq`, not `id`:
 
 ```python
     trio: Mapped[int] = mapped_column(Integer)
@@ -926,8 +929,7 @@ def a_match(session, seeded):
     session.flush()
     for trio, slugs in ((1, TRIO_1), (2, TRIO_2)):
         for slot, slug in enumerate(slugs, 1):
-            session.add(MatchHero(match_id=m.id, trio=trio, slot=slot,
-                                  hero_slug=slug, status="identified"))
+            session.add(MatchHero(match_id=m.seq, trio=trio, slot=slot, hero_slug=slug))
     session.flush()
     return m
 
@@ -1838,6 +1840,30 @@ matches_for_fit carries blue_trio, which only the intercept exclusion needs."
 
 - [ ] **Step 1: Write the failing test**
 
+**Build the test infrastructure first - none of it exists.** `tests/games/afk_journey/mixins/`
+has no `conftest.py`, and there is no `bot`, `store` or `frame_capture_on` fixture anywhere.
+Follow the stub pattern the existing mixin tests use (`test_auto_bet.py`,
+`test_guild_member_scan.py`): a minimal subclass exercising pure logic, with `pytauri` and
+`adb_auto_player.ext_mod` mocked per the repo's CLAUDE.md.
+
+Add `tests/games/afk_journey/mixins/conftest.py` providing:
+
+- `store` - a real `MatchStore` on a `tmp_path` database, so the assertions read what was
+  actually written rather than what a mock recorded.
+- `bot` - a `SolsticeClashMixin` subclass stub wired to that store, with the screen-reading
+  methods stubbed out. It must be a real instance, because the carryover attributes are the
+  thing under test.
+- `frame_capture_on` - flips the existing frame-capture setting and yields the directory.
+- `_summary(top, bottom, winner)` - builds the summary read object `_record_summary` consumes.
+  Take its exact shape from the real call site at `solstice_clash.py:1187-1196` rather than
+  inventing one.
+
+**There is no `_abandon_match` method.** The draw exits at `solstice_clash.py:1007` by
+setting `_draw_this_cycle = True` and returning, and the `SC-03` timeout re-raises
+`GameTimeoutError` from `:1002` after `_report_match_end_failure()`. The carryover tests must
+drive those real paths - which is the point, since Part 4's whole complaint is that neither
+of them clears the carried state.
+
 ```python
 # tests/games/afk_journey/mixins/test_solstice_orientation.py
 """Recording resolves orientation from the trios themselves, never from a banner,
@@ -1880,15 +1906,31 @@ def test_an_unresolved_read_still_records_the_winner(bot, store):
     assert store.last_match()["winning_trio"] is not None
 
 
-def test_a_mid_match_join_after_a_draw_does_not_inherit_the_last_prediction(bot, store):
-    """The stale-carryover bug. _pending_prediction survived SC-10 and SC-03 because
-    it was cleared only inside a successful _record_summary."""
+def test_a_draw_clears_the_carried_state(bot, draw_screen):
+    """The stale-carryover bug. _pending_prediction survived SC-10 because it was
+    cleared only inside a successful _record_summary (:1275-1276), so the NEXT match
+    recorded this one's prediction.
+
+    Drives the real exit at solstice_clash.py:1007 - there is no _abandon_match."""
     bot._pending_prediction = 0.8
     bot._draft_ratings = (100, 200)
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
-    bot._abandon_match(reason="SC-10")
+    bot._await_match_end()          # returns True on the SC-10 path
+    assert bot._draw_this_cycle is True
     assert bot._pending_prediction is None
     assert bot._draft_ratings is None
+    assert bot._pending_draft_trios is None
+
+
+def test_a_timeout_clears_the_carried_state(bot, timeout_screen):
+    """SC-03 re-raises from :1002, so the clear must survive an exception path -
+    a finally block, not a line before the raise."""
+    from adb_auto_player.exceptions import GameTimeoutError
+    bot._pending_prediction = 0.8
+    bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
+    with pytest.raises(GameTimeoutError):
+        bot._await_match_end()
+    assert bot._pending_prediction is None
     assert bot._pending_draft_trios is None
 
 
@@ -1899,9 +1941,9 @@ def test_panels_matching_neither_carried_trio_refuse_the_carried_prediction(bot,
     assert store.last_match()["predicted_trio_1"] is None
 
 
-def test_the_summary_frame_is_saved_for_every_match(bot, tmp_path, frame_capture_on):
+def test_the_summary_frame_is_saved_for_every_match(bot, frame_capture_on):
     bot._record_summary(_summary(top=["a", "b", "c"], bottom=["m", "n", "o"], winner="top"))
-    assert list(tmp_path.glob("summary-*.png"))
+    assert list(frame_capture_on.glob("summary-*.png"))
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1952,7 +1994,7 @@ Log the raw read at `[SC-75]`: both trios, the winner, the resolution and its ma
 
 - [ ] **Step 6: Implement Part 4 - the stale-carryover fix**
 
-`_pending_prediction` and `_draft_ratings` are cleared only inside `_record_summary` at :1275-1276, so after a draw (`SC-10`) or an `SC-03` timeout they survive and a following mid-match join records the PREVIOUS match's prediction against a new match. Clear `_pending_prediction`, `_draft_ratings` and `_pending_draft_trios` on EVERY exit path from a match. The trio anchor doubles as the guard: when the panels match neither carried trio, refuse the carried prediction and ratings as well as the orientation.
+`_pending_prediction` and `_draft_ratings` are cleared only inside `_record_summary` at :1275-1276, so after a draw (`SC-10`, `:1007`) or an `SC-03` timeout (`:1002`, which re-raises) they survive and a following mid-match join records the PREVIOUS match's prediction against a new match. Clear `_pending_prediction`, `_draft_ratings` and `_pending_draft_trios` on EVERY exit path from a match. **The `SC-03` path leaves by exception**, so a line placed before the `raise` does not run on it - use a `finally` around the match cycle rather than adding a clear to each branch and hoping none is missed. The trio anchor doubles as the guard: when the panels match neither carried trio, refuse the carried prediction and ratings as well as the orientation.
 
 - [ ] **Step 7: Run the full AFK Journey suite**
 

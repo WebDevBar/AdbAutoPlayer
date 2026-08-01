@@ -14,6 +14,7 @@ declarative (schema.sql) and the upgrade path repeatable.
 from __future__ import annotations
 
 import datetime
+import hashlib
 import os
 import sqlite3
 import uuid
@@ -212,6 +213,70 @@ def apply(db: str, quiet: bool = False) -> dict:
         con.close()
 
 
+def _backfill_comps_key(con: sqlite3.Connection) -> int:
+    """Give every already-recorded match the identity the new code looks it up by.
+
+    NOT cosmetic. `comps_key` arrived NULL on every existing row, and two things now key
+    off it: the push gate (`comps_key IS NOT NULL`), and the SC-41 backstop, which asks
+    `match_by_comps_key` whether a match is already recorded. With every row NULL the
+    backstop recognises NOTHING, so an upgraded install would re-record matches it
+    already has - manufacturing the exact duplicates this whole change exists to remove.
+
+    Only complete matches get a key, matching `is_complete`: three identified heroes a
+    side and a decided outcome. The event slug comes from `event_id`, falling back
+    through `theme_id`, and a row that resolves to neither is left NULL rather than
+    guessed - 120 of 1200 rows on the operator's database reach it via the fallback.
+
+    Idempotent: it only touches rows where `comps_key IS NULL`.
+
+    Args:
+        con: Open connection, mid-migration.
+
+    Returns:
+        How many rows were given a key.
+    """
+    if not table_exists(con, "match") or "comps_key" not in columns(con, "match"):
+        return 0
+
+    rows = con.execute(
+        """
+        SELECT m.id,
+               COALESCE(e1.slug, e2.slug) AS event_slug,
+               (SELECT group_concat(hero_slug) FROM (
+                    SELECT hero_slug FROM match_hero
+                    WHERE match_id = m.id AND side = 'left' AND hero_slug IS NOT NULL
+                    ORDER BY hero_slug)) AS left_slugs,
+               (SELECT group_concat(hero_slug) FROM (
+                    SELECT hero_slug FROM match_hero
+                    WHERE match_id = m.id AND side = 'right' AND hero_slug IS NOT NULL
+                    ORDER BY hero_slug)) AS right_slugs
+        FROM match m
+        LEFT JOIN event e1 ON e1.id = m.event_id
+        LEFT JOIN theme t  ON t.id  = m.theme_id
+        LEFT JOIN event e2 ON e2.id = t.event_id
+        WHERE m.comps_key IS NULL AND m.outcome IN ('left', 'right')
+        """
+    ).fetchall()
+
+    done = 0
+    for match_id, event_slug, left_slugs, right_slugs in rows:
+        if not event_slug or not left_slugs or not right_slugs:
+            continue
+        left = left_slugs.split(",")
+        right = right_slugs.split(",")
+        if len(left) != 3 or len(right) != 3:
+            continue
+        # Kept in step with matchkey.comps_key. Duplicated rather than imported because
+        # this file is loaded standalone by the client, outside the package.
+        a, b = sorted([",".join(sorted(left)), ",".join(sorted(right))])
+        digest = hashlib.sha256(f"{event_slug}|{a}|{b}".encode()).hexdigest()
+        con.execute(
+            "UPDATE match SET comps_key=? WHERE id=?", (f"sha256:{digest}", match_id)
+        )
+        done += 1
+    return done
+
+
 def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     con.executescript(open(SCHEMA).read())          # CREATE IF NOT EXISTS throughout
     # Derived views live in their own file because the CLIENT executes them too - a
@@ -262,6 +327,8 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     if table_exists(con, "match") and "outcome" in columns(con, "match"):
         con.execute("UPDATE match SET outcome='left' WHERE outcome='blue'")
         con.execute("UPDATE match SET outcome='right' WHERE outcome='red'")
+
+    _backfill_comps_key(con)
 
     if table_exists(con, "cell_registry"):
         # REPLACE is a no-op on rows without the substring, so this is safe to run on

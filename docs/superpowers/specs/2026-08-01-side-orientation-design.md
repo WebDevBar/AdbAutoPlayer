@@ -71,8 +71,9 @@ stored as a human-readable hint and never determine a side.
 2. Carry the merged draft+locked trios to record time (client).
 3. Save the summary frame (client).
 4. Fix the stale-carryover bug (client).
+4b. Store trios canonically in the LOCAL database too, with `blue_trio` as the pointer.
 5. Replace `left_*`/`right_*` with `trio_1`/`trio_2` on the server (`0007`).
-6. Teach the client to store pulled rows without sides.
+6. Teach the client to store pulled rows without a `blue_trio`.
 7. Reconcile the local/synced pairs already on disk.
 8. Repair the 76 mirrored rows, locally and in the pool.
 
@@ -155,6 +156,62 @@ match's prediction and ratings against a new match.
 The trio anchor doubles as the guard: when the panels match neither carried trio, refuse to
 record the carried prediction and ratings as well as refusing the orientation. Clear both
 on every exit path from a match, not only the successful one.
+
+## Part 4b - one shape, both databases
+
+Adopted after the operator proposed it: store trios canonically in the LOCAL database too,
+not only on the server.
+
+**This makes the bug unrepresentable rather than fixed.** Match 1476 happened because there
+were two independent side labels - `outcome` said left/right and `match_hero.side` said
+left/right - and nothing forced them to agree. Replace both with one trio identity plus one
+annotation and there is nothing left to contradict.
+
+| column | meaning |
+|---|---|
+| `trio_1`, `trio_2` | canonically sorted, exactly as `comps_key` already sorts them |
+| `winning_trio` | 1 or 2 |
+| `blue_trio` | 1, 2, or NULL when we did not watch the draft |
+
+`match_hero` carries `trio` (1 or 2) and keeps its `slot`.
+
+**Nothing local is lost.** `blue_trio` points at whichever trio was blue, so left/right is
+fully recoverable for any match we spectated, and with `slot` so are the plate numbers.
+Side stops being a label that can contradict the heroes and becomes a pointer to one of
+them, which cannot. For a pulled row `blue_trio` is NULL - honest, and the only thing lost
+is something we never had.
+
+`predicted_left` is unchanged and still means "P(blue wins)". It stays interpretable
+because `blue_trio` says which trio blue was, and scoring becomes `predicted_left >= 0.5`
+against `winning_trio == blue_trio`. There is no second frame for it to mismatch.
+
+The fit then reads trios uniformly with no branching on origin, and `blue_trio IS NOT NULL`
+becomes the single condition for contributing to the intercept - the distinction from
+Part 6 expressed as data rather than as logic.
+
+### The live path is untouched
+
+Realtime is the operator's hard requirement and this does not reach it. During the draft
+everything runs from the in-memory reads: left/right, pick order, the coloured log, the
+odds, the overlay, the bet. `blue_trio` is written at RECORD time, after all of that has
+happened. Side matters live, for betting on the correct side and for the log to be
+truthful; after the details screen it only has to be recoverable, and it is.
+
+### It must migrate itself, on every install
+
+The operator's collaborator runs the Windows build and will never run a script by hand.
+`migrate.py` already executes on every launch through `_ensure_schema`, which is how their
+database acquired the identity columns without them doing anything - so the mechanism
+exists and must be used.
+
+**Do not gate it on a column check.** `_schema_is_current` skips `migrate.apply()` when
+every column is present, which is exactly why the `comps_key` backfill silently never ran
+after its columns landed and 50 pulled rows stayed keyless across two upgrades. A shape
+change needs a "not done yet" predicate - a decided row whose `trio_1` is NULL - matching
+the backfill's own predicate so it cannot loop.
+
+It must also survive a database in any prior state. The collaborator's was old enough to
+fail with `no such column: predicted_left`.
 
 ## Part 5 - the server drops sides (`0007`)
 

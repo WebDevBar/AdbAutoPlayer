@@ -46,8 +46,10 @@ from ..services.solstice.details_screen import (
     is_details_screen,
     load_replay_template,
 )
+from ..services.solstice.canon import canonical_trios
 from ..services.solstice.icons import IconLibrary
 from ..services.solstice.matchkey import comps_key, is_complete
+from ..services.solstice.orient import Orientation, resolve
 from ..services.solstice.naming import resolve_hero_name_strict
 from ..services.solstice.odds import (
     MIN_LOCKED_FOR_ODDS,
@@ -260,6 +262,25 @@ CHAT_DRAG_TO_Y = 620
 CHAT_DRAG_SECONDS = 2.0
 
 
+def _trio_of(hero, trio_1) -> int:
+    """Which canonical trio this summary hero belongs to.
+
+    By SLUG, never by which panel it sat in - that is the whole point of the shape.
+    An unidentified cell falls back to its panel, because there is no slug to sort and
+    an incomplete read is not a contradiction.
+
+    Args:
+        hero: One summary hero read.
+        trio_1: The canonically first composition.
+
+    Returns:
+        1 or 2.
+    """
+    if hero.slug:
+        return 1 if hero.slug in trio_1 else 2
+    return 1 if hero.side == "left" else 2
+
+
 class SolsticeClashMixin(AFKJourneyBase, ABC):
     """Solstice Clash data collection."""
 
@@ -333,7 +354,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             overlay.safe_shell(self._device.d, overlay.stop_command())
             self._device.d.d.uninstall(overlay.PACKAGE)
             logging.info("[SC-82] odds overlay removed")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logging.warning(f"[SC-82] could not remove the overlay: {exc}")
 
     @register_command(
@@ -594,17 +615,27 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 event_id=event_id,
                 theme_id=theme_id,
                 theme_resolved_by=theme_resolved_by,
-                outcome=read.winner,
                 outcome_source="observed",
                 left_player=read.left_player,
                 right_player=read.right_player,
             )
         )
+        # This path reads a compete result COLD - there is no draft to anchor against,
+        # so it has no blue_trio to claim and does not invent one. Its trios and its
+        # winner need no orientation, which is exactly why they can still be recorded.
+        try:
+            compete_trio_1, _compete_trio_2 = canonical_trios(
+                {"left": sorted(left), "right": sorted(right)}
+            )
+        except ValueError as exc:
+            logging.warning(f"[SC-40] not representable as two trios: {exc}")
+            self._store.mark_unrepresentable(match_id)
+            return False
         self._store.record_heroes(
             match_id,
             [
                 HeroSlot(
-                    side=h.side,
+                    trio=_trio_of(h, compete_trio_1),
                     slot=h.slot,
                     hero_slug=h.slug,
                     art_ref=h.art_ref,
@@ -619,6 +650,15 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 )
                 for h in read.heroes
             ],
+        )
+        winning_panel = sorted(
+            h.slug for h in read.heroes if h.side == read.winner and h.slug
+        )
+        self._store.finalise_summary(
+            match_id,
+            winning_trio=1 if winning_panel == compete_trio_1 else 2,
+            blue_trio=None,
+            outcome_source="observed",
         )
         self._store.finalise_identity(match_id)
 
@@ -710,6 +750,25 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
     def _run_one_match(self) -> bool:
         """Spectate one match and record it. Returns True if a match was recorded."""
+        try:
+            return self._run_one_match_inner()
+        finally:
+            # PART 4: the stale-carryover fix. These used to be cleared ONLY inside a
+            # successful `_record_summary`, so after a draw (SC-10) or an SC-03 timeout
+            # they survived - and the next mid-match join recorded the PREVIOUS match's
+            # prediction and ratings against a new match.
+            #
+            # A `finally` around the whole cycle rather than a clear on each branch:
+            # SC-03 leaves by RAISING, so a line before the raise never runs, and a
+            # per-branch clear relies on nobody adding a branch later. `_record_summary`
+            # runs synchronously inside this call, so it has already consumed these by
+            # the time the finally fires.
+            self._pending_prediction = None
+            self._draft_ratings = (None, None)
+            self._pending_draft_trios = None
+
+    def _run_one_match_inner(self) -> bool:
+        """The body. See `_run_one_match` for why it is wrapped."""
         # _open_spectate reads the theme while it is ON the event screen and returns it.
         # The theme cannot be read before that call (we are on the overworld) and cannot
         # be read after it (the summary screen does not show it).
@@ -765,7 +824,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     logging.info(
                         f"[SC-65] saved {LOCK_BURST_FRAMES} frames to {target}"
                     )
-                except Exception as exc:  # noqa: BLE001 - never fatal
+                except Exception as exc:
                     logging.warning(f"[SC-67] lock-frame capture failed: {exc}")
 
             # CONFIRMATION TWO. The first was the detection that ended the draft
@@ -781,7 +840,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             for look in range(LOCKED_CONFIRM_LOOKS):
                 try:
                     candidate = self.get_screenshot()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logging.debug(f"[SC-45] settle screenshot failed: {exc}")
                     time_module.sleep(LOCKED_LOOK_INTERVAL)
                     continue
@@ -864,6 +923,19 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     )
 
             merged = merge_screens(draft_reads, locked)
+            # PART 2: carry the merged trios to record time. These are the same six
+            # heroes the prediction below was computed from, in the DRAFT's frame of
+            # reference - which is the frame `predicted_left` has always lived in.
+            # Anchoring the summary against them rather than against a re-read frame
+            # makes the orientation self-consistent by construction.
+            #
+            # Retaining a value is behaviour-neutral: nothing here reads, computes or
+            # displays anything differently, and `_last_draft_reads` is cleared below
+            # before `_record_summary` ever runs.
+            self._pending_draft_trios = (
+                frozenset(r.slug for r in merged if r.identified and r.side == "left"),
+                frozenset(r.slug for r in merged if r.identified and r.side == "right"),
+            )
             filled = sum(1 for r in merged if r.identified)
             from_locked = {r.slug for r in locked if r.identified}
             from_draft = sum(
@@ -955,7 +1027,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 elif locked_seen:
                     locked_seen = False
                     self._overlay_hide()
-            except Exception as exc:  # noqa: BLE001 - a display is never worth a match
+            except Exception as exc:
                 logging.debug(f"[SC-81] could not track the locked screen: {exc}")
 
             hit = self.find_any_template(
@@ -1172,6 +1244,76 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"stopping: {max_restarts} consecutive cycles recorded no match"
         )
 
+    def _finalise_orientation(self, match_id, read, trio_1, trio_2) -> None:
+        """Resolve which trio was OURS, and close the row.
+
+        PART 1. The resolver scores BOTH panels jointly against the merged draft
+        trios: the draft screen never shows pick 6, so a draft-frame red side is only
+        ever two heroes, and matching the winning panel alone gives 1-vs-1 on a single
+        misread - a tie. Joint scoring gives 5-vs-0 clean and 4-vs-1 with one misread.
+
+        On refusal we still record the trios and the winner. Those need NO orientation:
+        the winner and the heroes come off the same panel pair in the same pass, so
+        "the trio in this panel won" survives a swap intact. Only `blue_trio` and the
+        draft-relative values are declined, and they are declined rather than guessed.
+
+        Args:
+            match_id: The row to close.
+            read: The summary read.
+            trio_1: The canonically first composition.
+            trio_2: The canonically second composition.
+        """
+        winning_trio = None
+        if read.winner in ("left", "right"):
+            panel = sorted(
+                h.slug for h in read.heroes if h.side == read.winner and h.slug
+            )
+            winning_trio = 1 if panel == trio_1 else 2
+
+        carried = getattr(self, "_pending_draft_trios", None)
+        blue_trio = None
+        margin = None
+        if carried is not None:
+            draft_blue, draft_red = carried
+            panel_top = {h.slug for h in read.heroes if h.side == "left" and h.slug}
+            panel_bottom = {h.slug for h in read.heroes if h.side == "right" and h.slug}
+            resolution = resolve(panel_top, panel_bottom, draft_blue, draft_red)
+            margin = resolution.margin
+            if resolution.orientation is Orientation.DIRECT:
+                blue_trio = 1 if sorted(panel_top) == trio_1 else 2
+            elif resolution.orientation is Orientation.SWAPPED:
+                blue_trio = 1 if sorted(panel_bottom) == trio_1 else 2
+
+        ratings = getattr(self, "_draft_ratings", (None, None))
+        if blue_trio is None:
+            # No orientation, so nothing draft-relative may be attached. The carried
+            # prediction and ratings are refused along with the side - the panels
+            # matching neither carried trio is exactly the stale-carryover case.
+            t1_rating = t2_rating = predicted = None
+        else:
+            t1_rating, t2_rating = (
+                (ratings[0], ratings[1]) if blue_trio == 1 else (ratings[1], ratings[0])
+            )
+            pending = getattr(self, "_pending_prediction", None)
+            predicted = None
+            if pending is not None:
+                p_left = pending[0]
+                predicted = p_left if blue_trio == 1 else 1.0 - p_left
+
+        logging.info(
+            f"[SC-75] trio 1 {sorted(trio_1)} vs trio 2 {sorted(trio_2)}, "
+            f"winner=trio {winning_trio}, blue=trio {blue_trio}, margin={margin}"
+        )
+        self._store.finalise_summary(
+            match_id,
+            winning_trio=winning_trio,
+            blue_trio=blue_trio,
+            trio_1_rating=t1_rating,
+            trio_2_rating=t2_rating,
+            predicted_trio_1=predicted,
+            outcome_source="observed",
+        )
+
     def _record_summary(
         self,
         draft_frame,
@@ -1213,12 +1355,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 event_id=event_id,
                 theme_id=theme_id,
                 theme_resolved_by=theme_resolved_by,
-                outcome=read.winner,
                 outcome_source="observed",
                 left_player=read.left_player,
                 right_player=read.right_player,
-                left_rating=getattr(self, "_draft_ratings", (None, None))[0],
-                right_rating=getattr(self, "_draft_ratings", (None, None))[1],
             )
         )
         self._claim_draft_frame(match_id)
@@ -1248,7 +1387,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     if crowd is not None
                     else "[SC-78] market recorded"
                 )
-            except Exception as exc:  # noqa: BLE001 - never worth a match
+            except Exception as exc:
                 logging.warning(f"[SC-78] market could not be recorded: {exc}")
         self._pool_read = None
         self._spectators = None
@@ -1276,6 +1415,23 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self._draft_ratings = (None, None)
         self._first_locked_frame = None
 
+        # The two compositions, numbered by the canonical sort. Which one is "1" is a
+        # pure function of the heroes, so two spectators who saw this match with the
+        # panels the other way round both store it under the same numbers.
+        panel_left = sorted(h.slug for h in read.heroes if h.side == "left" and h.slug)
+        panel_right = sorted(
+            h.slug for h in read.heroes if h.side == "right" and h.slug
+        )
+        try:
+            trio_1, trio_2 = canonical_trios({"left": panel_left, "right": panel_right})
+        except ValueError as exc:
+            # Cannot form two complete trios. Terminal rather than pending - a row left
+            # unclassified is read by the migration predicate as "the reshape has not
+            # run" and re-runs it on every launch.
+            logging.warning(f"[SC-75] not representable as two trios: {exc}")
+            self._store.mark_unrepresentable(match_id)
+            return
+
         slots: list[HeroSlot] = []
         for hero in read.heroes:
             # SHELVED. Long-press OCR is left in place but switched off: on device the
@@ -1293,7 +1449,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
             slots.append(
                 HeroSlot(
-                    side=hero.side,
+                    trio=_trio_of(hero, trio_1),
                     slot=hero.slot,
                     hero_slug=confirmed or hero.slug,
                     art_ref=hero.art_ref,
@@ -1342,6 +1498,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ):
                 logging.info(f"tuned {confirmed} on the summary screen")
         self._store.record_heroes(match_id, slots)
+        self._finalise_orientation(match_id, read, trio_1, trio_2)
 
         # Identity can only be finalised HERE, not at insert: the match row is
         # written before the summary is read, so the heroes it is made of are not
@@ -1440,7 +1597,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             started = time_module.perf_counter()
             try:
                 frame = self.get_screenshot()
-            except Exception as exc:  # noqa: BLE001 - a lost frame is not fatal here
+            except Exception as exc:
                 logging.debug(f"[SC-45] screenshot failed during the draft: {exc}")
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue
@@ -1489,7 +1646,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 # Re-read after the drag: the frame in hand was captured before it.
                 try:
                     frame = self.get_screenshot()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logging.debug(f"[SC-45] screenshot after the chat drag: {exc}")
 
                 # Fit ONCE per draft, here. The fit takes ~2s over a few hundred
@@ -1510,7 +1667,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                             f"(gap {left_rating - right_rating:+d})"
                         )
                     self._draft_ratings = (left_rating, right_rating)
-                except Exception as exc:  # noqa: BLE001 - never worth a match
+                except Exception as exc:
                     logging.debug(f"[SC-74] ratings unreadable: {exc}")
                     self._draft_ratings = (None, None)
             saw_draft = True
@@ -1553,7 +1710,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         if count is not None:
                             self._spectators = count
                             logging.info(f"[SC-80] {count} spectators")
-                except Exception as exc:  # noqa: BLE001 - never worth a match
+                except Exception as exc:
                     logging.debug(f"[SC-77] pool read failed: {exc}")
             for pick in newly:
                 # Two lines, two audiences: the coloured one-liner for whoever is
@@ -1651,7 +1808,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 stamp = datetime.now(UTC).strftime("%H%M%S")
                 cv2.imwrite(str(target / f"sc03_{stamp}.png"), frame)
                 logging.warning(f"[SC-79] frame saved to {target}")
-        except Exception as exc:  # noqa: BLE001 - the match is already lost
+        except Exception as exc:
             logging.debug(f"[SC-79] could not report the failure: {exc}")
 
     def _claim_draft_frame(self, match_id: int | None) -> None:
@@ -1704,7 +1861,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # run killed mid-match - and it is meant to stand out as unusable.
             self._pending_frame = path
             logging.debug(f"[SC-83] draft frame saved to {path}")
-        except Exception as exc:  # noqa: BLE001 - a screenshot is never worth a match
+        except Exception as exc:
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")
 
     def _sync_theme_windows(self) -> None:
@@ -1723,7 +1880,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             sync = SyncClient(self._store)
             if sync.enabled:
                 sync.pull_themes()
-        except Exception as exc:  # noqa: BLE001 - never worth a run
+        except Exception as exc:
             logging.debug(f"[SC-37] could not sync theme windows: {exc}")
 
     def _overlay_prepare(self, install_if_absent: bool = False) -> None:
@@ -1790,7 +1947,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             overlay.safe_shell(device, overlay.snooze_notice_command())
             self._overlay_ok = True
             logging.info("[SC-82] odds overlay ready")
-        except Exception as exc:  # noqa: BLE001 - a display is never worth a run
+        except Exception as exc:
             logging.info(f"[SC-82] overlay unavailable, continuing without it: {exc}")
 
     def _overlay_show(self, prediction, gate: str | None) -> None:
@@ -1861,7 +2018,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # still possible.
             self._overlay_show(prediction, gate)
             self._auto_bet(prediction, gate)
-        except Exception as exc:  # noqa: BLE001 - never worth a match
+        except Exception as exc:
             logging.debug(f"[SC-76] final odds could not be shown: {exc}")
 
     def _final_prediction(self, merged) -> tuple[float, str, int] | None:
@@ -1888,7 +2045,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                 else None,
             )
             return prediction.p_mid, prediction.source_code, len(left) + len(right)
-        except Exception as exc:  # noqa: BLE001 - never worth a match
+        except Exception as exc:
             logging.debug(f"[SC-75] final prediction failed: {exc}")
             return None
 
@@ -1945,7 +2102,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             self._odds_fit = fitted
             self._theme_matches = same_theme
             return fitted, same_theme
-        except Exception as exc:  # noqa: BLE001 - odds are never worth a match
+        except Exception as exc:
             logging.warning(f"[SC-73] odds model could not be fitted: {exc}")
             self._band_evidence = {}
             return None, 0
@@ -1981,7 +2138,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             for line in format_odds(prediction, len(settled), gate):
                 logging.info(line)
             self._overlay_show(prediction, gate)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logging.warning(f"[SC-73] odds could not be computed: {exc}")
 
     def _auto_bet(self, prediction, gate: str | None) -> None:
@@ -2189,7 +2346,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         while time_module.monotonic() < deadline:
             try:
                 frame = self.get_screenshot()
-            except Exception as exc:  # noqa: BLE001 - a lost frame is not fatal
+            except Exception as exc:
                 logging.debug(f"[SC-45] screenshot while waiting to lock: {exc}")
                 time_module.sleep(DRAFT_POLL_SECONDS)
                 continue

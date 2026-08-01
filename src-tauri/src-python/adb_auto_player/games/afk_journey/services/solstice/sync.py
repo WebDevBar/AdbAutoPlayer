@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 DEFAULT_URL = "https://gameretro.net/adb"
 
+
 def _builtin_key() -> str:
     """The fork key baked in at build time.
 
@@ -41,7 +42,7 @@ def _builtin_key() -> str:
 
 FORK_API_KEY = _builtin_key()
 
-BATCH_LIMIT = 500      # server rejects a larger batch with 422
+BATCH_LIMIT = 500  # server rejects a larger batch with 422
 MAX_CHUNKS_PER_CYCLE = 3
 PULL_LIMIT = 500
 # Pull re-requests an overlap: `seq` is assigned at INSERT, so a transaction can
@@ -67,7 +68,7 @@ def _detect_client_version() -> str:
         from importlib.metadata import version
 
         return version("adb-auto-player")
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "unknown"
 
 
@@ -102,8 +103,9 @@ class SyncConfig:
 class SyncClient:
     """Push local matches to the pool and pull everyone else's back."""
 
-    def __init__(self, store, config: SyncConfig | None = None,
-                 client_version: str | None = None) -> None:
+    def __init__(
+        self, store, config: SyncConfig | None = None, client_version: str | None = None
+    ) -> None:
         self._store = store
         self._cfg = config or SyncConfig.load()
         self._client_version = client_version or _detect_client_version()
@@ -131,7 +133,7 @@ class SyncClient:
         """
         try:
             raw = exc.read(HTTP_ERROR_BODY_LIMIT + 1)
-        except Exception:  # noqa: BLE001 - see the docstring
+        except Exception:
             return ""
         truncated = len(raw) > HTTP_ERROR_BODY_LIMIT
         text = " ".join(raw[:HTTP_ERROR_BODY_LIMIT].decode("utf-8", "replace").split())
@@ -160,7 +162,7 @@ class SyncClient:
                 req.add_header("Content-Type", "application/json")
 
             with urllib.request.urlopen(req, timeout=self._cfg.timeout) as resp:
-                self._auth_failures = 0   # any success clears the streak
+                self._auth_failures = 0  # any success clears the streak
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as exc:
             detail = self._error_detail(exc)
@@ -204,7 +206,9 @@ class SyncClient:
                 break
 
             payload = {
-                "schema_version": 4,
+                # 5: trios, no sides, no player names. The server accepts both for
+                # one release, so an older client is not stranded mid-rollout.
+                "schema_version": 5,
                 "matches": [
                     {k: v for k, v in dict(r, index=i).items() if k != "local_id"}
                     for i, r in enumerate(rows)
@@ -263,8 +267,12 @@ class SyncClient:
         supersession_since = self._store.supersession_cursor()
         body = self._request(
             "GET",
+            # The version is sent EXPLICITLY. It used to send none at all, which is
+            # why an absent one has to mean 4 on the server - that default exists for
+            # clients that predate this line, not for us.
             f"/v1/matches?since={since}&limit={PULL_LIMIT}"
-            f"&supersession_since={supersession_since}",
+            f"&supersession_since={supersession_since}"
+            f"&schema_version=5",
         )
         if body is None:
             # Do NOT advance either cursor on failure - they are the only record

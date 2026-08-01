@@ -210,15 +210,30 @@ Read `app/models.py:115-254` first. Keep every column not named below exactly as
 A constraint nobody has tried to breach is a comment, so each of these inserts a
 deliberate violation and asserts the database refuses it.
 """
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Match, MatchHero
 
 
-def _match(session, **kw):
-    m = Match(natural_key=kw.pop("nk", "nk1"), comps_key="ck1", captured_at="2026-08-01T00:00:00Z",
-              contributor_uuid="u1", canonical_state="canonical", **kw)
+def _match(session, contributor, theme, **kw):
+    """Every NOT NULL column must be supplied or the insert fails for an unrelated
+    reason and the constraint under test is never reached. The real model requires
+    contributor_id, theme_id, theme_resolved_by and source, and captured_at is a
+    datetime - not the string an earlier draft of this test passed."""
+    kw.setdefault("canonical_state", "canonical")
+    m = Match(
+        natural_key=kw.pop("nk", "nk1"),
+        comps_key=kw.pop("comps_key", "ck1"),
+        captured_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        contributor_id=contributor.id,
+        theme_id=theme.id,
+        theme_resolved_by="window",
+        source="compete",
+        **kw,
+    )
     session.add(m)
     session.flush()
     return m
@@ -230,47 +245,50 @@ def _hero(session, match, trio, slot, slug):
     return h
 
 
-def test_trio_must_be_1_or_2(session):
-    m = _match(session, winning_trio=1)
+def test_trio_must_be_1_or_2(session, contributor, theme):
+    m = _match(session, contributor, theme, winning_trio=1)
     _hero(session, m, 3, 1, "a")
     with pytest.raises(IntegrityError):
         session.flush()
 
 
-def test_slot_must_be_1_2_or_3(session):
-    m = _match(session, winning_trio=1)
+def test_slot_must_be_1_2_or_3(session, contributor, theme):
+    m = _match(session, contributor, theme, winning_trio=1)
     _hero(session, m, 1, 99, "a")
     with pytest.raises(IntegrityError):
         session.flush()
 
 
-def test_a_hero_appears_once_in_the_whole_match(session):
-    m = _match(session, winning_trio=1)
+def test_a_hero_appears_once_in_the_whole_match(session, contributor, theme):
+    m = _match(session, contributor, theme, winning_trio=1)
     _hero(session, m, 1, 1, "a")
     _hero(session, m, 2, 1, "a")
     with pytest.raises(IntegrityError):
         session.flush()
 
 
-def test_a_slot_is_used_once_per_trio(session):
-    m = _match(session, winning_trio=1)
+def test_a_slot_is_used_once_per_trio(session, contributor, theme):
+    m = _match(session, contributor, theme, winning_trio=1)
     _hero(session, m, 1, 1, "a")
     _hero(session, m, 1, 1, "b")
     with pytest.raises(IntegrityError):
         session.flush()
 
 
-def test_winning_trio_must_be_1_or_2(session):
+def test_winning_trio_must_be_1_or_2(session, contributor, theme):
     with pytest.raises(IntegrityError):
-        _match(session, winning_trio=3)
-        session.flush()
+        _match(session, contributor, theme, winning_trio=3)
 
 
-def test_canonical_state_is_constrained(session):
+def test_canonical_state_is_constrained(session, contributor, theme):
     with pytest.raises(IntegrityError):
-        _match(session, winning_trio=1, canonical_state="maybe")
-        session.flush()
+        _match(session, contributor, theme, winning_trio=1, canonical_state="maybe")
 ```
+
+The `contributor` and `theme` fixtures must exist in `tests/conftest.py`; check whether the
+existing suite already provides them and add them if not. **Verify each test fails for the
+RIGHT reason** - a test that errors on a missing NOT NULL column is not exercising the
+constraint it names, and would keep passing after the constraint was removed.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -387,13 +405,60 @@ pointers meaningless."
 
 The ~70 rows `0006` already swapped map naively; these ~6 map inverted; both reach the same canonical truth.
 
-- [ ] **Step 1: Copy the sidecar into the server repo**
+- [ ] **Step 1: Build a `comps_key`-keyed sidecar - the raw one CANNOT be used**
+
+The committed sidecar is keyed by `natural_key`, and `0006` rewrote every surviving
+server row's `natural_key` to `"<comps_key>:<occurrence>"` (`0006_backfill_identity.py:17`).
+A lookup by the CURRENT server key therefore misses every entry, silently treating all ~929
+audited rows as unaudited and nulling their ratings, predictions, pools and odds. This is
+also what the spec means by "recompute the target set against the POST-0006 pool, not
+against the client sidecar".
+
+`comps_key` is orientation-free and `0006` did not change it, so it is the join that
+survives. Generate the keyed file from the CLIENT database, which holds both keys:
 
 ```bash
-mkdir -p migrations/data
-cp ~/Dev/webdevbar/adbautoplayer/docs/solstice-clash/side-audit-2026-08-01.json migrations/data/
-git add migrations/data/side-audit-2026-08-01.json
+cd ~/Dev/webdevbar/adbautoplayer
+python3 - <<'EOF' > /tmp/side-audit-by-comps-key.json
+import json, sqlite3
+audit = json.load(open("docs/solstice-clash/side-audit-2026-08-01.json"))
+con = sqlite3.connect("data/solstice_clash/heroes.sqlite")
+by_nk = {nk: ck for nk, ck in con.execute(
+    "SELECT natural_key, comps_key FROM match"
+    " WHERE natural_key IS NOT NULL AND comps_key IS NOT NULL")}
+out, dropped = {}, 0
+for e in audit:
+    ck = by_nk.get(e["natural_key"])
+    if ck is None:
+        dropped += 1
+        continue
+    out[ck] = e["verdict"]
+print(json.dumps({"dropped_without_comps_key": dropped, "verdicts": out}, indent=1))
+EOF
+cp /tmp/side-audit-by-comps-key.json ~/Dev/webdevbar/gameretro-adb-api/migrations/data/
 ```
+
+Read `dropped_without_comps_key` before continuing. A large number means the join is wrong,
+not that those rows are unauditable - stop and diagnose rather than proceeding with a
+sidecar that mostly missed.
+
+```bash
+cd ~/Dev/webdevbar/gameretro-adb-api
+git add migrations/data/side-audit-by-comps-key.json
+```
+
+**A `mirrored` verdict alone does NOT mean invert.** `0006` already swapped the rows it
+reached, and a swapped row's heroes now match the draft orientation, so it maps NAIVELY.
+Only a row that is mirrored AND was never corrected needs the inversion. `0006` recorded
+exactly this: `match_merge_log.orientation_verdict` is `'CORRECTED'` for every survivor it
+swapped (`0006_backfill_identity.py:413-414, 449`). So:
+
+```
+invert = (verdict == "mirrored") and survivor was NOT 'CORRECTED' in match_merge_log
+```
+
+That is the derivation the spec asks for, and it is why the target set comes out at roughly
+six rows rather than seventy-six.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -550,9 +615,9 @@ Expected: 4 passed
 1. `op.add_column` every new column from Task 2, all nullable.
 2. Load `migrations/data/side-audit-2026-08-01.json`; build `{natural_key: verdict}`. Treat only `verdict == "mirrored"` as `mirrored=True`, only `"agree"` as `False`, and everything else (`partial`, `unreadable`, `incomplete`, absent) as `None`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
-4. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
-5. Assert canonical ordering in bulk: no canonical match may have its `trio=1` heroes sorting after its `trio=2` heroes. Raise on any violation.
-6. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate, drop `side`, then add the new uniques and checks.
+4. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
+5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
+6. Assert canonical ordering in bulk: no canonical match may have its `trio=1` heroes sorting after its `trio=2` heroes. Raise on any violation. **This must come after step 4**, not before - the column it reads does not exist until then. Both assertions stay inside the transaction and before any destructive drop.
 7. Drop `left_player`, `left_rating`, `left_rank`, `right_player`, `right_rating`, `right_rank`, `outcome`, `predicted_left`, `left_pool`, `right_pool`, `left_odds`, `right_odds`.
 
 `downgrade()` raises `NotImplementedError` with the message `"0007 is irreversible: restore from the pg_dump taken before it ran."` Reconstructing a side from a trio is exactly the information this migration removes on purpose.
@@ -710,7 +775,21 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
 - `app/routers/matches.py`:
   - Ingest branches on `schema_version`. A v4 payload is converted with `canonicalise_row` (import from `migrations.versions._0007_helpers`, or move that function to `app/canon.py` and import from there - prefer the move, so a migration file is not a runtime dependency) with `mirrored=None`, since a live v4 client is reporting its own draft-anchored orientation and **is** trustworthy: pass `mirrored=False` for live ingest, not `None`. A v4 client's `left` IS its blue.
   - A v5 payload is validated: recompute `canonical_trios` from the submitted heroes and reject the row if the client's `trio` assignment disagrees. Never trust the client's numbering.
-  - Pull reads `schema_version` from the query string, defaulting to 4, and serialises with the matching model.
+  - **Pull needs a real v4 ADAPTER, not just a different response model.** After `0007` the
+    row has no `outcome`, no `side`, no `left_rating` and no player names, so there is
+    nothing for the existing v4 schema to serialise. Write `to_v4_wire(match) -> dict` that
+    picks a DETERMINISTIC wire orientation - trio 1 is always `left` - and maps the winner,
+    the heroes, the prediction, the ratings, the ranks, the pools and the odds together in
+    one place, so the emitted row is internally consistent even though its orientation is
+    now arbitrary. Player names emit as `null`.
+
+    That arbitrary orientation is safe for exactly the reason Part 6 gives: a v4 client
+    stores a pulled row and its own fit is antisymmetric in everything but the intercept,
+    which pulled rows do not touch. It would NOT be safe for a row the client believed it
+    had watched, and nothing about a pulled row lets it believe that.
+
+  - Pull reads `schema_version` from the query string, defaulting to 4, and serialises via
+    `to_v4_wire` or the v5 model accordingly.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -752,13 +831,36 @@ ls -lh ~/pre-0007-*.sql
 
 The automated backup sidecar has never worked (a 376-byte file, `/scripts` empty - recorded as a known issue in `docs/DEPLOY.md`). Check the byte count is plausible, in the megabytes. Do not proceed on a small file.
 
-- [ ] **Step 3: Push, wait for the deploy, then migrate**
+- [ ] **Step 3: Close the incompatibility window BEFORE pushing**
+
+Push-then-migrate and migrate-then-push are both broken, and this is the trap the plan hit
+on its first review. Dokploy autodeploys on push to `main`, so:
+
+- **Push first** and the new code serves against the pre-`0007` database, issuing SQL for
+  `winning_trio` and `trio` columns that do not exist yet.
+- **Migrate first** and `0007` drops `outcome`, `side` and the rest out from under the
+  version still running.
+
+There is no ordering of those two steps that works, because the schema and the application
+must change together. Take the API down for the migration:
 
 ```bash
-git push origin main
-# wait for Dokploy to finish, then:
+docker stop gameretro-adb-o8cxcd-api-1
+git push origin main                       # Dokploy builds; the old container is stopped
+# wait for the build to finish and the new container to be created, then BEFORE it serves:
 docker exec gameretro-adb-o8cxcd-api-1 alembic upgrade head
+docker start gameretro-adb-o8cxcd-api-1    # if the deploy did not already start it
 ```
+
+If Dokploy insists on starting the container itself, the equivalent is: let it deploy,
+immediately `docker stop` it, run `alembic upgrade head`, then `docker start`. Either way
+**no version of the application may serve a request against the schema it does not match.**
+A push here is a few minutes of 502s for the clients, which retry - a failed push is not a
+rejection and the rows stay pushable. That is strictly better than either version writing
+against the wrong shape.
+
+Confirm the actual Dokploy behaviour before running this rather than assuming which of the
+two shapes applies; `docs/DEPLOY.md` in the server repo is the authority.
 
 Note: `alembic upgrade head`, not `uv run alembic` - the container has alembic on PATH.
 
@@ -1092,6 +1194,18 @@ def test_the_dropped_columns_do_not_come_back(tmp_path, migrate, sidecar):
     assert "side" not in hero_cols and "trio" in hero_cols
 
 
+def test_a_fresh_database_gets_the_new_shape_directly(tmp_path, migrate, sidecar):
+    """A brand-new install runs schema.sql, which now has trio and winning_trio and no
+    side or outcome. _backfill_comps_key references both of the removed columns
+    unconditionally, so without a shape check _apply raises before the reshape runs."""
+    sidecar({})
+    db = tmp_path / "fresh.sqlite"
+    migrate.apply(str(db), quiet=True)   # must not raise
+    con = sqlite3.connect(db)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(match_hero)")}
+    assert "trio" in cols and "side" not in cols
+
+
 def test_a_database_missing_predicted_left_entirely_still_migrates(tmp_path, migrate, sidecar):
     """The collaborator's database was old enough to lack the column."""
     sidecar({})
@@ -1166,7 +1280,14 @@ In `migrate.py`:
 
 - **Delete** `("match", "predicted_left", "REAL")` from `ADD_COLUMNS`. This is the round-9 finding: the list exists to upgrade databases predating a column, so leaving it there re-adds `predicted_left` empty on the launch after the drop.
 - Add the new `match` columns to `ADD_COLUMNS` so old databases acquire them.
-- Add `_reshape_to_trios(con)`, called from `_apply` after the existing `_backfill_comps_key(con)`, in ONE transaction:
+- **Make `_backfill_comps_key` shape-aware FIRST.** Its query at `migrate.py:216-250`
+  references `match_hero.side` and `m.outcome` unconditionally. Once `schema.sql` creates
+  fresh databases with `trio` and `winning_trio` instead, `_apply` raises a missing-column
+  error before the reshape is ever reached - so a brand-new install breaks. Give it two
+  query forms selected by a `PRAGMA table_info` check, or skip it entirely when `side` is
+  absent (a fresh database has no rows to backfill). Cover this with the
+  `test_a_fresh_database_gets_the_new_shape_directly` case below.
+- Add `_reshape_to_trios(con)`, called from `_apply` after `_backfill_comps_key(con)`, in ONE transaction:
   1. If `canonical_state` exists and no `match` row has it NULL, return immediately - the reshape is done.
   2. Create `legacy_side_snapshot` and populate it from every match that still has legacy columns. Guard each column with a `PRAGMA table_info` presence check, so a database predating `predicted_left` does not raise.
   3. Add the new columns.
@@ -1180,7 +1301,7 @@ In `migrate.py`:
 - [ ] **Step 6: Run to verify it passes**
 
 Run: `uv run pytest tests/games/afk_journey/services/solstice/test_reshape_migration.py -v`
-Expected: 8 passed
+Expected: 9 passed
 
 - [ ] **Step 7: Verify against a COPY of the real database**
 
@@ -1491,6 +1612,11 @@ that recorded it, so we cannot know in advance which frames will matter."
 
 - [ ] **Step 1: Write the failing test**
 
+The real interface is `design(matches, theme_id=None, siblings=()) -> (x, y, w, heroes,
+players)` - five values, at `odds.py:210`. There is no `build_design`, and the third value
+is the WEIGHT vector, not coefficients. The `Match` dataclass at `odds.py:138` has no
+`blue_trio`, so Step 4 must add one.
+
 ```python
 # tests/games/afk_journey/services/solstice/test_odds_intercept.py
 """The encoding is ANTISYMMETRIC, so orientation is free for hero terms and the
@@ -1503,42 +1629,54 @@ pooled row with an arbitrary orientation would corrupt it.
 """
 import numpy as np
 
-from adb_auto_player.games.afk_journey.services.solstice.odds import build_design
+from adb_auto_player.games.afk_journey.services.solstice.odds import Match, design, fit
+
+
+def _row(blue_trio, left_won=True):
+    return Match(left=("a", "b", "c"), right=("m", "n", "o"), left_won=left_won,
+                 theme_id=1, left_rating=100, right_rating=200, blue_trio=blue_trio)
+
+
+def _flipped(m):
+    return Match(left=m.right, right=m.left, left_won=not m.left_won, theme_id=m.theme_id,
+                 left_rating=m.right_rating, right_rating=m.left_rating,
+                 blue_trio=m.blue_trio)
 
 
 def test_a_pooled_row_has_a_zero_intercept():
-    X, y, _ = build_design([_row(blue_trio=None)])
-    assert X[0][0] == 0.0
+    x, _y, _w, _h, _p = design([_row(blue_trio=None)], theme_id=1)
+    assert x[0][0] == 0.0
 
 
 def test_a_local_row_has_a_one_intercept():
-    X, y, _ = build_design([_row(blue_trio=1)])
-    assert X[0][0] == 1.0
+    x, _y, _w, _h, _p = design([_row(blue_trio=1)], theme_id=1)
+    assert x[0][0] == 1.0
 
 
 def test_hero_terms_are_identical_for_a_pooled_row():
     """Only the intercept differs. Every pooled comp still trains the hero strengths,
     which is the entire point of pooling."""
-    local = build_design([_row(blue_trio=1)])[0][0]
-    pooled = build_design([_row(blue_trio=None)])[0][0]
+    local = design([_row(blue_trio=1)], theme_id=1)[0][0]
+    pooled = design([_row(blue_trio=None)], theme_id=1)[0][0]
     assert list(local[1:]) == list(pooled[1:])
 
 
 def test_flipping_a_row_leaves_the_likelihood_unchanged():
-    import numpy as np
-    beta = np.array([0.0, 0.3, -0.2, 0.1, 0.4, -0.1, 0.2])
-    X1, y1, _ = build_design([_row(blue_trio=1, winning_trio=1)])
-    X2, y2, _ = build_design([_flipped(_row(blue_trio=1, winning_trio=1))])
-    p1 = 1 / (1 + np.exp(-X1[0] @ beta))
-    p2 = 1 / (1 + np.exp(-X2[0] @ beta))
-    assert abs((y1[0] * np.log(p1) + (1 - y1[0]) * np.log(1 - p1))
-               - (y2[0] * np.log(p2) + (1 - y2[0]) * np.log(1 - p2))) < 1e-12
+    """Antisymmetry, measured rather than asserted. Uses a pooled row so the intercept
+    is zero for both and cannot mask the result."""
+    m = _row(blue_trio=None)
+    x1, y1, _w, _h, _p = design([m], theme_id=1)
+    x2, y2, _w, _h, _p = design([_flipped(m)], theme_id=1)
+    beta = np.arange(1, x1.shape[1] + 1) * 0.1
+    ll = lambda x, y: (y * np.log(1 / (1 + np.exp(-x @ beta)))
+                       + (1 - y) * np.log(1 - 1 / (1 + np.exp(-x @ beta))))
+    assert abs(ll(x1[0], y1[0]) - ll(x2[0], y2[0])) < 1e-12
 
 
 def test_a_fit_with_no_pooled_rows_is_unchanged(golden_local_matches, golden_coefficients):
     """The hard requirement: this must not move the model for a user with no pool."""
-    _, _, coef = build_design(golden_local_matches)
-    np.testing.assert_allclose(coef, golden_coefficients, rtol=1e-12)
+    result = fit(golden_local_matches, theme_id=golden_local_matches[0].theme_id)
+    np.testing.assert_allclose(result.beta, golden_coefficients, rtol=1e-10)
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1548,12 +1686,18 @@ Expected: FAIL - the intercept column is unconditionally 1.0.
 
 - [ ] **Step 3: Capture the golden baseline BEFORE changing anything**
 
-Fit the current model on the current local matches and save the coefficients to `tests/.../data/golden_coefficients.json`. Without this the last test cannot prove the change is inert for local-only data, and that guarantee is the whole reason the change is acceptable.
+Fit the current model on the current local matches and save BOTH the `Match` inputs and
+the resulting `Fit.beta` to `tests/.../data/golden_fit.json`, exposed as the
+`golden_local_matches` and `golden_coefficients` fixtures. Capture it with the CURRENT code,
+before touching `odds.py` - after the edit the baseline is unrecoverable, and without it the
+last test cannot prove the change is inert for local-only data, which is the whole reason
+the change is acceptable.
 
 - [ ] **Step 4: Implement**
 
 - `load_matches` groups by `h.trio` instead of `h.side`; `y = (winning_trio == 1)`; heroes in trio 1 get `+1` and trio 2 get `-1`; the rating gap becomes `trio_1_rating - trio_2_rating`.
-- `odds.py:249`, the intercept column, becomes `1.0 if blue_trio is not None else 0.0`. `blue_trio IS NOT NULL` is the single condition for contributing to the intercept - the Part 6 distinction expressed as data rather than as branching logic.
+- Add `blue_trio: int | None = None` to the `Match` dataclass at `odds.py:138`, and populate it in `load_matches` from the column Task 8 added to `matches_for_fit`. Without this the next bullet references an undefined name.
+- `odds.py:249`, the intercept column, becomes `1.0 if match.blue_trio is not None else 0.0`. `blue_trio IS NOT NULL` is the single condition for contributing to the intercept - the Part 6 distinction expressed as data rather than as branching logic.
 - Nothing else changes. Hero terms and the rating gap are correct as they stand for a pooled row, because the encoding is antisymmetric.
 
 - [ ] **Step 5: Run to verify it passes**
@@ -1827,3 +1971,6 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 2. **Task 4's v4 ingest uses `mirrored=False`, not `None`.** A live v4 client reports its own draft-anchored orientation and its `left` IS its blue - unlike a historic row, whose stored side came off the summary panels. Getting this backwards would NULL every incoming prediction.
 3. **The sidecar must be packaged** (Task 7 Step 1). If `resource_file` cannot find it, the migration NULLs every `blue_trio` - safe, but wrong and invisible. Assert the sidecar loaded and log its row count.
 4. **The golden coefficients (Task 10 Step 3) must be captured before any `odds.py` edit.** After the edit the baseline is unrecoverable.
+5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
+6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
+7. **Task 5 Step 3 takes the API down.** Schema and application must change together; neither push-then-migrate nor migrate-then-push is safe. Confirm Dokploy's actual start behaviour against `docs/DEPLOY.md` before running it.

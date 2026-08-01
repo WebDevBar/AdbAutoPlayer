@@ -228,9 +228,31 @@ Side stops being a label that can contradict the heroes and becomes a pointer to
 them, which cannot. For a pulled row `blue_trio` is NULL - honest, and the only thing lost
 is something we never had.
 
-`predicted_left` is unchanged and still means "P(blue wins)". It stays interpretable
-because `blue_trio` says which trio blue was, and scoring becomes `predicted_left >= 0.5`
-against `winning_trio == blue_trio`. There is no second frame for it to mismatch.
+**Predictions are stored canonically too, for the same reason the compositions are.**
+Round 5 caught the earlier wording: a pulled row has `blue_trio = NULL` and the API returns
+`predicted_trio_1`, which cannot be written into a column meaning "P(blue wins)" - trio 1
+is not blue, and blue is unknown.
+
+So the stored column is **`predicted_trio_1`**, meaning "P(trio 1 wins)", valid for every
+row whatever its origin. `predicted_left` becomes a DERIVED view:
+
+```
+predicted_left = predicted_trio_1        if blue_trio = 1
+               = 1 - predicted_trio_1    if blue_trio = 2
+               = NULL                    if blue_trio IS NULL
+```
+
+Scoring uses `predicted_trio_1 >= 0.5` against `winning_trio == 1`, which needs no side at
+all and works for pulled rows too. The blue-relative view exists only for humans reading a
+log, and it is NULL exactly when we have no right to it.
+
+The 1,400+ existing `predicted_left` values migrate in the same atomic step: with
+`blue_trio` established from the sidecar, `predicted_trio_1` is a mechanical rewrite.
+
+`scored_predictions` (`store.py:770-781`) currently selects every decisive row with a
+prediction, synced included. Under the new column that is CORRECT rather than a bug - a
+pooled prediction is another contributor's call and scoring it is meaningful - but it is a
+behaviour change and must be a deliberate one, so it is named here.
 
 The fit then reads trios uniformly with no branching on origin, and `blue_trio IS NOT NULL`
 becomes the single condition for contributing to the intercept - the distinction from
@@ -463,16 +485,25 @@ and worked. Per row:
 
 Nothing is left depending on a human running a step in the right order.
 
-Revised sequence:
+### Everything client-side ships in ONE binary
+
+Round 5 caught the sequence being read as a release order, which cannot work.
+`_ensure_schema` runs inside `MatchStore` construction (`store.py:257, 297`), before any
+recording happens. So the moment a user launches the new build, the database is reshaped -
+and every reader and writer in that same binary must ALREADY speak the new shape.
+
+There is no release in which the migration has run and the code has not. Parts 1-4, 4b, 6
+and 7 are one client release. The list below is the order of WORK, not of shipping:
 
 1. **Part 1** - the audit. Already run: `side-audit-2026-08-01.json`, committed.
-2. **Part 4b** - repair-and-reshape, atomic, automatic on launch, sidecar-driven.
-3. **Parts 1-4** - the recording fix, stopping new corruption.
-4. **Part 5** - the server schema and the dual-version API phase.
-5. **Parts 6, 7** - the fit and the reconciliation, both depending on 5.
-6. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach, using the
-   absolute correction path. This one stays gated on explicit approval: it writes to
-   production and no automatic path should.
+2. **Part 4b** - repair-and-reshape, atomic, sidecar-driven, automatic on launch.
+3. **Parts 1-4** - the recording fix.
+4. **Parts 6, 7** - the fit and the reconciliation.
+5. Ship all of the above together. Nothing above may reach a user alone.
+6. **Part 5** - the server schema and the dual-version API phase. Separate repo, separate
+   deploy, and the dual-version window is exactly what lets these two land independently.
+7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach. Stays gated on
+   explicit approval: it writes to production and no automatic path should.
 
 Part 8a as a separate gated step no longer exists.
 

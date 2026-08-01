@@ -430,17 +430,26 @@ python3 - <<'EOF' > /tmp/side-audit-by-comps-key.json
 import json, sqlite3
 audit = json.load(open("docs/solstice-clash/side-audit-2026-08-01.json"))
 con = sqlite3.connect("/tmp/heroes-for-sidecar.sqlite")
-by_nk = {nk: ck for nk, ck in con.execute(
-    "SELECT natural_key, comps_key FROM match"
+by_nk = {nk: (ck, at) for nk, ck, at in con.execute(
+    "SELECT natural_key, comps_key, captured_at FROM match"
     " WHERE natural_key IS NOT NULL AND comps_key IS NOT NULL")}
 out, dropped = {}, 0
 for e in audit:
-    ck = by_nk.get(e["natural_key"])
-    if ck is None:
+    row = by_nk.get(e["natural_key"])
+    if row is None:
         dropped += 1
         continue
-    out[ck] = e["verdict"]
-print(json.dumps({"dropped_without_comps_key": dropped, "verdicts": out}, indent=1))
+    ck, captured_at = row
+    # A LIST per key, never a scalar. comps_key omits occurrence and time by design, so
+    # a genuine rematch shares it - ids 1 and 45 are 31.6 hours apart under one key. A
+    # dict keyed on comps_key alone silently keeps the last verdict and applies it to
+    # every occurrence, which can bind a rematch's prediction and ratings to the wrong
+    # trio on the strength of a different match's audit.
+    out.setdefault(ck, []).append({"captured_at": captured_at, "verdict": e["verdict"]})
+collisions = {k: v for k, v in out.items() if len(v) > 1}
+print(json.dumps({"dropped_without_comps_key": dropped,
+                  "keys_with_multiple_occurrences": len(collisions),
+                  "verdicts": out}, indent=1))
 EOF
 cp /tmp/side-audit-by-comps-key.json ~/Dev/webdevbar/gameretro-adb-api/migrations/data/
 ```
@@ -453,10 +462,26 @@ provenance the re-keyed file was derived from.
 **The envelope is exactly:**
 
 ```json
-{"dropped_without_comps_key": 12, "verdicts": {"<comps_key>": "agree|mirrored|partial|unreadable|incomplete"}}
+{"dropped_without_comps_key": 12,
+ "keys_with_multiple_occurrences": 3,
+ "verdicts": {"<comps_key>": [{"captured_at": "...", "verdict": "agree|mirrored|partial|unreadable|incomplete"}]}}
 ```
 
-The migration reads `["verdicts"]`, not the top level. Read `dropped_without_comps_key`
+The migration reads `["verdicts"]`, not the top level. **Each value is a LIST**, because a
+`comps_key` can legitimately cover several occurrences.
+
+**Matching a server row to a verdict needs the time as well as the key.** Take the entries
+under the row's `comps_key` and keep those whose `captured_at` is within **120 seconds** of
+the server row's - the same window Part 7 uses to tell a duplicate capture from a rematch.
+Then:
+
+- **exactly one match** - use its verdict.
+- **zero, or more than one** - NO verdict. Ambiguity is not a tie to break; it is exactly
+  the case where a wrong guess binds one match's ratings to another's trios.
+
+Log the count of rows resolved this way and the count refused. `keys_with_multiple_occurrences`
+tells you in advance how much of this there is; if it is large, stop, because it means the
+key is doing less work than assumed. Read `dropped_without_comps_key`
 before continuing: with 1544 keyed rows against 929 audit entries the drop count should be
 small. A large one means the join is wrong, not that those rows are unauditable - stop and
 diagnose rather than proceeding with a sidecar that mostly missed. Assert in the migration
@@ -522,6 +547,24 @@ def test_row_with_no_verdict_keeps_outcome_and_nulls_the_draft_group():
     assert out["trio_1_rating"] is None
     assert out["trio_2_rating"] is None
     assert out["predicted_trio_1"] is None
+
+
+def test_a_shared_comps_key_outside_the_window_gets_no_verdict():
+    """Ids 1 and 45 share a comps_key and are 31.6 hours apart. Applying one
+    occurrence's verdict to the other would bind its ratings to the wrong trio."""
+    entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"}]
+    assert h.verdict_for(entries, "2026-08-02T17:36:00Z") is None
+
+
+def test_a_shared_comps_key_inside_the_window_resolves():
+    entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"}]
+    assert h.verdict_for(entries, "2026-08-01T10:01:00Z") == "mirrored"
+
+
+def test_two_entries_inside_the_window_refuse_rather_than_pick():
+    entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"},
+               {"captured_at": "2026-08-01T10:00:30Z", "verdict": "agree"}]
+    assert h.verdict_for(entries, "2026-08-01T10:00:10Z") is None
 
 
 def test_incomplete_row_is_unrepresentable():
@@ -619,17 +662,19 @@ def canonicalise_row(
     return out
 ```
 
+`verdict_for(entries, captured_at)` lives in `_0007_helpers.py` beside `canonicalise_row`.
+
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_migration_0007.py -v`
-Expected: 4 passed
+Expected: 7 passed
 
 - [ ] **Step 6: Write the Alembic migration**
 
 `migrations/versions/0007_canonical_trios.py`, `down_revision = "0006"`. Structure, in one transaction:
 
 1. `op.add_column` every new column from Task 2, all nullable.
-2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map, keyed by `comps_key`. Assert it is non-empty. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, absent) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
+2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND a ±120 second `captured_at` window, refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
 4. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
@@ -1443,12 +1488,21 @@ Verified against a copy of the real database: <counts from step 7>."
 # tests/games/afk_journey/services/solstice/test_store_trios.py
 import pytest
 
-from adb_auto_player.games.afk_journey.services.solstice.store import HeroSlot, MatchStore
+from adb_auto_player.games.afk_journey.services.solstice.store import (
+    HeroSlot, MatchRecord, MatchStore,
+)
 
 
 def _slots(pairs):
     return [HeroSlot(trio=t, slot=s, hero_slug=g, art_ref=None, status="identified")
             for t, s, g in pairs]
+
+
+def _a_match():
+    """MatchRecord carries NO trio-relative field - the row is inserted before the
+    heroes are read, so there is nothing to number yet. finalise_summary supplies them."""
+    return MatchRecord(source="compete_summary", captured_at="2026-08-01T00:00:00Z",
+                       theme=None, event_id=None, theme_id=None)
 
 
 def test_record_heroes_rejects_inverted_canonical_order(store):
@@ -1470,8 +1524,8 @@ def test_scored_predictions_needs_no_side(store):
     mid = store.record_match(_a_match())
     store.record_heroes(mid, _slots([(1, 1, "a"), (1, 2, "b"), (1, 3, "c"),
                                      (2, 1, "m"), (2, 2, "n"), (2, 3, "o")]))
-    store.set_winning_trio(mid, 1, "observed")
     store.record_prediction(mid, predicted_trio_1=0.9, source="model", locked=6)
+    store.finalise_summary(mid, winning_trio=1, blue_trio=1, outcome_source="observed")
     rows = store.scored_predictions()
     assert rows == [(0.9, 1, "model", 6)]
 
@@ -1480,7 +1534,7 @@ def test_matches_for_fit_returns_trio_membership(store):
     mid = store.record_match(_a_match())
     store.record_heroes(mid, _slots([(1, 1, "a"), (1, 2, "b"), (1, 3, "c"),
                                      (2, 1, "m"), (2, 2, "n"), (2, 3, "o")]))
-    store.set_winning_trio(mid, 2, "observed")
+    store.finalise_summary(mid, winning_trio=2, blue_trio=1, outcome_source="observed")
     rows = store.matches_for_fit()
     assert {r[1] for r in rows} == {2}
     assert {r[-1] for r in rows} == {"a", "b", "c", "m", "n", "o"}
@@ -1690,8 +1744,21 @@ what sets `canonical_state`. A recording path that computes `blue_trio` without 
 leaves the row unfinished and re-triggers the migration on the next launch.
 
 A read that cannot form two complete trios calls `mark_unrepresentable(match_id)` instead.
-**Walk every exit path of `_record_summary`** - including the early returns - and confirm
-each ends in one of the two calls.
+**There are TWO recording paths, and the plan named only one.** Besides `_record_summary`,
+the `compete_summary` path at `solstice_clash.py:590-620` builds a `MatchRecord` with
+`outcome` and `outcome_source`, writes `HeroSlot(side=...)`, and after `record_heroes` calls
+only `finalise_identity`. Left alone it fails on the removed signatures - or worse, if it
+happens to construct successfully, leaves `canonical_state IS NULL`, which the Task 7
+predicate reads as "the reshape has not run" and re-runs the migration on every launch.
+
+Convert it in this task: `HeroSlot(trio=...)`, no `outcome` on the `MatchRecord`, and a
+`finalise_summary(...)` call after `record_heroes`. This path has no draft to anchor against
+- it is a compete result read cold - so it passes `blue_trio=None` unless a carried draft
+trio set is present for that match.
+
+**Then walk every exit path of BOTH paths** - including the early returns - and confirm each
+ends in `finalise_summary` or `mark_unrepresentable`. Grep for `MatchRecord(` and
+`HeroSlot(` across the whole client to be sure there is no third.
 
 When the panel tint is unreadable, do NOT fall through to `_winner_by_colour` or header OCR. Those read the banner, whose geometry is the thing on trial. Record unresolved instead.
 

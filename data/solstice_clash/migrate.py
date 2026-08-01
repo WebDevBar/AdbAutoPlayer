@@ -540,7 +540,16 @@ def _load_orientation_sidecar() -> dict:
     """
     path = os.path.join(HERE, "trio-orientation-by-comps-key.json")
     if not os.path.isfile(path):
-        return {}
+        # REFUSE, never fall back. Returning {} here would make every legacy match
+        # look unaudited, permanently NULL its ratings, ranks, prediction and odds,
+        # and then DROP the columns those came from - silent, irreversible data loss
+        # on nothing worse than a packaging slip. A loud failure is recoverable; this
+        # would not be.
+        raise RuntimeError(
+            f"the orientation sidecar is missing from {HERE}. The reshape is "
+            "irreversible and cannot run without it - it would treat every audited "
+            "row as unaudited and discard its draft-relative values for good."
+        )
     with open(path) as handle:
         payload = json.load(handle)
     out = {}

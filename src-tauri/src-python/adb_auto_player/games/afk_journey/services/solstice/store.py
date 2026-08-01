@@ -283,7 +283,6 @@ class MatchStore:
         """
         if self._db in MatchStore._schema_ensured:
             return
-        MatchStore._schema_ensured.add(self._db)
 
         script = resource_file(Path("solstice_clash") / "migrate.py")
         if script is None or not script.is_file():
@@ -299,9 +298,15 @@ class MatchStore:
                 return
             summary = module.apply(str(self._db), quiet=True)
         except Exception as exc:  # see the docstring: never block startup
+            # NOT marked ensured. `migrate.py` runs schema.sql before the reshape, so
+            # a failure can leave the database PARTIALLY upgraded - and marking it
+            # ensured here would skip every later attempt for the life of the process,
+            # leaving new matches to fail against a half-changed shape until restart.
+            # Leaving it unmarked means the next store construction tries again.
             logging.warning(f"[SC-93] could not migrate {self._db}: {exc}")
             return
 
+        MatchStore._schema_ensured.add(self._db)
         added = summary.get("columns_added") or []
         renamed = summary.get("columns_renamed") or []
         logging.info(

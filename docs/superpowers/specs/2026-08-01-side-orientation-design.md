@@ -26,9 +26,18 @@ MISS. But the scorer compares `predicted_left < 0.5` against a summary-relative 
 and those are different frames, so it recorded a HIT.
 
 **Scale**: an audit of 922 adjudicated draft frames found **76 mirrored, 8.24%**
-(95% Wilson 6.64-10.20). Every one of the 76 carries a prediction, so **76 stored HIT/MISS
-values are inverted**, and all 76 are already `pushed_at`-stamped - the pool holds 76 wrong
-outcomes.
+(95% Wilson 6.64-10.20). Every one carries a prediction, so **76 LOCAL stored HIT/MISS
+values are inverted**.
+
+**The pool is a different number, and the first draft got it wrong.** Server migration
+`0006`, applied earlier tonight, already loads the audit verdicts and swaps the heroes and
+outcome of every `frame_corrected` survivor (`0006_backfill_identity.py:294, 389, 413`).
+But it used a DIFFERENT sidecar: the server copy has 916 rows and 73 mirrored, the client
+copy 929 and 76. Six mirrored matches exist only in the client copy - local ids 1108, 1313,
+1316, 1472, 1474 and **1476, the match that exposed this**.
+
+So the pool holds roughly **6** wrong outcomes, not 76, and re-pushing all 76 would
+re-break the ~70 that `0006` already fixed. See Part 8.
 
 **What is NOT wrong.** The live path was correct throughout. The odds, the overlay and the
 auto-bet all run during the draft from draft-anchored data. `comps_key` sorts both trios,
@@ -67,10 +76,18 @@ stored as a human-readable hint and never determine a side.
 7. Reconcile the local/synced pairs already on disk.
 8. Repair the 76 mirrored rows, locally and in the pool.
 
-**Hard constraint, verified by both reviewers: nothing may change realtime behaviour.**
-Odds, overlay and auto-bet complete during the locked screen, before any summary exists,
-and were correct in the instance that exposed this. Every change here happens at or after
-`_record_summary`.
+**Hard constraint: nothing may change what the draft path DOES.** Odds, overlay and
+auto-bet complete during the locked screen, before any summary exists, and were correct in
+the instance that exposed this.
+
+Both reviewers flagged the earlier wording ("every change happens at or after
+`_record_summary`") as one this design cannot satisfy: Part 2 must capture state inside the
+locked-read block, and Part 4 must clear state on pre-summary exit paths. Both are
+behaviour-neutral - they retain and release values without reading, computing or displaying
+anything differently. The constraint is on BEHAVIOUR, not on line numbers.
+
+The one place this bites for real is Part 6, which changes `matches_for_fit` - and that
+feeds the draft-time fit. See Part 6.
 
 ---
 
@@ -153,18 +170,69 @@ property of the schema.
 
 Player names are dropped from the server entirely. They are ignored by design, excluded
 from identity, and OCR-fragile; keeping a field nobody may trust invites its use.
+`USE_PLAYER_TERMS = False` at `odds.py:52`, so nothing reads them.
+
+**Every other side-relative column must move too, or the row becomes uninterpretable.**
+Both reviewers caught this; the first draft canonicalised the heroes and the winner and
+left the rest pointing at an orientation that no longer exists:
+
+| today | becomes | why |
+|---|---|---|
+| `left_rating`, `right_rating` | `trio_1_rating`, `trio_2_rating` | NOT derivable from `match_hero`. 1,189 of 1,474 local rows carry them and the fit consumes the signed gap (`odds.py:260-261`). Dropping them loses the rating signal permanently |
+| `left_rank`, `right_rank` | `trio_1_rank`, `trio_2_rank` | same argument; currently NULL everywhere but the column should not become a trap |
+| `predicted_left` | `predicted_trio_1` | ingested and returned (`schemas.py:39`, `models.py:179`, `matches.py:251`). Left side-relative it associates a probability with an unknown trio |
+| `left_pool`, `right_pool`, `left_odds`, `right_odds` | `trio_1_*`, `trio_2_*` | same |
+
+All are migratable by the same canonical sort that produces `trio_1`/`trio_2`.
 
 **Ingest** computes the trios from the client's heroes as it already does for `comps_key`,
-assigns `trio_1`/`trio_2` by the same sort, and maps the client's reported winner onto
-`winning_trio`. **Pull** returns trios and `winning_trio`.
+assigns `trio_1`/`trio_2` by the same sort, and maps the client's reported winner and every
+side-relative value above onto the canonical order. **Pull** returns the same shape.
+
+### The API transition
+
+`schema_versions_supported = {4}` (`config.py:24`) and every client sends 4
+(`sync.py:206`). The request and response contracts require `side` and `outcome`
+(`schemas.py:12`, `schemas.py:80`). Replacing them outright breaks every client mid-rollout,
+including the BlueStacks contributor's.
+
+So: **the server accepts BOTH 4 and 5 for one release.** A version-4 payload keeps sending
+`side`/`outcome` and the server canonicalises it on the way in - it already has to, since
+that is exactly what the migration does to existing rows. Version 5 sends trios directly.
+Pull returns the shape matching the requested version. Support for 4 is dropped only once
+the contributor has upgraded, which is a decision, not a timer.
 
 ## Part 6 - pulled rows have no sides
 
 A pulled row with no local counterpart is a match we never watched. Store its trios with
 `side` NULL on `match_hero`, and a row-level flag recording that it is not draft-anchored.
 
-`matches_for_fit()` currently returns a `side` column the model consumes. It must read trio
-membership instead. The model fits on comps, and a comp is a set - it never needed a side.
+**"The model never used side" was wrong, and this is the part that needs a decision.**
+Both reviewers caught it. `odds.py:250-253` encodes heroes as `+1` for left and `-1` for
+right; `y = left_won` (`odds.py:262`); the rating term is a SIGNED left-minus-right gap
+(`odds.py:260-261`); and the fitted intercept therefore learns a real draft-blue advantage
+- local decisive matches split 662 left / 521 right, 56.0%.
+
+A side-less row cannot fill `y`, cannot sign the rating gap, and cannot orient the hero
+encoding. `winning_trio` says which comp won, not which was blue.
+
+**And this reaches realtime.** `matches_for_fit` (`store.py:787`) feeds `load_matches`
+(`odds.py:818`) feeds `fit`, whose output is the odds shown DURING the draft
+(`solstice_clash.py:1901`). Changing what it returns changes live predictions.
+
+Three options, none yet chosen - this is the open decision in this spec:
+
+1. **Orient pulled rows arbitrarily but consistently** (trio_1 as left) and add a column
+   marking them non-draft-anchored, then EXCLUDE them from the intercept while still using
+   them for the hero terms. The comp evidence is kept, the side evidence is not claimed.
+2. **Exclude pulled rows from the fit entirely.** Safest and smallest, but it discards the
+   pooled comps that are the reason for pooling.
+3. **Keep pulled rows out of the fit until a second local contributor exists**, then
+   revisit. Defers rather than decides.
+
+Option 1 is the only one that keeps the pooled data and tells the truth about it, but it
+changes the fit's input and therefore the live odds. That trade has to be made explicitly,
+not slipped in.
 
 ## Part 7 - reconciling the pairs already on disk
 
@@ -175,8 +243,9 @@ but nothing reconciles those that exist.
 
 A one-off pass, run at startup alongside the existing backfill:
 
-- For each `comps_key` held by more than one local row, group rows whose `captured_at` fall
-  within the **±2 minute** window.
+- For each `comps_key` held by more than one ROW IN THE LOCAL DATABASE - not "more than
+  one local row", which is zero groups, since every real pair is one `local` plus one
+  `synced` - group rows whose `captured_at` fall within the **±2 minute** window.
 - Within a group, keep the `origin='local'` row - it is draft-anchored - and mark the
   synced copies `superseded_by` it.
 - **Rows outside the window are different matches and must be left alone.** Ids 1 and 45
@@ -201,6 +270,39 @@ originally supplied it.
 
 **This is the one step that mutates data the operator can see.** It runs only on an
 explicit go-ahead, after a `pg_dump` and a local snapshot.
+
+### The pool needs ~6 rows corrected, not 76
+
+`0006` already corrected the rest. Both reviewers caught the first draft asserting
+otherwise. What Part 8 must therefore do:
+
+1. **Recompute the target set against the POST-0006 pool**, not against the client sidecar.
+   The six known candidates are local ids 1108, 1313, 1316, 1472, 1474, 1476, but the set
+   must be derived, not hard-coded.
+2. **Express the correction absolutely, never as a flip.** The client states which trio
+   won; the server SETS it. A toggle re-breaks any row already correct, which is exactly
+   the failure mode a stale target set would trigger.
+3. Both properties together make the operation idempotent - it can be run twice safely,
+   which matters because the first run is against production.
+
+### There is no mechanism to send a correction, on either side
+
+The first draft called a re-push "an update to an existing row". It is not:
+
+- **Client**: `pushable_matches` requires `pushed_at IS NULL` (`store.py:892`) and all
+  76 are stamped. Nothing will ever re-send them.
+- **Server**: an unchanged `comps_key` at the same `captured_at` routes through
+  `assign` -> `_merge` -> `RowResult(status="duplicate")` (`matches.py:336-343`), and the
+  corrected outcome is silently discarded.
+
+So Part 8 needs a real mechanism at both ends: a way to mark a repaired row for re-send
+that does not resurrect it as a new push, and a server path that accepts a corrected
+`winning_trio` for an identity it already holds. Neither exists.
+
+"From the contributor that originally supplied it" is also underdefined once a surviving
+server row has absorbed another contributor's capture, which demonstrably happens - locals
+1108, 1313 and 1316 were each answered `duplicate` against rows we later pulled back as
+synced 1109, 1314 and 1317.
 
 ## Ordering
 

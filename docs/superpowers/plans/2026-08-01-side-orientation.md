@@ -215,80 +215,92 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Match, MatchHero
+from app.models import Contributor, Match, MatchHero, Theme
+
+# The seeded heroes, and nothing else exists (`tests/conftest.py`). Sorted, so
+# TRIO_1 < TRIO_2 lexicographically and the canonical numbering is unambiguous.
+TRIO_1 = ("aliceth", "alna", "alsa")
+TRIO_2 = ("antandra", "arden", "atalanta")
 
 
-def _match(session, contributor, theme, **kw):
+def _match(seeded, **kw):
     """Every NOT NULL column must be supplied or the insert fails for an unrelated
-    reason and the constraint under test is never reached. The real model requires
-    contributor_id, theme_id, theme_resolved_by and source, and captured_at is a
-    datetime - not the string an earlier draft of this test passed."""
+    reason and the constraint under test is never reached - which is exactly what an
+    earlier draft of this file did. The real model requires contributor_id, theme_id,
+    theme_resolved_by and source, and captured_at is a datetime, not a string.
+
+    Uses the existing `seeded` fixture rather than inventing `contributor` and `theme`
+    fixtures, which the server suite does not have."""
     kw.setdefault("canonical_state", "canonical")
     m = Match(
         natural_key=kw.pop("nk", "nk1"),
         comps_key=kw.pop("comps_key", "ck1"),
         captured_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
-        contributor_id=contributor.id,
-        theme_id=theme.id,
+        contributor_id=seeded.query(Contributor).one().id,
+        theme_id=seeded.query(Theme).filter_by(slug="tactical-grounds").one().id,
         theme_resolved_by="window",
         source="compete",
         **kw,
     )
-    session.add(m)
-    session.flush()
+    seeded.add(m)
+    seeded.flush()
     return m
 
 
-def _hero(session, match, trio, slot, slug):
+def _hero(seeded, match, trio, slot, slug):
     h = MatchHero(match_id=match.id, trio=trio, slot=slot, hero_slug=slug, status="identified")
-    session.add(h)
+    seeded.add(h)
     return h
 
 
-def test_trio_must_be_1_or_2(session, contributor, theme):
-    m = _match(session, contributor, theme, winning_trio=1)
-    _hero(session, m, 3, 1, "a")
+def test_trio_must_be_1_or_2(seeded):
+    m = _match(seeded, winning_trio=1)
+    _hero(seeded, m, 3, 1, TRIO_1[0])
     with pytest.raises(IntegrityError):
-        session.flush()
+        seeded.flush()
 
 
-def test_slot_must_be_1_2_or_3(session, contributor, theme):
-    m = _match(session, contributor, theme, winning_trio=1)
-    _hero(session, m, 1, 99, "a")
+def test_slot_must_be_1_2_or_3(seeded):
+    m = _match(seeded, winning_trio=1)
+    _hero(seeded, m, 1, 99, TRIO_1[0])
     with pytest.raises(IntegrityError):
-        session.flush()
+        seeded.flush()
 
 
-def test_a_hero_appears_once_in_the_whole_match(session, contributor, theme):
-    m = _match(session, contributor, theme, winning_trio=1)
-    _hero(session, m, 1, 1, "a")
-    _hero(session, m, 2, 1, "a")
+def test_a_hero_appears_once_in_the_whole_match(seeded):
+    m = _match(seeded, winning_trio=1)
+    _hero(seeded, m, 1, 1, TRIO_1[0])
+    _hero(seeded, m, 2, 1, TRIO_1[0])
     with pytest.raises(IntegrityError):
-        session.flush()
+        seeded.flush()
 
 
-def test_a_slot_is_used_once_per_trio(session, contributor, theme):
-    m = _match(session, contributor, theme, winning_trio=1)
-    _hero(session, m, 1, 1, "a")
-    _hero(session, m, 1, 1, "b")
+def test_a_slot_is_used_once_per_trio(seeded):
+    m = _match(seeded, winning_trio=1)
+    _hero(seeded, m, 1, 1, TRIO_1[0])
+    _hero(seeded, m, 1, 1, TRIO_1[1])
     with pytest.raises(IntegrityError):
-        session.flush()
+        seeded.flush()
 
 
-def test_winning_trio_must_be_1_or_2(session, contributor, theme):
+def test_winning_trio_must_be_1_or_2(seeded):
     with pytest.raises(IntegrityError):
-        _match(session, contributor, theme, winning_trio=3)
+        _match(seeded, winning_trio=3)
 
 
-def test_canonical_state_is_constrained(session, contributor, theme):
+def test_canonical_state_is_constrained(seeded):
     with pytest.raises(IntegrityError):
-        _match(session, contributor, theme, winning_trio=1, canonical_state="maybe")
+        _match(seeded, winning_trio=1, canonical_state="maybe")
 ```
 
-The `contributor` and `theme` fixtures must exist in `tests/conftest.py`; check whether the
-existing suite already provides them and add them if not. **Verify each test fails for the
-RIGHT reason** - a test that errors on a missing NOT NULL column is not exercising the
-constraint it names, and would keep passing after the constraint was removed.
+These use the suite's existing `seeded` fixture (`tests/conftest.py:60-83`), which supplies
+the event, three themes, one contributor and exactly six heroes. **There is no `contributor`
+or `theme` fixture** - an earlier draft of this task invented both, and every test would have
+failed at fixture resolution rather than on the constraint it names.
+
+**Verify each test fails for the RIGHT reason.** A test that errors on a missing NOT NULL
+column, an unseeded hero or an unknown event is not exercising its constraint and would keep
+passing after that constraint was deleted.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -814,23 +826,28 @@ Irreversible by design; downgrade points at the pg_dump."
 # tests/test_api_dual_version.py
 """One release must serve both. A v4 client is the contributor's current build and
 breaking it mid-rollout strands their captures."""
+import pytest
 
-# `source` and `event_slug` are REQUIRED by MatchIn (`app/schemas.py:21-25`). Omitting
-# them fails validation with 422 before any canonicalisation runs, so the test would
-# never reach the behaviour it names.
+# Everything here must match the `seeded` fixture (`tests/conftest.py:60-83`), which is
+# the ONLY reference data these tests have: event slug `solstice-clash` and exactly six
+# heroes. `source` and `event_slug` are required by MatchIn (`app/schemas.py:21-25`).
+#
+# An unknown event or hero is rejected BEFORE canonicalisation, which is worse than a
+# failing test: `test_v5_push_rejects_a_non_canonical_trio_order` would then pass with the
+# canonical-order validation entirely absent.
+TRIO_1 = ("aliceth", "alna", "alsa")        # sorts first, so it is canonically trio 1
+TRIO_2 = ("antandra", "arden", "atalanta")
+
 V4_MATCH = {
     "index": 0, "natural_key": "nk-v4", "comps_key": "ck-v4",
-    "source": "compete", "event_slug": "solstice-clash-1",
+    "source": "compete", "event_slug": "solstice-clash",
     "captured_at": "2026-08-01T10:00:00Z", "outcome": "left",
     "left_rating": 100, "right_rating": 200, "predicted_left": 0.8,
-    "heroes": [
-        {"side": "left", "slot": 1, "hero_slug": "m"},
-        {"side": "left", "slot": 2, "hero_slug": "n"},
-        {"side": "left", "slot": 3, "hero_slug": "o"},
-        {"side": "right", "slot": 1, "hero_slug": "a"},
-        {"side": "right", "slot": 2, "hero_slug": "b"},
-        {"side": "right", "slot": 3, "hero_slug": "c"},
-    ],
+    # left holds TRIO_2, so left is canonically trio 2.
+    "heroes": [{"side": "left", "slot": i, "hero_slug": h}
+               for i, h in enumerate(TRIO_2, 1)]
+             + [{"side": "right", "slot": i, "hero_slug": h}
+                for i, h in enumerate(TRIO_1, 1)],
 }
 
 
@@ -843,7 +860,7 @@ def test_v4_push_is_canonicalised_on_the_way_in(client, auth, session):
     from app.models import Match
     m = session.query(Match).filter_by(
         natural_key=r.json()["results"][0]["natural_key"]).one()
-    # left = (m,n,o) sorts after (a,b,c), so left is trio 2 and it won.
+    # left holds TRIO_2, which sorts second, so left is trio 2 and it won.
     assert m.winning_trio == 2
     assert m.trio_2_rating == 100
     assert m.predicted_trio_1 == 0.2
@@ -853,17 +870,13 @@ def test_v4_push_is_canonicalised_on_the_way_in(client, auth, session):
 def test_v5_push_sends_trios_directly(client, auth, session):
     payload = {"schema_version": 5, "matches": [{
         "index": 0, "natural_key": "nk-v5", "comps_key": "ck-v5",
-        "source": "compete", "event_slug": "solstice-clash-1",
+        "source": "compete", "event_slug": "solstice-clash",
         "captured_at": "2026-08-01T11:00:00Z", "winning_trio": 2,
         "trio_1_rating": 200, "trio_2_rating": 100, "predicted_trio_1": 0.2,
-        "heroes": [
-            {"trio": 1, "slot": 1, "hero_slug": "a"},
-            {"trio": 1, "slot": 2, "hero_slug": "b"},
-            {"trio": 1, "slot": 3, "hero_slug": "c"},
-            {"trio": 2, "slot": 1, "hero_slug": "m"},
-            {"trio": 2, "slot": 2, "hero_slug": "n"},
-            {"trio": 2, "slot": 3, "hero_slug": "o"},
-        ]}]}
+        "heroes": [{"trio": 1, "slot": i, "hero_slug": h}
+                   for i, h in enumerate(TRIO_1, 1)]
+                 + [{"trio": 2, "slot": i, "hero_slug": h}
+                    for i, h in enumerate(TRIO_2, 1)]}]}
     r = client.post("/v1/matches", json=payload, headers=auth)
     assert r.status_code == 200
     from app.models import Match
@@ -876,16 +889,14 @@ def test_v5_push_rejects_a_non_canonical_trio_order(client, auth):
     this backwards makes every pointer mean the opposite trio, silently."""
     payload = {"schema_version": 5, "matches": [{
         "index": 0, "natural_key": "nk-bad", "comps_key": "ck-bad",
-        "source": "compete", "event_slug": "solstice-clash-1",
+        "source": "compete", "event_slug": "solstice-clash",
         "captured_at": "2026-08-01T12:00:00Z", "winning_trio": 1,
-        "heroes": [
-            {"trio": 1, "slot": 1, "hero_slug": "m"},
-            {"trio": 1, "slot": 2, "hero_slug": "n"},
-            {"trio": 1, "slot": 3, "hero_slug": "o"},
-            {"trio": 2, "slot": 1, "hero_slug": "a"},
-            {"trio": 2, "slot": 2, "hero_slug": "b"},
-            {"trio": 2, "slot": 3, "hero_slug": "c"},
-        ]}]}
+        # DELIBERATELY inverted: TRIO_2 submitted as trio 1. Every hero and the event
+        # are valid, so the only thing that can reject this is the canonical-order check.
+        "heroes": [{"trio": 1, "slot": i, "hero_slug": h}
+                   for i, h in enumerate(TRIO_2, 1)]
+                 + [{"trio": 2, "slot": i, "hero_slug": h}
+                    for i, h in enumerate(TRIO_1, 1)]}]}
     r = client.post("/v1/matches", json=payload, headers=auth)
     assert r.json()["results"][0]["status"] == "rejected"
 
@@ -896,6 +907,29 @@ def test_pull_without_a_version_returns_the_v4_shape(client, auth):
     rows = r.json()["matches"]
     if rows:
         assert "outcome" in rows[0] and "winning_trio" not in rows[0]
+
+
+@pytest.fixture
+def a_match(session, seeded):
+    """One canonical match to serve over the wire. Defined here because the server
+    suite has no such fixture - an earlier draft of this task assumed one and would
+    have failed at collection."""
+    from datetime import datetime, timezone
+
+    from app.models import Contributor, Match, MatchHero, Theme
+    m = Match(natural_key="nk-wire", comps_key="ck-wire", source="compete",
+              captured_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+              contributor_id=seeded.query(Contributor).one().id,
+              theme_id=seeded.query(Theme).filter_by(slug="tactical-grounds").one().id,
+              theme_resolved_by="window", canonical_state="canonical")
+    session.add(m)
+    session.flush()
+    for trio, slugs in ((1, TRIO_1), (2, TRIO_2)):
+        for slot, slug in enumerate(slugs, 1):
+            session.add(MatchHero(match_id=m.id, trio=trio, slot=slot,
+                                  hero_slug=slug, status="identified"))
+    session.flush()
+    return m
 
 
 def test_the_v4_wire_preserves_the_original_orientation(client, auth, session, a_match):
@@ -910,7 +944,7 @@ def test_the_v4_wire_preserves_the_original_orientation(client, auth, session, a
     row = client.get("/v1/matches?since=0&limit=10", headers=auth).json()["matches"][0]
     assert row["outcome"] == "left"     # trio 2 won and trio 2 is on the left
     assert row["left_rating"] == 100
-    assert {h["hero_slug"] for h in row["heroes"] if h["side"] == "left"} == {"m", "n", "o"}
+    assert {h["hero_slug"] for h in row["heroes"] if h["side"] == "left"} == set(TRIO_2)
 
 
 def test_the_v5_shape_never_exposes_wire_left_trio(client, auth):

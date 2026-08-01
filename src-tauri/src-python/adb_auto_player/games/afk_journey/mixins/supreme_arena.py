@@ -218,7 +218,7 @@ class SupremeArenaMixin(AFKJourneyBase):
         """Forfeit the challenge: tap the X, match the dialog tick, tap it."""
         self.tap(CONTROL_TAP[FFMode.SUPREME_ARENA])
         self.sleep_navigation()
-        tick = find_give_up_tick(self.get_screenshot())
+        tick = find_give_up_tick(self.get_screenshot(), self.template_dir)
         if tick is None:
             logging.error("[FF-43] give-up dialog did not appear - stopping")
             return self._sa_halt()
@@ -251,6 +251,7 @@ class SupremeArenaMixin(AFKJourneyBase):
                 FFMode.SUPREME_ARENA,
                 self._sa_position(),
                 self._sa_ocr(),
+                self.template_dir,
                 frozenset(excluded),
             )
             if decision.action is Action.TAKE:

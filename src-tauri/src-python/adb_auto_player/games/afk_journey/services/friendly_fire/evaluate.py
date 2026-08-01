@@ -43,6 +43,7 @@ def evaluate(
     mode: Mode,
     position: OpponentPosition,
     ocr_backend,
+    templates,
     excluded: frozenset[int] = frozenset(),
 ) -> Decision:
     """Read one select-opponent frame and decide what to do about it.
@@ -52,15 +53,16 @@ def evaluate(
         mode: which screen this is.
         position: the user's configured Opponent Position (ignored for Arena).
         ocr_backend: anything exposing `detect_text_blocks`.
+        templates: the game's template directory (`Game.template_dir`).
         excluded: cards already rejected by a confirming read this attempt.
 
     Returns:
         The action to take, with a reason for the log.
     """
     order = preference_order(mode, position)
-    colour = cards_with_badges(frame, mode) & set(order)
+    colour = cards_with_badges(frame, mode, frozenset(order))
     ocr = _ocr_flags(frame, mode, order, ocr_backend)
-    control = classify_control(frame, mode)
+    control = classify_control(frame, mode, templates)
     decision = decide(order, colour, ocr, control, excluded)
 
     disagreement = colour ^ ocr
@@ -106,7 +108,7 @@ def confirms_take(
         True only if both reads agree the card is clear.
     """
     order = preference_order(mode, position)
-    colour = cards_with_badges(frame, mode) & set(order)
+    colour = cards_with_badges(frame, mode, frozenset(order))
     ocr = _ocr_flags(frame, mode, [card], ocr_backend)
     if card in (colour | ocr):
         logging.warning(

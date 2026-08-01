@@ -216,7 +216,7 @@ class ArenaMixin(AFKJourneyBase):
         """
         self.tap(CONTROL_TAP[FFMode.ARENA])
         self.sleep_navigation()
-        tick = find_give_up_tick(self.get_screenshot())
+        tick = find_give_up_tick(self.get_screenshot(), self.template_dir)
         if tick is None:
             logging.error("[FF-33] give-up dialog did not appear - stopping")
             return self._ff_halt()
@@ -251,6 +251,7 @@ class ArenaMixin(AFKJourneyBase):
                 FFMode.ARENA,
                 OpponentPosition.Left,  # Arena has no position setting
                 self._ff_ocr(),
+                self.template_dir,
                 frozenset(excluded),
             )
             if decision.action is Action.TAKE:

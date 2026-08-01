@@ -109,7 +109,9 @@ def find_badges(frame: np.ndarray) -> list[Badge]:
     return found
 
 
-def cards_with_badges(frame: np.ndarray, mode: Mode) -> set[int]:
+def cards_with_badges(
+    frame: np.ndarray, mode: Mode, cards: frozenset[int] | None = None
+) -> set[int]:
     """Indices of cards carrying a badge.
 
     Assignment is by x-range OVERLAP. A component overlapping two ranges flags BOTH,
@@ -119,6 +121,9 @@ def cards_with_badges(frame: np.ndarray, mode: Mode) -> set[int]:
     Args:
         frame: BGR frame.
         mode: which screen this is.
+        cards: restrict to these zero-based indices. Arena never takes card 3, so
+            scanning it only produces a flag the caller discards - and a flag on a
+            card we cannot take reads, in a log, like a detection we ignored.
 
     Returns:
         Zero-based card indices.
@@ -127,6 +132,8 @@ def cards_with_badges(frame: np.ndarray, mode: Mode) -> set[int]:
     for badge in find_badges(frame):
         bx0, _, bx1, _ = badge.box
         for index, (x0, x1) in enumerate(CARD_X_RANGES[mode]):
+            if cards is not None and index not in cards:
+                continue
             if bx0 < x1 and x0 < bx1:
                 flagged.add(index)
     return flagged

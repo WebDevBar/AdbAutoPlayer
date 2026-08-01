@@ -1,5 +1,29 @@
 # Changelog
 
+## [wdb-12.9.25-30] - 2026-08-01
+
+Two fixes to Prevent Friendly Fire, both found on its first live Arena run.
+
+### Fixed
+
+- **The control template could never load in a packaged build.** `control.py` derived its
+  template directory from `__file__`, which is correct in a source checkout and wrong in
+  the RPM: templates install to `/usr/lib/AdbAutoPlayer/games/...` while the code lives
+  under `.../site-packages/...`. Every load raised `FileNotFoundError`, so the bottom-right
+  control was permanently `unknown` and the mode could never tell Refresh from the X. The
+  directory now comes from `Game.template_dir`, which the rest of the app already uses and
+  which resolves correctly in both. The tests pass the REAL template directory rather than
+  a stub - a stub would have passed throughout while the shipped build was looking in the
+  wrong place.
+  - Only reachable when every evaluated card is flagged, which is why three live runs
+    took a card correctly while logging `[FF-20]` each time.
+
+### Changed
+
+- **Card 3 is no longer scanned.** Arena only ever takes cards 1 and 2, and a badge found
+  on card 3 was flagged and then discarded. Harmless, but it put a detection in the log
+  that could never be acted on, which reads like a card we chose to ignore.
+
 ## [Unreleased]
 
 ## [wdb-12.9.25-29] - 2026-08-01

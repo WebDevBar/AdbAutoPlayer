@@ -12,6 +12,7 @@ from adb_auto_player.games.afk_journey.services.friendly_fire.control import (
     find_give_up_tick,
 )
 from adb_auto_player.games.afk_journey.services.friendly_fire.geometry import (
+
     CONTROL_REGION,
     GIVE_UP_CANCEL_CENTRE,
     GLYPH_TEMPLATE_BOX,
@@ -40,16 +41,16 @@ def test_every_template_fits_inside_its_search_region():
 
 
 def test_arena_refresh_and_x_are_told_apart():
-    assert classify_control(_frame("01"), Mode.ARENA) == "refresh"
-    assert classify_control(_frame("03"), Mode.ARENA) == "give_up"
+    assert classify_control(_frame("01"), Mode.ARENA, TEMPLATES) == "refresh"
+    assert classify_control(_frame("03"), Mode.ARENA, TEMPLATES) == "give_up"
 
 
 def test_supreme_arena_is_classified_with_its_OWN_template():
     """The Arena refresh glyph scores 0.36 here. Deleting the Supreme Arena template
     and pointing at Arena's must break this test, because the symptom in production
     is a mode that quits instead of refreshing."""
-    assert classify_control(_frame("05"), Mode.SUPREME_ARENA) == "refresh"
-    assert classify_control(_frame("06"), Mode.SUPREME_ARENA) == "give_up"
+    assert classify_control(_frame("05"), Mode.SUPREME_ARENA, TEMPLATES) == "refresh"
+    assert classify_control(_frame("06"), Mode.SUPREME_ARENA, TEMPLATES) == "give_up"
 
 
 def test_supreme_arena_refresh_template_actually_exists_and_differs():
@@ -72,21 +73,21 @@ def test_a_screen_with_no_control_is_unknown_not_guessed():
 
     This is the case a 0.8 floor gets wrong: the X scores 0.8027 here.
     """
-    assert classify_control(_frame("04"), Mode.ARENA) == "unknown"
+    assert classify_control(_frame("04"), Mode.ARENA, TEMPLATES) == "unknown"
 
 
 def test_the_give_up_tick_is_found_and_is_the_tap_target():
-    point = find_give_up_tick(_frame("04"))
+    point = find_give_up_tick(_frame("04"), TEMPLATES)
     assert point is not None
     assert abs(point.x - 866) <= 12
     assert abs(point.y - 1241) <= 12
 
 
 def test_the_tick_is_not_the_cancel_button():
-    point = find_give_up_tick(_frame("04"))
+    point = find_give_up_tick(_frame("04"), TEMPLATES)
     assert abs(point.x - GIVE_UP_CANCEL_CENTRE.x) > 100
 
 
 def test_no_tick_on_a_screen_without_the_dialog():
     for name in ("01", "05"):
-        assert find_give_up_tick(_frame(name)) is None
+        assert find_give_up_tick(_frame(name), TEMPLATES) is None

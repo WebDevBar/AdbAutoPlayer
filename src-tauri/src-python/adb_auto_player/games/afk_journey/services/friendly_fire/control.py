@@ -20,7 +20,12 @@ from .geometry import (
     Mode,
 )
 
-_TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
+# NO module-level template path. Deriving one from __file__ works in a source
+# checkout and is WRONG in the packaged build: the RPM installs templates to
+# /usr/lib/AdbAutoPlayer/games/... while the code lives under .../site-packages/...,
+# so every load raised FileNotFoundError and the control was permanently `unknown`.
+# The caller is a Game and already has `self.template_dir`, which resolves correctly
+# in both - see game.py:116.
 
 # The refresh glyph is NOT shared between modes: Arena's arrow is anticlockwise and
 # thin, Supreme Arena's clockwise and thick, and cross-matching scores 0.36 against a
@@ -33,11 +38,22 @@ _GIVE_UP_TEMPLATE = "arena/give_up_glyph.png"
 _TICK_TEMPLATE = "arena/give_up_confirm.png"
 
 
-def _load(name: str) -> np.ndarray:
-    """Load a template in BGR, matching what the device and cv2.imread both give."""
-    template = cv2.imread(str(_TEMPLATES / name), cv2.IMREAD_COLOR)
+def _load(templates: Path, name: str) -> np.ndarray:
+    """Load a template in BGR, matching what the device and cv2.imread both give.
+
+    Args:
+        templates: The game's template directory, from `Game.template_dir`.
+        name: Path relative to it, e.g. "arena/refresh_glyph.png".
+
+    Returns:
+        The template image.
+
+    Raises:
+        FileNotFoundError: If it is not there.
+    """
+    template = cv2.imread(str(templates / name), cv2.IMREAD_COLOR)
     if template is None:
-        raise FileNotFoundError(_TEMPLATES / name)
+        raise FileNotFoundError(templates / name)
     return template
 
 
@@ -51,7 +67,7 @@ def _best(region: np.ndarray, template: np.ndarray) -> tuple[float, Point]:
     return float(score), centre
 
 
-def classify_control(frame: np.ndarray, mode: Mode) -> str:
+def classify_control(frame: np.ndarray, mode: Mode, templates: Path) -> str:
     """Whether the bottom-right control is Refresh, the X, or unrecognised.
 
     Both-match and neither-match are BOTH "unknown". The two glyphs are visually
@@ -68,8 +84,8 @@ def classify_control(frame: np.ndarray, mode: Mode) -> str:
     x0, y0, x1, y1 = CONTROL_REGION[mode]
     region = frame[y0:y1, x0:x1]
     try:
-        refresh, _ = _best(region, _load(_REFRESH_TEMPLATE[mode]))
-        give_up, _ = _best(region, _load(_GIVE_UP_TEMPLATE))
+        refresh, _ = _best(region, _load(templates, _REFRESH_TEMPLATE[mode]))
+        give_up, _ = _best(region, _load(templates, _GIVE_UP_TEMPLATE))
     except (FileNotFoundError, cv2.error) as exc:
         logging.warning(f"[FF-20] could not classify the control: {exc}")
         return "unknown"
@@ -81,7 +97,7 @@ def classify_control(frame: np.ndarray, mode: Mode) -> str:
     return "refresh" if is_refresh else "give_up"
 
 
-def find_give_up_tick(frame: np.ndarray) -> Point | None:
+def find_give_up_tick(frame: np.ndarray, templates: Path) -> Point | None:
     """The green confirm tick of the "Give up this challenge?" dialog.
 
     Detected by the tick rather than the dialog sheet: the sheet is blank (pixel
@@ -99,7 +115,7 @@ def find_give_up_tick(frame: np.ndarray) -> Point | None:
     x0, y0, x1, y1 = GIVE_UP_TICK_REGION
     region = frame[y0:y1, x0:x1]
     try:
-        score, centre = _best(region, _load(_TICK_TEMPLATE))
+        score, centre = _best(region, _load(templates, _TICK_TEMPLATE))
     except (FileNotFoundError, cv2.error) as exc:
         logging.warning(f"[FF-21] could not look for the give-up tick: {exc}")
         return None

@@ -392,7 +392,7 @@ pointers meaningless."
 - Test: `tests/test_migration_0007.py`
 
 **Interfaces:**
-- Consumes: `app.canon.canonical_trios`, `app.canon.trio_index_for`, `app.canon.map_side_pair` (Task 1); the committed sidecar `docs/solstice-clash/side-audit-2026-08-01.json` in the CLIENT repo, which must be copied into this repo as `migrations/data/side-audit-2026-08-01.json` in Step 1 - a migration may not read another repo.
+- Consumes: `app.canon.canonical_trios`, `app.canon.trio_index_for`, `app.canon.map_side_pair` (Task 1); `migrations/data/side-audit-by-comps-key.json`, generated in Step 1 from the client's audit plus the operator's database - a migration may not read another repo, and the raw natural-key-keyed sidecar does not join to anything post-`0006`.
 - Produces: the deployed schema Task 4 serialises.
 
 **The correction rule, which rounds 11 and 12 settled and which is the easiest thing in this plan to get backwards:**
@@ -417,12 +417,19 @@ against the client sidecar".
 `comps_key` is orientation-free and `0006` did not change it, so it is the join that
 survives. Generate the keyed file from the CLIENT database, which holds both keys:
 
+**Use the OPERATOR'S database, not the checked-in one.** `data/solstice_clash/heroes.sqlite`
+is a seed: zero matches, and its `match` table has no `comps_key` column at all, so the
+command below fails instantly against it. The real database lives at
+`~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite` (1548 matches, 1495 with a
+`comps_key`, 1544 with a `natural_key` as of 2026-08-01). Work on a COPY.
+
 ```bash
 cd ~/Dev/webdevbar/adbautoplayer
+cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-for-sidecar.sqlite
 python3 - <<'EOF' > /tmp/side-audit-by-comps-key.json
 import json, sqlite3
 audit = json.load(open("docs/solstice-clash/side-audit-2026-08-01.json"))
-con = sqlite3.connect("data/solstice_clash/heroes.sqlite")
+con = sqlite3.connect("/tmp/heroes-for-sidecar.sqlite")
 by_nk = {nk: ck for nk, ck in con.execute(
     "SELECT natural_key, comps_key FROM match"
     " WHERE natural_key IS NOT NULL AND comps_key IS NOT NULL")}
@@ -438,14 +445,23 @@ EOF
 cp /tmp/side-audit-by-comps-key.json ~/Dev/webdevbar/gameretro-adb-api/migrations/data/
 ```
 
-Read `dropped_without_comps_key` before continuing. A large number means the join is wrong,
-not that those rows are unauditable - stop and diagnose rather than proceeding with a
-sidecar that mostly missed.
+**The filename is `migrations/data/side-audit-by-comps-key.json` everywhere** - in this
+step, in Step 6, and in the task's Interfaces block. The natural-key-keyed
+`side-audit-2026-08-01.json` is NEVER read by the server; it stays in the client repo as the
+provenance the re-keyed file was derived from.
 
-```bash
-cd ~/Dev/webdevbar/gameretro-adb-api
-git add migrations/data/side-audit-by-comps-key.json
+**The envelope is exactly:**
+
+```json
+{"dropped_without_comps_key": 12, "verdicts": {"<comps_key>": "agree|mirrored|partial|unreadable|incomplete"}}
 ```
+
+The migration reads `["verdicts"]`, not the top level. Read `dropped_without_comps_key`
+before continuing: with 1544 keyed rows against 929 audit entries the drop count should be
+small. A large one means the join is wrong, not that those rows are unauditable - stop and
+diagnose rather than proceeding with a sidecar that mostly missed. Assert in the migration
+that the loaded verdict map is non-empty, so a missing or mis-shaped file fails loudly
+instead of silently nulling the pool.
 
 **A `mirrored` verdict alone does NOT mean invert.** `0006` already swapped the rows it
 reached, and a swapped row's heroes now match the draft orientation, so it maps NAIVELY.
@@ -613,7 +629,7 @@ Expected: 4 passed
 `migrations/versions/0007_canonical_trios.py`, `down_revision = "0006"`. Structure, in one transaction:
 
 1. `op.add_column` every new column from Task 2, all nullable.
-2. Load `migrations/data/side-audit-2026-08-01.json`; build `{natural_key: verdict}`. Treat only `verdict == "mirrored"` as `mirrored=True`, only `"agree"` as `False`, and everything else (`partial`, `unreadable`, `incomplete`, absent) as `None`.
+2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map, keyed by `comps_key`. Assert it is non-empty. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, absent) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
 4. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
@@ -842,25 +858,39 @@ on its first review. Dokploy autodeploys on push to `main`, so:
   version still running.
 
 There is no ordering of those two steps that works, because the schema and the application
-must change together. Take the API down for the migration:
+must change together.
 
-```bash
-docker stop gameretro-adb-o8cxcd-api-1
-git push origin main                       # Dokploy builds; the old container is stopped
-# wait for the build to finish and the new container to be created, then BEFORE it serves:
-docker exec gameretro-adb-o8cxcd-api-1 alembic upgrade head
-docker start gameretro-adb-o8cxcd-api-1    # if the deploy did not already start it
-```
+**Stopping the container is not enough either.** Dokploy provides no way to create a
+replacement container without starting it, so "deploy then immediately `docker stop`" always
+leaves an interval where the new code serves against the old schema - which is the thing
+being ruled out, not a smaller version of it.
 
-If Dokploy insists on starting the container itself, the equivalent is: let it deploy,
-immediately `docker stop` it, run `alembic upgrade head`, then `docker start`. Either way
-**no version of the application may serve a request against the schema it does not match.**
-A push here is a few minutes of 502s for the clients, which retry - a failed push is not a
-rejection and the rows stay pushable. That is strictly better than either version writing
-against the wrong shape.
+**Disable at the ROUTE, before the push.** `docs/DEPLOY.md` section 3 puts routing in
+Dokploy's Domains UI, through Traefik, so removing the domain makes the API unreachable at
+the edge no matter which container is running or when it starts:
 
-Confirm the actual Dokploy behaviour before running this rather than assuming which of the
-two shapes applies; `docs/DEPLOY.md` in the server repo is the authority.
+1. Dokploy → Domains → remove the `gameretro.net` domain from the `api` service. Note the
+   exact settings first: host, path, service name `api`, port, and both certificate toggles
+   OFF (`traefik/scripts/dokploy-ssl-automation.sh` owns certificates and skips any domain
+   already configured elsewhere).
+2. **Verify unreachable** before going further - do not take the UI's word for it:
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://gameretro.net/v1/matches
+   ```
+   Expect 404 or 503. A 200 or a 401 means the route is still live and the migration must
+   not start.
+3. `git push origin main` and let Dokploy build and deploy normally. Nothing can reach it.
+4. `docker exec gameretro-adb-o8cxcd-api-1 alembic upgrade head`
+5. Re-add the domain with the settings from step 1. Section 3 notes a routing change needs a
+   redeploy, so allow for one.
+6. Verify with a real authenticated request before declaring the window closed.
+
+Clients see a few minutes of failures and retry. A failed push is not a rejection - the rows
+keep `pushed_at IS NULL` and stay pushable - so no capture is lost. That is strictly better
+than either version of the application writing against a shape it does not match.
+
+Removing and re-adding a production route is operator-visible and gated: it needs the
+explicit go-ahead from Step 1, and `docs/DEPLOY.md` is the authority on the exact settings.
 
 Note: `alembic upgrade head`, not `uv run alembic` - the container has alembic on PATH.
 
@@ -1973,4 +2003,5 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 4. **The golden coefficients (Task 10 Step 3) must be captured before any `odds.py` edit.** After the edit the baseline is unrecoverable.
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
-7. **Task 5 Step 3 takes the API down.** Schema and application must change together; neither push-then-migrate nor migrate-then-push is safe. Confirm Dokploy's actual start behaviour against `docs/DEPLOY.md` before running it.
+7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
+8. **Task 3 Step 1 uses the OPERATOR'S database**, `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`, on a copy. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.

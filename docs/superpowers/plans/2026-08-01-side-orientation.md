@@ -1024,11 +1024,14 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
 
   class MatchBatchV4(BaseModel):
       schema_version: Literal[4]
-      matches: list[MatchIn]
+      # KEEP max_length. The current MatchBatch has Field(max_length=MAX_BATCH)
+      # (`app/schemas.py:64`); splitting the model and forgetting it would remove the
+      # only bound on an authenticated ingest request. Round 18 caught it missing here.
+      matches: list[MatchIn] = Field(max_length=MAX_BATCH)
 
   class MatchBatchV5(BaseModel):
       schema_version: Literal[5]
-      matches: list[MatchInV5]
+      matches: list[MatchInV5] = Field(max_length=MAX_BATCH)
 
   MatchBatch = Annotated[
       Union[MatchBatchV4, MatchBatchV5],
@@ -1044,7 +1047,20 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
 - `app/routers/matches.py`:
   - Ingest branches on `batch.schema_version`, with the payload already parsed into the right model by the union above. A v4 payload is converted with `canonicalise_row` (import from `migrations.versions._0007_helpers`, or move that function to `app/canon.py` and import from there - prefer the move, so a migration file is not a runtime dependency) with `mirrored=None`, since a live v4 client is reporting its own draft-anchored orientation and **is** trustworthy: pass `mirrored=False` for live ingest, not `None`. A v4 client's `left` IS its blue.
   - A v5 payload is validated: recompute `canonical_trios` from the submitted heroes and reject the row if the client's `trio` assignment disagrees. Never trust the client's numbering.
-  - **Pull needs a real v4 ADAPTER, not just a different response model.** After `0007` the
+  - **The RESPONSE model is concrete as well, and must become version-aware too.** The route
+    is declared `@router.get("/matches", response_model=MatchPage)`
+    (`app/routers/matches.py:438`) and `MatchPage.matches` is `list[MatchOut]`
+    (`app/schemas.py:127`). A v5 row lacks `outcome` and `side`, so FastAPI fails RESPONSE
+    validation on the way out - the exact mirror of the request-side fault round 17 found,
+    and round 18 caught that only half of it had been fixed.
+
+    Add `MatchPageV5` alongside `MatchOutV5`, and make the route's `response_model` depend on
+    the requested version. Either declare `response_model=None` and return an explicitly
+    validated model per branch, or split into two route handlers. Do NOT widen `MatchOut`
+    with optional trio fields: a response model that accepts both shapes stops catching the
+    case where the wrong one is emitted, which is the one thing it is there for.
+
+- **Pull needs a real v4 ADAPTER, not just a different response model.** After `0007` the
     row has no `outcome`, no `side`, no `left_rating` and no player names, so there is
     nothing for the existing v4 schema to serialise. Write `to_v4_wire(match) -> dict` that
     maps the winner, the heroes, the prediction, the ratings, the ranks, the pools and the
@@ -2673,6 +2689,7 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
+17. **Both the REQUEST and the RESPONSE models are concrete and both must become version-aware.** `MatchPage.matches` is `list[MatchOut]`, so a v5 row fails response validation on the way out just as a v5 payload failed on the way in. Do not widen `MatchOut` to accept both - that removes the check that the right shape was emitted. And keep `Field(max_length=MAX_BATCH)` on both request branches; dropping it removes the only bound on an authenticated ingest.
 16. **The request batch model must be a discriminated union on `schema_version`.** FastAPI validates the body before the router runs, so a statically-typed `list[MatchIn]` rejects every v5 payload with 422 before any version branch executes.
 15. **`migrate.py` cannot import the package.** It runs standalone and is loaded by path in the shipped build, so the pure row logic is duplicated into `data/solstice_clash/canon_rows.py` beside it, pinned by an equivalence test against `services/solstice/canon.py`.
 14. **The analysis scripts have no `--db` today** and silently ignore it, so a verification command that passes one reads the LIVE database while looking like it tested a copy. Task 13 adds the option before using it.

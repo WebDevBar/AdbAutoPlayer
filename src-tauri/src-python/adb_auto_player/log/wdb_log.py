@@ -29,11 +29,24 @@ _HIDDEN_CODES = frozenset({
     "SC-71",  # read order - an implementation detail of the locked read
     "SC-72",  # the model's own size, useful when reading back, noise while watching
     "SC-74",  # ratings read - on screen already
-    "SC-75",  # the prediction, which the bubble is already showing
     "SC-77",  # crowd split - on screen already
     "SC-78",  # market recorded
     "SC-80",  # spectator count - on screen already
+    # Screen transitions. Each one is visible on the device a second before it is
+    # logged, so in the live view they only push the picks and the call off the top.
+    "SC-50",  # mode banner at startup
+    "SC-54",  # draft screen
+    "SC-55",  # draft over - locked screen is up
+    "SC-58",  # locked picks screen
+    "SC-76",  # FINAL - all picks locked, immediately followed by the odds block
+    "SC-82",  # overlay install/remove chatter
 })
+
+# SC-75 is NOT hidden. It was, under the comment "the prediction, which the bubble is
+# already showing" - written when SC-75 carried only the prediction. It now also carries
+# `BLUE WINS` / `RED WINS` and the HIT/MISS result, which are the two lines the operator
+# most wants to see, and they inherited a hide rule meant for something else. The result
+# of a match is not on screen by the time it is logged: the game has already moved on.
 
 # Lines the odds block prints that repeat what the overlay shows, or qualify it in a way
 # that only matters when reading back.
@@ -42,13 +55,29 @@ _HIDDEN_PREFIXES = (
     "80% interval",
     "=====",
     "  =====",
+    # The union of both screens, printed the moment the picks are all known. Every
+    # hero in it has already been announced one line at a time, in draft order.
+    "locked - ",
 )
 
 # "recorded 6 rows, 0 deduced by elimination, 0 set-consistent" is worth seeing ONLY when
 # a number is off. All-zeroes is the normal case and says nothing.
 _ALL_CLEAR = re.compile(r"recorded \d+ rows, 0 deduced by elimination, 0 set-consistent")
 
+# "4/6 heroes identified" is bookkeeping under the call: it says how much of the draft
+# the number rests on, which matters when reconstructing a call and not while watching
+# one. The picks themselves are announced individually, so the count is derivable anyway.
+_HERO_COUNT = re.compile(r"^\s*\d/6 heroes identified")
+
+# `[SC-35] sync enabled` is a one-off banner; `[SC-35] sync: pushed 1, duplicate 0` is
+# the line the operator actually watches for. Same code, so this has to match the
+# MESSAGE - which is why the filter is written on text rather than on level or code.
+_SYNC_BANNER = re.compile(r"^\[SC-35]\s+sync (enabled|disabled)$")
+
 _CODE = re.compile(r"\[(SC-\d+)]")
+
+# Only a code at the START of the line is a prefix; one quoted mid-sentence is content.
+_CODE_PREFIX = re.compile(r"^\s*\[SC-\d+]\s*")
 
 
 def is_live_worthy(message: str) -> bool:
@@ -68,7 +97,25 @@ def is_live_worthy(message: str) -> bool:
         return False
     if any(text.startswith(p) for p in _HIDDEN_PREFIXES):
         return False
+    if _HERO_COUNT.match(text) or _SYNC_BANNER.match(text):
+        return False
     return not _ALL_CLEAR.search(text)
+
+
+def live_message(message: str) -> str:
+    """The message as the live view should show it - without its `[SC-nn]` code.
+
+    The codes exist so a line in a log can be grepped and talked about precisely. Nobody
+    watching a draft run needs one, and six characters of prefix on every line is six
+    characters of hero name pushed off a narrow panel. The FILE keeps them.
+
+    Args:
+        message: The formatted log message.
+
+    Returns:
+        The message with a leading code removed, if it had one.
+    """
+    return _CODE_PREFIX.sub("", message or "", count=1)
 
 
 def wdb_log_path() -> Path:

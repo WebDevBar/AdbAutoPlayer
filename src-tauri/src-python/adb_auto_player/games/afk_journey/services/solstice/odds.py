@@ -739,7 +739,7 @@ def format_odds(
         "",
         _RULE,
         f"  {header}",
-        f"  {blue}   |   {red}",
+        f"  {blue} | {red}",
         f"  80% interval {band}   trust: {trust}",
         f"  {locked}/6 heroes identified",
         _RULE,

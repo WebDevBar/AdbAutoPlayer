@@ -6,6 +6,7 @@ from adb_auto_player.log.wdb_log import (
     WdbSessionFileHandler,
     attach_wdb_session_log,
     is_live_worthy,
+    live_message,
 )
 
 # Real lines, copied from a run. The operator read these on screen and called them noise;
@@ -18,7 +19,8 @@ HIDDEN = [
     "[SC-71] read order was r3 r2 r1 l3 l2 l1 - the missing side's last slot first",
     "[SC-72] odds model: fitted on 21 matches from this theme",
     "[SC-74] ratings 4066 vs 4055 (gap +11)",
-    "[SC-75] recorded prediction 38% left (r+h)",
+    # NOTE: "[SC-75] recorded prediction ..." used to live here. That line no longer
+    # exists - SC-75 now carries the WINNER and the HIT/MISS result, which are shown.
     "[SC-77] crowd 71% left (pools 414179/166578)",
     "[SC-78] market recorded: 22% left from 835702 staked",
     "[SC-80] 206 spectators",
@@ -27,15 +29,36 @@ HIDDEN = [
     "==============================================",
     "spectate_draft_picks: recorded 6 rows, 0 deduced by elimination, 0 set-consistent",
     "spectate_prematch: recorded 6 rows, 0 deduced by elimination, 0 set-consistent",
-]
-
-SHOWN = [
+    # Screen transitions. Visible on the device before they are logged, and in a narrow
+    # panel they push the picks and the call off the top.
     "[SC-50] Solstice Clash: spectating, logging picks, recording",
     "[SC-54] draft screen",
     "[SC-55] draft over - locked screen is up",
     "[SC-58] locked picks screen",
-    "Blue picked: Lenya [0.964/0.563]",
+    "[SC-76] FINAL - all picks locked",
+    "[SC-82] odds overlay ready",
+    # Every hero in this was already announced one line at a time, in draft order.
     "locked - Blue: Bryon, Kruger, Lenya | Red: Ulmus, Cyran, Ludovic",
+    # Bookkeeping under the call, and derivable from the pick lines anyway.
+    "  4/6 heroes identified",
+    "  6/6 heroes identified",
+    # A one-off banner. The push/pull summary shares its code and IS shown, which is why
+    # this one has to be matched on the message.
+    "[SC-35] sync enabled",
+    "[SC-35] sync disabled",
+]
+
+SHOWN = [
+    # The picks, one line each, in draft order.
+    '<span class="sc-blue">BLUE 1: Lenya</span>',
+    '<span class="sc-red">RED 6: Zandrok</span>',
+    # The call, and how it turned out. SC-75 used to be hidden under a comment about
+    # "the prediction, which the bubble is already showing" - written before it also
+    # carried the RESULT. By the time a result is logged the game has moved on, so it
+    # is on no screen at all.
+    '[SC-75] <span class="sc-red">RED WINS</span>',
+    '[SC-75] called red 56% (r+h) - red won - <span class="sc-hit">HIT</span>',
+    "[SC-40] <span class=\"sc-blue\">BLUE WINS</span>",
     "[SC-35] sync: pushed 1, duplicate 0, rejected 0",
     "[SC-03] match did not end in time",
 ]
@@ -49,6 +72,21 @@ def test_the_noise_stays_out_of_the_live_view():
 def test_the_events_worth_watching_get_through():
     for line in SHOWN:
         assert is_live_worthy(line), line
+
+
+def test_the_live_view_drops_the_sc_code_but_the_file_keeps_it():
+    """Codes are for grepping a file and talking about a line precisely.
+
+    Six characters of prefix on every line is six characters of hero name pushed off a
+    narrow panel, and nobody watching a draft needs the number.
+    """
+    assert live_message("[SC-35] sync: pushed 1") == "sync: pushed 1"
+    assert live_message('[SC-75] <span class="sc-red">RED WINS</span>') == (
+        '<span class="sc-red">RED WINS</span>'
+    )
+    # Only a code at the START is a prefix. One quoted mid-sentence is content.
+    assert live_message("see [SC-41] for why") == "see [SC-41] for why"
+    assert live_message("no code here") == "no code here"
 
 
 def test_a_row_count_that_is_NOT_all_clear_still_shows():

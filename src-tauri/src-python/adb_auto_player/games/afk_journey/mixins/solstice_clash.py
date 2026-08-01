@@ -35,6 +35,7 @@ from ..services.solstice.draftlog import (
     format_merged,
     format_pick,
     format_pick_audit,
+    plate_number,
     MAX_PICKS_PER_SIDE,
     merge_screens,
     newly_locked,
@@ -868,6 +869,18 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             from_draft = sum(
                 1 for r in merged if r.identified and r.slug not in from_locked
             )
+            # The SIXTH pick, at last. It cannot be read from the draft screen - the
+            # game leaves that screen the instant the pick is made - so it only becomes
+            # known here, and without this the live log announced five picks and then
+            # jumped straight to the odds. `prematch_pick` is numbered 1-3 within a side,
+            # which plate_number maps to 2/3/6 on the right, so the line reads RED 6
+            # exactly as the plate does.
+            announced = {r.slug for r in draft_reads if r.identified}
+            for read in sorted(merged, key=plate_number):
+                if read.identified and read.slug not in announced:
+                    logging.info(format_pick(read))
+                    logging.debug(format_pick_audit(read))
+
             logging.info(format_merged(merged))
 
             # The prediction as it stood with the final six, BEFORE the fight. Recorded

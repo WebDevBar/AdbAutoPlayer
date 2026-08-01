@@ -145,13 +145,13 @@ class TauriQueueHandler(logging.Handler):
         # The live view is read over a shoulder while a draft runs, so every line that is
         # merely true competes with the two or three that are useful. Everything still
         # reaches the session file; this only decides what is worth watching.
-        from adb_auto_player.log.wdb_log import is_live_worthy
+        from adb_auto_player.log.wdb_log import is_live_worthy, live_message
 
         if not is_live_worthy(record.getMessage()):
             return
         log_message = LogMessageFactory.create_log_message(
             record=record,
-            message=StringHelper.sanitize_path(record.getMessage()),
+            message=live_message(StringHelper.sanitize_path(record.getMessage())),
             html_class=getattr(record, "preset", None),
             profile_index=self.profile_index,
         )

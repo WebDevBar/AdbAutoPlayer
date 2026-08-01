@@ -190,6 +190,29 @@ constraint, never a second writable source.
 Which trio is 1 and which is 2 is decided by the same sort `comps_key` uses, so the
 assignment is a pure function of the heroes and cannot drift from it.
 
+### Storing it once is necessary but not sufficient
+
+Review round 3 showed the "cannot contradict" claim still did not hold: nothing stopped
+six heroes being tagged `trio=1` while `winning_trio=2` pointed at a composition that does
+not exist. One source of truth removes the DISAGREEMENT; it does not by itself make the
+reference valid.
+
+The shape therefore carries constraints, enforced in the schema where SQLite allows and in
+a single validated write boundary where it does not:
+
+- `match_hero.trio IN (1, 2)`.
+- `UNIQUE(match_id, trio, hero_slug)` - a hero appears once per trio.
+- **Exactly three distinct identified heroes per trio**, for any match with a decided
+  outcome. This is the same completeness rule `is_complete` and the backfill already use,
+  so a five-hero row like 625 is simply never assigned a trio rather than being a
+  constraint violation.
+- `winning_trio` and `blue_trio`, when not NULL, must be 1 or 2 AND that trio must exist
+  for the match. A pointer to an absent composition is the failure round 3 described.
+
+All writes go through one function that asserts these before committing. A test inserts
+each violation and asserts it is rejected - a constraint nobody has tried to breach is a
+comment.
+
 **Nothing local is lost.** `blue_trio` points at whichever trio was blue, so left/right is
 fully recoverable for any match we spectated, and with `slot` so are the plate numbers.
 Side stops being a label that can contradict the heroes and becomes a pointer to one of
@@ -256,9 +279,18 @@ from identity, and OCR-fragile; keeping a field nobody may trust invites its use
 Both reviewers caught this; the first draft canonicalised the heroes and the winner and
 left the rest pointing at an orientation that no longer exists:
 
+**The server derives its compositions the same way.** Round 3 caught Part 5 keeping
+writable `trio_1`/`trio_2` columns on `match` while `match_hero.trio` also existed - which
+is exactly the duplicate source 4b rejects, reintroduced one repo over. `match_hero.trio`
+is the sole record there too, under the same constraints; anything wanting `trio_1` as a
+column is a generated column or a materialised view, never a second thing to write.
+
+The side-relative VALUES below still move, because they are not compositions - they are
+measurements attached to one:
+
 | today | becomes | why |
 |---|---|---|
-| `left_rating`, `right_rating` | `trio_1_rating`, `trio_2_rating` | NOT derivable from `match_hero`. 1,189 of 1,474 local rows carry them and the fit consumes the signed gap (`odds.py:260-261`). Dropping them loses the rating signal permanently |
+| `left_rating`, `right_rating` | `trio_1_rating`, `trio_2_rating` (trio_N here names the DERIVED order, not a stored composition) | NOT derivable from `match_hero`. 1,189 of 1,474 local rows carry them and the fit consumes the signed gap (`odds.py:260-261`). Dropping them loses the rating signal permanently |
 | `left_rank`, `right_rank` | `trio_1_rank`, `trio_2_rank` | same argument; currently NULL everywhere but the column should not become a trap |
 | `predicted_left` | `predicted_trio_1` | ingested and returned (`schemas.py:39`, `models.py:179`, `matches.py:251`). Left side-relative it associates a probability with an unknown trio |
 | `left_pool`, `right_pool`, `left_odds`, `right_odds` | `trio_1_*`, `trio_2_*` | same |
@@ -395,23 +427,42 @@ removes both. Worse, a 4b migration that ran first could not derive `blue_trio` 
 for the 76 mirrored rows, because treating legacy `left` as blue is precisely what is
 wrong with them.
 
-Part 8 therefore splits, and the local repair comes FIRST:
+**The ordering cannot be enforced by instructions, so it is not.** Round 3 found the
+trap: 4b must migrate automatically on every launch, while 8a needs explicit approval
+because it mutates data. On the contributor's Windows machine those cannot be sequenced by
+asking - launching the new build would reshape first and derive `blue_trio` from a legacy
+`left` that is wrong for exactly the 76 rows in question, irreversibly.
 
-1. **Part 1** - the audit. Already run: `side-audit-2026-08-01.json`.
-2. **Part 8a - local repair, on the OLD columns.** Flip `match_hero.side` and
-   `outcome` on the 76 mirrored rows while those columns still exist. After this every
-   local row is draft-anchored and `left` genuinely means blue.
-3. **Part 4b** - the local shape change. Only now can it set `blue_trio` by reading the
-   legacy `left` side, because step 2 made that reading true.
-4. **Parts 1-4** - the recording fix, stopping new corruption.
-5. **Part 5** - the server schema and the dual-version API phase.
-6. **Parts 6, 7** - the fit and the reconciliation, both depending on 5.
-7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach, using the
-   absolute correction path Part 8 describes.
+So **the local repair and the shape change become ONE atomic migration step**, and the
+alternative dismissed in the first draft is adopted: the 4b migration consumes the
+committed audit sidecar directly.
 
-The alternative - having the 4b migration consume the audit verdicts directly and
-establish `blue_trio` absolutely - is workable but puts vision evidence inside a schema
-migration. Repairing first keeps the migration mechanical.
+This is not vision evidence inside a migration. The sidecar is a committed, deterministic
+lookup table keyed by `natural_key`, and server migration `0006` already did precisely this
+and worked. Per row:
+
+- **In the sidecar as `mirrored`** - set `blue_trio` to the trio the frame confirmed, not
+  the one legacy `left` claims. The repair and the reshape happen in the same statement,
+  so no intermediate state exists to be interrupted.
+- **In the sidecar as `agree`** - `blue_trio` from legacy `left`, which the frame confirms.
+- **Not in the sidecar at all** - `blue_trio = NULL` with a reason. Never audited, so we
+  have no evidence for its orientation and will not invent one. It can be filled later by
+  a further audit.
+
+Nothing is left depending on a human running a step in the right order.
+
+Revised sequence:
+
+1. **Part 1** - the audit. Already run: `side-audit-2026-08-01.json`, committed.
+2. **Part 4b** - repair-and-reshape, atomic, automatic on launch, sidecar-driven.
+3. **Parts 1-4** - the recording fix, stopping new corruption.
+4. **Part 5** - the server schema and the dual-version API phase.
+5. **Parts 6, 7** - the fit and the reconciliation, both depending on 5.
+6. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach, using the
+   absolute correction path. This one stays gated on explicit approval: it writes to
+   production and no automatic path should.
+
+Part 8a as a separate gated step no longer exists.
 
 ## Risks
 

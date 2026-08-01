@@ -220,10 +220,12 @@ a single validated write boundary where it does not:
   point the canonical sort cannot tell trio 1 from trio 2 and both pointers stop naming a
   composition. The game's shared exclusive pick pool makes this impossible on screen, which
   is precisely why a misread must not be able to represent it.
-- **`UNIQUE(match_id, trio, slot)`** - the trio-space equivalent of today's
-  `UNIQUE(match_id, side, slot)`. Without it two heroes can share a slot while another is
-  absent, which passes the three-distinct-heroes check and silently breaks the plate
-  recovery this design promises.
+- **`UNIQUE(match_id, trio, slot)` AND `slot IN (1, 2, 3)`** - the trio-space equivalent
+  of today's `UNIQUE(match_id, side, slot)`, plus a domain. Uniqueness alone lets two
+  heroes share a slot while another is absent. A domain alone lets a canonical row hold
+  slots `(1, 2, 99)` in each trio - round 8's counterexample, which passes uniqueness and
+  the three-distinct-heroes count while plate 3 does not exist. Both are needed before
+  "plate numbers are fully recoverable" is true rather than hoped for.
 - **Exactly three distinct identified heroes per trio**, for any match with a decided
   outcome. This is the same completeness rule `is_complete` and the backfill already use,
   so a five-hero row like 625 is simply never assigned a trio rather than being a
@@ -350,10 +352,6 @@ predicate" was the contradiction round 7 flagged; skipping is exactly what cause
 
 `canonical_state` is added by the same migration, before any classification, and is the one
 column the predicate depends on - so the check is `canonical_state` absent OR any row NULL.
-
-The predicate is therefore: a row with `outcome IN ('left','right')`, three identified
-heroes per side, and no `trio` assignment. Row 625 fails the hero count, is skipped by
-both the migration and the predicate, and the check settles.
 
 It must also survive a database in any prior state. The collaborator's was old enough to
 fail with `no such column: predicted_left`.
@@ -567,10 +565,9 @@ and 7 are one client release. The list below is the order of WORK, not of shippi
 2. **Part 4b** - repair-and-reshape, atomic, sidecar-driven, automatic on launch.
 3. **Parts 1-4** - the recording fix.
 4. **Parts 6, 7** - the fit and the reconciliation.
-5. Ship all of the above together. Nothing above may reach a user alone.
-6. **Part 5 - the server schema and the dual-version phase, which must be DEPLOYED
-   BEFORE the client of step 5 reaches anyone.** Round 6 caught the order being stated
-   backwards. Production accepts only version 4 today (`gameretro-adb-api/app/config.py:24`),
+5. **Part 5 - the server schema and the dual-version phase. DEPLOYED AND LIVE before
+   step 6.** Round 6 caught the order stated backwards, and round 8 caught the numbering
+   still contradicting the prose after it was fixed in words only. Production accepts only version 4 today (`gameretro-adb-api/app/config.py:24`),
    so a v5 client shipped first would fail every push against a server that has never heard
    of the trio contract. The server accepting BOTH 4 and 5 is what makes the client release
    independent - the window has to exist before the client needs it, not after.
@@ -581,6 +578,9 @@ and 7 are one client release. The list below is the order of WORK, not of shippi
    without one is treated as version 4, which is exactly what every already-installed
    client is. No negotiation and no fallback: the client asks for the one shape it can
    parse, and old clients keep getting the old shape until they are replaced.
+
+6. **Ship the client** - steps 2, 3 and 4 as one binary. Nothing in them may reach a user
+   alone, and none of them may reach a user before step 5 is live.
 7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach. Stays gated on
    explicit approval: it writes to production and no automatic path should.
 
@@ -593,13 +593,16 @@ Part 8a as a separate gated step no longer exists.
 | The resolver refuses too often and matches go unrecorded | Unresolved rows are still stored with everything side-neutral; only the outcome is withheld. The margin rule is tested against one and two misreads |
 | `0007` lands on a pool that had `0005` and `0006` hours earlier | `pg_dump` first, restore-verified, and the migration is mechanical: trios are derivable from `match_hero`, which is unchanged |
 | The reconciliation collapses a genuine rematch | The ±2 minute window is the test, not `comps_key` alone. Ids 1/45 are the committed fixture |
-| Repairing the 76 corrupts good rows | Dry-run default, snapshot, `predicted_left`/names untouched, and the same two-phase swap the repair already uses |
+| Repairing the 76 corrupts good rows | Dry-run default, `legacy_side_snapshot` written before any drop, names untouched, and the same two-phase swap the repair already uses |
 | A pulled row's missing side breaks the model fit | `matches_for_fit` moves to trio membership; the model never used side |
 
 ## What this does not do
 
 It does not change how a match is played, watched, predicted, displayed or bet on. It does
-not touch `predicted_left`. It does not attempt to explain why row 1476 stored
+not change any PREDICTION - `predicted_left` is re-expressed as `predicted_trio_1` and
+inverted where the sidecar says the row was mirrored, but the probability the model
+assigned to a given trio is preserved exactly, and the ~157 rows with no orientation
+evidence keep theirs verbatim in `legacy_side_snapshot`. It does not attempt to explain why row 1476 stored
 `left_player = Rocky` when the header showed Guicts - both reviewers failed to account for
 it, no summary frame exists from that window, and Part 3 exists so the next such question
 is answerable.

@@ -13,16 +13,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## `gh` in this repo: ALWAYS pass `--repo WebDevBar/AdbAutoPlayer`
+## `gh` in this repo targets the FORK - set once per clone
 
-This is a FORK. `gh` resolves a fork to its **parent** by default, so every `gh` command
-here silently targets `AdbAutoPlayer/AdbAutoPlayer` (upstream) unless told otherwise.
+This is a FORK, and `gh` resolves a fork to its **parent** by default. Fix it once, per
+clone, rather than remembering a flag:
 
 ```bash
-gh release create wdb-12.9.25-30 --repo WebDevBar/AdbAutoPlayer ...   # correct
-gh release list --repo WebDevBar/AdbAutoPlayer                        # correct
-gh run list --repo WebDevBar/AdbAutoPlayer                            # correct
+gh repo set-default WebDevBar/AdbAutoPlayer     # writes to .git/config
+gh repo set-default --view                      # confirm
 ```
+
+After that, bare `gh release create` / `view` / `list` and `gh run list` all hit the fork.
+**A fresh clone does not inherit this** - it lives in `.git/config`, so re-run it whenever
+the repo is cloned again, and pass `--repo WebDevBar/AdbAutoPlayer` explicitly in scripts
+or CI where no default is set.
 
 **The errors do not name the cause, which is why this keeps recurring.** Two seen on
 2026-08-01, both from the same mistake:

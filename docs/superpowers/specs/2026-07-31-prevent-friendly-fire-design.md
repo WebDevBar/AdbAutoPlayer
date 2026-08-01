@@ -590,3 +590,26 @@ attempt was uncovered until this list.
 4. **No badge has been observed on Supreme Arena's LEFT card.** Its band is inferred from
    the two measured columns plus the card stagger. Mitigated by the OR rule and resolved
    over time by frame collection - this is the specific gap the collection exists to fill.
+
+## Follow-on ideas, from live use
+
+Not defects. Recorded on 2026-08-01, the feature's first live Arena session.
+
+1. **A choice of which clear card to prefer.** Arena's preference order is fixed at
+   `(0, 1)` - left first, then centre - so when BOTH are clear it always takes the left.
+   That is deliberate today: card 1 is usually the weakest opponent and the mode exists to
+   farm attempts cheaply. But the operator may sometimes want the centre card, and the
+   order is currently a constant in `select.py::preference_order`, not a setting.
+
+   Shape if it is built: a per-mode setting alongside the existing `Opponent Position`,
+   offering left-first / centre-first, defaulting to left-first so nobody's behaviour
+   changes on upgrade. Card 3 stays excluded regardless - it is outside the power bracket
+   the mode targets, and since 2026-08-01 it is not even scanned.
+
+   Worth knowing before building it: `preference_order` already takes `OpponentPosition`
+   for Supreme Arena, so a second axis needs care not to produce a combination nobody
+   asked for.
+
+2. **The three verified live behaviours**, for anyone who doubts the two-signal design:
+   colour and OCR independently agreed on a guild member (run 2) and on a friend (run 3),
+   and the mode took the clear card each time.

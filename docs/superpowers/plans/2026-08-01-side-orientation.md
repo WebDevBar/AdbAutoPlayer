@@ -815,8 +815,12 @@ Irreversible by design; downgrade points at the pg_dump."
 """One release must serve both. A v4 client is the contributor's current build and
 breaking it mid-rollout strands their captures."""
 
+# `source` and `event_slug` are REQUIRED by MatchIn (`app/schemas.py:21-25`). Omitting
+# them fails validation with 422 before any canonicalisation runs, so the test would
+# never reach the behaviour it names.
 V4_MATCH = {
     "index": 0, "natural_key": "nk-v4", "comps_key": "ck-v4",
+    "source": "compete", "event_slug": "solstice-clash-1",
     "captured_at": "2026-08-01T10:00:00Z", "outcome": "left",
     "left_rating": 100, "right_rating": 200, "predicted_left": 0.8,
     "heroes": [
@@ -833,8 +837,12 @@ V4_MATCH = {
 def test_v4_push_is_canonicalised_on_the_way_in(client, auth, session):
     r = client.post("/v1/matches", json={"schema_version": 4, "matches": [V4_MATCH]}, headers=auth)
     assert r.status_code == 200
+    # The server assigns its OWN key - `f"{key}:{occurrence}"` at
+    # `app/routers/matches.py:233` - and ignores the submitted one. Look the row up by
+    # what the response reports, never by what the request sent.
     from app.models import Match
-    m = session.query(Match).filter_by(natural_key="nk-v4").one()
+    m = session.query(Match).filter_by(
+        natural_key=r.json()["results"][0]["natural_key"]).one()
     # left = (m,n,o) sorts after (a,b,c), so left is trio 2 and it won.
     assert m.winning_trio == 2
     assert m.trio_2_rating == 100
@@ -845,6 +853,7 @@ def test_v4_push_is_canonicalised_on_the_way_in(client, auth, session):
 def test_v5_push_sends_trios_directly(client, auth, session):
     payload = {"schema_version": 5, "matches": [{
         "index": 0, "natural_key": "nk-v5", "comps_key": "ck-v5",
+        "source": "compete", "event_slug": "solstice-clash-1",
         "captured_at": "2026-08-01T11:00:00Z", "winning_trio": 2,
         "trio_1_rating": 200, "trio_2_rating": 100, "predicted_trio_1": 0.2,
         "heroes": [
@@ -858,7 +867,8 @@ def test_v5_push_sends_trios_directly(client, auth, session):
     r = client.post("/v1/matches", json=payload, headers=auth)
     assert r.status_code == 200
     from app.models import Match
-    assert session.query(Match).filter_by(natural_key="nk-v5").one().winning_trio == 2
+    assert session.query(Match).filter_by(
+        natural_key=r.json()["results"][0]["natural_key"]).one().winning_trio == 2
 
 
 def test_v5_push_rejects_a_non_canonical_trio_order(client, auth):
@@ -866,6 +876,7 @@ def test_v5_push_rejects_a_non_canonical_trio_order(client, auth):
     this backwards makes every pointer mean the opposite trio, silently."""
     payload = {"schema_version": 5, "matches": [{
         "index": 0, "natural_key": "nk-bad", "comps_key": "ck-bad",
+        "source": "compete", "event_slug": "solstice-clash-1",
         "captured_at": "2026-08-01T12:00:00Z", "winning_trio": 1,
         "heroes": [
             {"trio": 1, "slot": 1, "hero_slug": "m"},
@@ -919,8 +930,10 @@ def test_pull_with_version_5_returns_trios(client, auth):
 
 
 def test_an_unknown_version_is_still_rejected(client, auth):
+    """422, not 400 - `app/routers/matches.py:307` already raises HTTPException(422)
+    and this change has no reason to alter that."""
     r = client.post("/v1/matches", json={"schema_version": 9, "matches": []}, headers=auth)
-    assert r.status_code == 400
+    assert r.status_code == 422
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1087,8 +1100,11 @@ Expected: no NULL bucket. Also confirm a v4 pull still works, because the contri
 
 ```bash
 curl -s -H "Authorization: Bearer <token>" \
-  "https://<host>/v1/matches?since=0&limit=1" | head -c 400
+  "https://gameretro.net/adb/v1/matches?since=0&limit=1" | head -c 400
 ```
+
+The path is `/adb` with Strip Path on, exactly as in Step 3 - `/v1/matches` returns 404 on a
+perfectly healthy deploy and would read as a broken one.
 
 ---
 

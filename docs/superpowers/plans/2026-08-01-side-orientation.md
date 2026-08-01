@@ -1862,8 +1862,27 @@ Add `tests/games/afk_journey/mixins/conftest.py` providing these FIXTURES:
 And put `_summary(top, bottom, winner)` in a **helpers module** the tests IMPORT -
 `tests/games/afk_journey/mixins/_solstice_helpers.py` - not in `conftest.py`. A plain
 function defined in `conftest.py` is not injected as a module global, so calling it bare
-raises `NameError`. Build its shape from the real call site at `solstice_clash.py:1187-1196`
-rather than inventing one.
+raises `NameError`.
+
+**`_record_summary` takes FRAMES, not parsed data.** Its real signature is
+`_record_summary(self, draft_frame, prematch_frame, theme: str | None, frame=None)`
+(`solstice_clash.py:1175-1181`); it calls `read_summary(...)` internally at `:1194`. So
+`_summary(...)` builds the object `read_summary` RETURNS, and the tests inject it by
+monkeypatching `read_summary` in the mixin's namespace, then call the method properly:
+
+```python
+def _record(bot, monkeypatch, read):
+    monkeypatch.setattr(
+        "adb_auto_player.games.afk_journey.mixins.solstice_clash.read_summary",
+        lambda *a, **k: read)
+    bot._record_summary(draft_frame=None, prematch_frame=None, theme=None,
+                        frame=_BLANK_FRAME)
+```
+
+Do NOT change `_record_summary`'s signature to make the tests easier. Its `frame=None`
+default exists so that "every existing caller and test is unchanged", and the draft path is
+under a hard no-behaviour-change constraint. Build `_summary`'s shape from what
+`read_summary` actually returns rather than inventing one.
 
 **There is no `_abandon_match` and no `_await_match_end`.** The enclosing method is
 **`_run_one_match()` at `solstice_clash.py:711`**. Within it the draw exits at `:1007` by
@@ -1880,7 +1899,7 @@ import pytest
 
 from adb_auto_player.games.afk_journey.services.solstice.orient import Orientation, resolve
 
-from ._solstice_helpers import _summary
+from ._solstice_helpers import _record, _summary
 
 
 def test_direct_orientation_scores_five_of_five():
@@ -1902,17 +1921,17 @@ def test_contradictory_evidence_refuses():
     assert r.orientation is Orientation.UNRESOLVED
 
 
-def test_an_unresolved_read_records_no_blue_trio(bot, store):
+def test_an_unresolved_read_records_no_blue_trio(bot, store, monkeypatch):
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
-    bot._record_summary(_summary(top=["a", "b", "m"], bottom=["c", "n", "o"], winner="top"))
+    _record(bot, monkeypatch, _summary(top=["a", "b", "m"], bottom=["c", "n", "o"], winner="top"))
     assert store.last_match()["blue_trio"] is None
 
 
-def test_an_unresolved_read_still_records_the_winner(bot, store):
+def test_an_unresolved_read_still_records_the_winner(bot, store, monkeypatch):
     """Refusing an orientation must not throw away the outcome - the trios and the
     winner are the only rock-solid facts on that screen, and they need no side."""
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
-    bot._record_summary(_summary(top=["a", "b", "m"], bottom=["c", "n", "o"], winner="top"))
+    _record(bot, monkeypatch, _summary(top=["a", "b", "m"], bottom=["c", "n", "o"], winner="top"))
     assert store.last_match()["winning_trio"] is not None
 
 
@@ -1944,22 +1963,27 @@ def test_a_timeout_clears_the_carried_state(bot, timeout_screen):
     assert bot._pending_draft_trios is None
 
 
-def test_panels_matching_neither_carried_trio_refuse_the_carried_prediction(bot, store):
+def test_panels_matching_neither_carried_trio_refuse_the_carried_prediction(
+        bot, store, monkeypatch):
     bot._pending_prediction = 0.8
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
-    bot._record_summary(_summary(top=["x", "y", "z"], bottom=["p", "q", "r"], winner="top"))
+    _record(bot, monkeypatch, _summary(top=["x", "y", "z"], bottom=["p", "q", "r"], winner="top"))
     assert store.last_match()["predicted_trio_1"] is None
 
 
-def test_the_summary_frame_is_saved_for_every_match(bot, frame_capture_on):
-    bot._record_summary(_summary(top=["a", "b", "c"], bottom=["m", "n", "o"], winner="top"))
+def test_the_summary_frame_is_saved_for_every_match(bot, frame_capture_on, monkeypatch):
+    _record(bot, monkeypatch, _summary(top=["a", "b", "c"], bottom=["m", "n", "o"], winner="top"))
     assert list(frame_capture_on.glob("summary-*.png"))
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/games/afk_journey/mixins/test_solstice_orientation.py -v`
-Expected: FAIL - `_pending_draft_trios` does not exist.
+Expected: FAIL on the assertions - `blue_trio` is not written, and the carried state
+survives the draw and the timeout. **Not** on `_pending_draft_trios` being missing: assigning
+an attribute to a live instance always succeeds, so a test that fails there is failing for
+the wrong reason and would go green without the fix. Read the failure output and confirm each
+one is the assertion, not a `TypeError`, `NameError` or fixture error.
 
 - [ ] **Step 3: Implement Part 2 - carry the merged trios**
 

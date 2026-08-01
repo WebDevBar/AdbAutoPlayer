@@ -1008,8 +1008,41 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
 
 - `app/config.py:24`: `schema_versions_supported: set[int] = {4, 5}`.
 - `app/schemas.py`: keep the existing v4 request models untouched; add `MatchInV5` / `MatchHeroInV5` carrying `trio`, `winning_trio`, `trio_N_*`, `predicted_trio_1`, and no `side`/`outcome`/player names. Add `MatchOutV5` for pull.
+
+- **The BATCH model must become version-aware, or none of this is reachable.** Round 17
+  caught it: `post_matches(batch: MatchBatch, ...)` types `matches` as `list[MatchIn]`, and
+  FastAPI validates the body BEFORE the router function runs. A v5 row has no `side` and no
+  `outcome`, so it is rejected with 422 before any branch could look at `schema_version`.
+  Adding `MatchInV5` does not connect it to request parsing.
+
+  Use a discriminated union on the version field, so each shape is validated against its own
+  model and an unknown version still fails as a 422:
+
+  ```python
+  from typing import Annotated, Literal, Union
+  from pydantic import Field
+
+  class MatchBatchV4(BaseModel):
+      schema_version: Literal[4]
+      matches: list[MatchIn]
+
+  class MatchBatchV5(BaseModel):
+      schema_version: Literal[5]
+      matches: list[MatchInV5]
+
+  MatchBatch = Annotated[
+      Union[MatchBatchV4, MatchBatchV5],
+      Field(discriminator="schema_version"),
+  ]
+  ```
+
+  The endpoint keeps `batch: MatchBatch` and branches on `batch.schema_version` for the
+  canonicalisation, which is now purely about the data rather than about parsing. Check
+  whether `app/config.py`'s `schema_versions_supported` is still consulted anywhere after
+  this - if the union has become the only gate, say so rather than leaving a setting that
+  looks load-bearing and is not.
 - `app/routers/matches.py`:
-  - Ingest branches on `schema_version`. A v4 payload is converted with `canonicalise_row` (import from `migrations.versions._0007_helpers`, or move that function to `app/canon.py` and import from there - prefer the move, so a migration file is not a runtime dependency) with `mirrored=None`, since a live v4 client is reporting its own draft-anchored orientation and **is** trustworthy: pass `mirrored=False` for live ingest, not `None`. A v4 client's `left` IS its blue.
+  - Ingest branches on `batch.schema_version`, with the payload already parsed into the right model by the union above. A v4 payload is converted with `canonicalise_row` (import from `migrations.versions._0007_helpers`, or move that function to `app/canon.py` and import from there - prefer the move, so a migration file is not a runtime dependency) with `mirrored=None`, since a live v4 client is reporting its own draft-anchored orientation and **is** trustworthy: pass `mirrored=False` for live ingest, not `None`. A v4 client's `left` IS its blue.
   - A v5 payload is validated: recompute `canonical_trios` from the submitted heroes and reject the row if the client's `trio` assignment disagrees. Never trust the client's numbering.
   - **Pull needs a real v4 ADAPTER, not just a different response model.** After `0007` the
     row has no `outcome`, no `side`, no `left_rating` and no player names, so there is
@@ -2640,6 +2673,7 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
+16. **The request batch model must be a discriminated union on `schema_version`.** FastAPI validates the body before the router runs, so a statically-typed `list[MatchIn]` rejects every v5 payload with 422 before any version branch executes.
 15. **`migrate.py` cannot import the package.** It runs standalone and is loaded by path in the shipped build, so the pure row logic is duplicated into `data/solstice_clash/canon_rows.py` beside it, pinned by an equivalence test against `services/solstice/canon.py`.
 14. **The analysis scripts have no `--db` today** and silently ignore it, so a verification command that passes one reads the LIVE database while looking like it tested a copy. Task 13 adds the option before using it.
 13. **The `0006` correction marker is the literal `'frame_corrected'`**, not `'CORRECTED'` - that is the Python constant's NAME (`0006_backfill_identity.py:72`). Comparing against the wrong string matches nothing and inverts all ~76 mirrored rows instead of ~6, re-corrupting the ~70 already repaired. Assert the match count is non-zero before proceeding.

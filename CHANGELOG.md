@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+## [wdb-12.9.25-29] - 2026-08-01
+
+Two defects found while auditing the betting model, and the identity change that fixes
+the second one. Also the first release your friend can test: the overlay install no
+longer touches a package-manager property on emulators that never needed it, and a sync
+rejection finally says which field it rejected.
+
+### Identity - one match can no longer occupy two rows
+
+Match identity was `outcome | sides | 10-minute-bucket`, which failed twice over. Mirror
+a match and every field changes, so the same match earned two keys. And a bucket splits
+at its boundaries - two captures nine seconds apart landed either side of a wall.
+
+Identity is now the two hero trios, each sorted internally then sorted against each
+other, scoped by event. The outcome is not in it at all: winner-first ordering survives a
+disagreement about which SIDE a trio was on, but not one about which trio WON, and a
+misread panel tint is a failure mode on record. Time is handled by a server-side
+proximity merge instead of a hash component.
+
+Measured on 1,185 completed matches: 1,179 distinct identities, and every one of the six
+repeats is the same match captured 1 to 16 seconds apart. No two genuinely distinct
+matches share an identity within the window.
+
+- Client and server compute the identical key, pinned by a shared digest test on both
+  sides so a future divergence fails loudly at once rather than silently splitting the pool.
+- An existing database is backfilled on upgrade. Without that the dedupe backstop would
+  recognise nothing and re-record matches it already had.
+- Rows already pooled are merged by a migration; nothing is deleted, and merged rows keep
+  their old keys so a client holding one can still resolve it.
+
+### Our own left/right labels were wrong 8% of the time
+
+The summary screen's panel-to-side mapping flips. Player names and ratings do not - they
+come from the header and the draft screen - so only the hero sides and the outcome move.
+A new read-only audit compares every saved draft frame against its stored row: **73 of
+909 rows are mirrored, 8.03%**.
+
+That also means our accuracy was understated. `predicted_left` is recorded from the draft
+screen and the outcome from the summary, so a mirrored row scored backwards. Corrected,
+the model reads **57.85%** rather than 55.97%.
+
+Mirroring is almost absent when the left side is higher-rated (0.2%) and common when it
+is not (15.5%), which is the lead on the mechanism.
+
+
 ### Added
 
 - **Minimize to tray.** A new App setting, "Minimize button should hide to the system

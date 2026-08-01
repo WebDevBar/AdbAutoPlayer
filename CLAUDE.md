@@ -13,6 +13,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## `gh` in this repo: ALWAYS pass `--repo WebDevBar/AdbAutoPlayer`
+
+This is a FORK. `gh` resolves a fork to its **parent** by default, so every `gh` command
+here silently targets `AdbAutoPlayer/AdbAutoPlayer` (upstream) unless told otherwise.
+
+```bash
+gh release create wdb-12.9.25-30 --repo WebDevBar/AdbAutoPlayer ...   # correct
+gh release list --repo WebDevBar/AdbAutoPlayer                        # correct
+gh run list --repo WebDevBar/AdbAutoPlayer                            # correct
+```
+
+**The errors do not name the cause, which is why this keeps recurring.** Two seen on
+2026-08-01, both from the same mistake:
+
+| what you run | what gh says | what is actually wrong |
+|---|---|---|
+| `gh release create <tag>` | `"workflow" scope may be required` | no write access to UPSTREAM. The token's scopes are fine |
+| `gh release view <tag>` | `release not found` | the release exists on the FORK; gh looked upstream |
+
+The second is the dangerous one: it reports absence rather than an error, so it reads as a
+fact about the repo. It produced a confident and wrong "none of these tags has a release
+attached" during a release, when several did.
+
+Check `gh auth status` before believing any scope-related gh error - the token has had
+`gist, read:org, repo, workflow` throughout.
+
 ## Markdown Rules (for editing this file)
 
 These rules must be followed every time this file is edited to avoid lint warnings:

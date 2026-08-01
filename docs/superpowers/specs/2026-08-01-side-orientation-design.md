@@ -564,22 +564,34 @@ otherwise. What Part 8 must therefore do:
    the failure mode a stale target set would trigger.
 3. Both properties together make the operation idempotent - it can be run twice safely,
    which matters because the first run is against production.
-4. **Correct these rows INSIDE `0007`, before it canonicalizes them, and set every
-   trio-relative value - not the winner alone.** Round 11 caught the ordering fault.
-   `0006` deliberately swapped only heroes and outcome
-   (`0006_backfill_identity.py:318, 326`), leaving predictions, ratings, ranks, pools and
-   odds untouched because they are draft-relative. For the ~6 rows it never reached, the
-   heroes were therefore NOT swapped either - so if `0007` canonicalizes first, it attaches
-   every draft-relative value to the summary-panel trio, which for a mirrored row is the
-   wrong one. Setting `winning_trio` afterwards cannot undo that: the winner would then be
-   right while the prediction, ratings, ranks and odds all pointed at the other trio, which
-   is defect 1476 rebuilt out of correct-looking parts.
+4. **`0007` handles these rows by binding the draft-relative group to the opposite trio.
+   It does not touch their heroes or their outcome.** Rounds 11 and 12 together settled
+   this, and round 12 killed a wrong answer of mine that would have created the very
+   contradiction it was meant to prevent.
 
-   So `0007` consumes the sidecar verdicts itself, in one transaction: for each row it
-   confirms mirrored, it inverts the whole draft-relative group together with the winner,
-   and only then canonicalizes. Rows with no verdict are canonicalized on their outcome and
-   heroes alone and get NULL for the draft-relative group - the same honest rule the local
-   migration follows, for the same reason.
+   The situation: `0006` swapped only heroes and outcome
+   (`0006_backfill_identity.py:318, 326, 347`), leaving predictions, ratings, ranks, pools
+   and odds alone because they are draft-relative. The ~6 rows it never reached therefore
+   still have **summary-relative heroes and outcome that agree with each other**, and a
+   draft-relative group that does not agree with them.
+
+   Only one thing is actually wrong with those rows, and it is not the winner. Heroes and
+   outcome come from the same panel pass, so "the trio in this panel won" is true whichever
+   panel we call left - the same orientation-freedom that makes `winning_trio` migrate
+   without a verdict everywhere else in this document. Inverting the winner would BREAK a
+   correct fact. Inverting the winner and the draft-relative group while leaving heroes
+   alone - my round-11 wording - makes the winner contradict its own trio outright.
+
+   So the correction is the minimal one: canonicalize heroes and outcome exactly as for any
+   other row, and attach the draft-relative group to the OTHER trio than a naive left-to-trio
+   mapping would give. Nothing is swapped, nothing is mutated in place; the only thing that
+   changes is which trio those values are recorded against. That is also the same rule the
+   local migration applies to `mirrored` rows, so both sides of the system end at the same
+   canonical truth by the same reasoning - the ~70 rows `0006` already swapped map naively,
+   these ~6 map inverted, and the results agree.
+
+   Rows with no verdict are canonicalized on outcome and heroes alone and get NULL for the
+   draft-relative group - the same honest rule, for the same reason.
 
    This puts an operator-visible mutation inside a migration, which is acceptable here only
    because server migrations are already manual and gated (`docs/DEPLOY.md`): `0007` IS the

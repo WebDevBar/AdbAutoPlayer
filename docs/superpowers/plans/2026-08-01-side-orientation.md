@@ -1180,6 +1180,7 @@ perfectly healthy deploy and would read as a broken one.
 **Files:**
 - Create: `src-tauri/src-python/tests/games/afk_journey/services/solstice/data/golden_fit.json`
 - Create: `src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/canon.py`
+- Create: `data/solstice_clash/canon_rows.py` - the same pure functions, dependency-free, for the standalone `migrate.py` which cannot import the package (see Task 7)
 - Test: `src-tauri/src-python/tests/games/afk_journey/services/solstice/test_canon.py`
 
 - [ ] **Step 0: Capture the golden model baseline - FIRST, before anything else in Phase B**
@@ -1315,7 +1316,9 @@ Expected: FAIL - no module `canon`.
 
 - [ ] **Step 3: Implement**
 
-Copy `app/canon.py` from Task 1 verbatim (the three functions), then add:
+Copy `app/canon.py` from Task 1 verbatim (the three functions) into BOTH
+`services/solstice/canon.py` and `data/solstice_clash/canon_rows.py`, then add the following
+to the package copy only (the migration validates in bulk instead):
 
 ```python
 def assert_canonical(rows: list[dict]) -> None:
@@ -1395,6 +1398,49 @@ other composition."
 - Produces: the schema Task 8 reads and writes.
 
 **This is the highest-risk task in the plan.** It runs unattended on the contributor's Windows machine, it drops columns, and it is not reversible. The correction rule is identical to Task 3's - re-read it there.
+
+**Where the shared row logic lives, and why it is duplicated.** `migrate.py` is deliberately
+standalone - Task 7 Step 7 runs `python3 data/solstice_clash/migrate.py <db>` from the repo
+root, where `src-tauri/src-python` is not on `sys.path`, and the shipped build loads it by
+path outside the package. So it **cannot** `import adb_auto_player...canon`; that raises
+`ModuleNotFoundError` and takes the standalone verification with it. Round 16 caught this.
+
+The pure row logic therefore lives in **`data/solstice_clash/canon_rows.py`**, a
+dependency-free module sitting beside `migrate.py` and imported by it as a sibling. The
+package module `services/solstice/canon.py` keeps its own copy of the same three functions.
+
+That is a deliberate duplication, on the same reasoning as the client/server one: the two
+sides genuinely cannot share an import path, and `sys.path` surgery inside a migration that
+runs unattended on someone else's machine is worse than a copy. **Pin it with an equivalence
+test** - load both modules and assert they agree across a table of cases, so a change to one
+that is not made to the other fails loudly:
+
+```python
+def test_the_two_canonical_implementations_agree():
+    import importlib.util
+    from pathlib import Path
+
+    from adb_auto_player.games.afk_journey.services.solstice import canon as pkg
+
+    spec = importlib.util.spec_from_file_location(
+        "_canon_rows",
+        Path(__file__).parents[6] / "data" / "solstice_clash" / "canon_rows.py")
+    std = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(std)
+
+    cases = [
+        {"left": ["m", "n", "o"], "right": ["a", "b", "c"]},
+        {"left": ["a", "b", "c"], "right": ["m", "n", "o"]},
+    ]
+    for by_side in cases:
+        assert std.canonical_trios(by_side) == pkg.canonical_trios(by_side)
+        t1, _ = pkg.canonical_trios(by_side)
+        assert std.trio_index_for("left", t1, by_side) == pkg.trio_index_for(
+            "left", t1, by_side)
+```
+
+Fix the `parents[N]` depth against the real file location rather than trusting the number
+here.
 
 - [ ] **Step 1: Package the sidecar**
 
@@ -1668,7 +1714,7 @@ In `migrate.py`:
   2. Create `legacy_side_snapshot` and populate it from every match that still has legacy columns. Guard each column with a `PRAGMA table_info` presence check, so a database predating `predicted_left` does not raise.
   3. Add the new columns.
   4. Load the sidecar into `{natural_key: verdict}`. Only `"mirrored"` is `True`, only `"agree"` is `False`, everything else and every absence is `None`.
-  5. Per match: group `match_hero` by `side`, call the same `canonicalise_row` logic as Task 3 (put it in `canon.py` and import it in both places rather than writing it twice), and additionally set `blue_trio` - which is `left_is` for `agree`, the other trio for `mirrored`, and `NULL` for no verdict.
+  5. Per match: group `match_hero` by `side`, call the same `canonicalise_row` logic as Task 3, imported from **`data/solstice_clash/canon_rows.py`** (see below), and additionally set `blue_trio` - which is `left_is` for `agree`, the other trio for `mirrored`, and `NULL` for no verdict.
   6. Rewrite `match_hero.side` into `trio` and `match_odds` into trio order via `op`-free SQLite table rebuild (`CREATE TABLE ..._new`, `INSERT SELECT`, `DROP`, `RENAME`) - SQLite cannot add constraints to an existing table.
   7. Assert no `match` row has `canonical_state IS NULL`, and assert canonical ordering in bulk. Raise and roll back on either.
   8. Drop the legacy `match` columns via the same rebuild.
@@ -2485,6 +2531,19 @@ The `--apply` path mutated `match_hero.side` and `match.outcome` (:713). Those c
 
 - [ ] **Step 3: Run each against a migrated copy**
 
+**These scripts do not accept `--db` today** - they hard-code their database path, and Python
+ignores the unknown argument silently, so the command below would have run against the LIVE
+database while appearing to test the migrated copy. Round 16 caught it. Add a real `--db`
+option to each as part of this task, defaulting to the current hard-coded path so existing
+usage is unchanged:
+
+```python
+parser.add_argument("--db", default=str(DEFAULT_DB_PATH),
+                    help="database to read; defaults to the installed one")
+```
+
+Then:
+
 ```bash
 cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-scripts.sqlite
 python3 data/solstice_clash/migrate.py /tmp/heroes-scripts.sqlite
@@ -2494,7 +2553,10 @@ for s in solstice_side_audit solstice_crowd_agreement solstice_walkforward; do
 done
 ```
 
-Every one must exit 0 and produce plausible output. A script that runs but prints zero rows is a failure, not a pass.
+Every one must exit 0 and produce plausible output. **A script that runs but prints zero rows
+is a failure, not a pass** - and so is one that prints the right-looking numbers while reading
+a database you did not point it at. Confirm the row counts differ from a run against the live
+database, or add a line echoing which path was opened.
 
 - [ ] **Step 4: Update the docs and the changelog**
 
@@ -2578,6 +2640,8 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
+15. **`migrate.py` cannot import the package.** It runs standalone and is loaded by path in the shipped build, so the pure row logic is duplicated into `data/solstice_clash/canon_rows.py` beside it, pinned by an equivalence test against `services/solstice/canon.py`.
+14. **The analysis scripts have no `--db` today** and silently ignore it, so a verification command that passes one reads the LIVE database while looking like it tested a copy. Task 13 adds the option before using it.
 13. **The `0006` correction marker is the literal `'frame_corrected'`**, not `'CORRECTED'` - that is the Python constant's NAME (`0006_backfill_identity.py:72`). Comparing against the wrong string matches nothing and inverts all ~76 mirrored rows instead of ~6, re-corrupting the ~70 already repaired. Assert the match count is non-zero before proceeding.
 12. **The golden baseline is captured in Task 6 Step 0 from LOCAL ROWS ONLY, before ANY schema or `odds.py` change**, and `load_matches` is re-pointed in Task 8 alongside `matches_for_fit` rather than in Task 10. An unfiltered baseline includes synced rows, whose contribution Task 10 deliberately changes, which would make its "the fit is unchanged" assertion false by construction. Both are ordering constraints: after the reshape the legacy fit cannot run, and a `matches_for_fit` whose shape has changed breaks positional unpacking immediately.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.

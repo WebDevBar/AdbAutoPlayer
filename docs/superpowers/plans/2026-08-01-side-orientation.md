@@ -1146,13 +1146,57 @@ perfectly healthy deploy and would read as a broken one.
 
 # PHASE B - CLIENT (one binary, ships after Phase A is live)
 
-### Task 6: Canonical trio helper and the validated write boundary (client)
+### Task 6: Golden model baseline, then the canonical trio helper
 
 **Repo:** `adbautoplayer`
 
 **Files:**
+- Create: `src-tauri/src-python/tests/games/afk_journey/services/solstice/data/golden_fit.json`
 - Create: `src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/canon.py`
 - Test: `src-tauri/src-python/tests/games/afk_journey/services/solstice/test_canon.py`
+
+- [ ] **Step 0: Capture the golden model baseline - FIRST, before anything else in Phase B**
+
+Task 10's guarantee is that a fit with no pooled rows is unchanged. That can only be proved
+against a baseline produced by the CURRENT code on the CURRENT data, and both are gone once
+Task 7 reshapes the database and Task 8 re-points `load_matches`. Round 14 caught the plan
+trying to capture it in Task 10, by which point it is unobtainable.
+
+```bash
+cd ~/Dev/webdevbar/adbautoplayer/src-tauri
+cp ~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite /tmp/heroes-golden.sqlite
+uv run python - <<'EOF'
+import json
+from pathlib import Path
+from adb_auto_player.games.afk_journey.services.solstice.odds import fit, load_matches
+from adb_auto_player.games.afk_journey.services.solstice.store import MatchStore
+
+store = MatchStore(Path("/tmp/heroes-golden.sqlite"))
+matches = load_matches(store)
+theme_id = matches[0].theme_id
+result = fit(matches, theme_id=theme_id)
+out = Path("src-python/tests/games/afk_journey/services/solstice/data/golden_fit.json")
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(json.dumps({
+    "theme_id": theme_id,
+    "matches": [m.__dict__ for m in matches],
+    "beta": list(result.beta),
+}, indent=1, default=str))
+print(f"{len(matches)} matches, {len(result.beta)} coefficients")
+EOF
+```
+
+Adjust the call shapes to whatever `load_matches` and `fit` actually take - read them first.
+Commit this file on its own before proceeding, so it cannot be silently regenerated later:
+
+```bash
+git add src-tauri/src-python/tests/games/afk_journey/services/solstice/data/golden_fit.json
+git commit -m "test: golden model baseline, captured before the trio rework
+
+Task 10 claims a fit with no pooled rows is bit-identical afterwards. That is only
+provable against the current code fitting the current data, and both are gone once
+the reshape lands - so it is captured here, first, and committed alone."
+```
 
 **Interfaces:**
 - Consumes: nothing.
@@ -1796,6 +1840,20 @@ Expected: FAIL - `HeroSlot` has no field `trio`.
 - `record_prediction` takes `predicted_trio_1` instead of `predicted_left`.
 - `scored_predictions` becomes `SELECT predicted_trio_1, winning_trio, predicted_source, predicted_locked FROM match WHERE predicted_trio_1 IS NOT NULL AND winning_trio IS NOT NULL AND superseded_by IS NULL AND canonical_state='canonical'`. Note the deliberate behaviour change named in the spec: synced rows now score too, because a pooled prediction is another contributor's call and scoring it is meaningful.
 - `matches_for_fit` selects `m.id, m.winning_trio, m.theme_id, m.event_id, m.trio_1_rating, m.trio_2_rating, m.blue_trio, h.trio, h.hero_slug`, filtered on `m.winning_trio IS NOT NULL AND m.canonical_state='canonical' AND h.hero_slug IS NOT NULL AND m.superseded_by IS NULL`, ordered `m.id, h.trio, h.slot`. `blue_trio` is carried because Task 10 needs it and nothing else does.
+
+- **`odds.load_matches()` must be re-pointed in THIS task, not in Task 10.** It unpacks
+  `matches_for_fit`'s tuple positionally, so the moment the query changes shape it raises -
+  and Task 8 cannot reach a green suite while Task 10 is still ahead of it. Round 14 caught
+  this as an ordering fault.
+
+  Here that means only the unpacking and the grouping: read `winning_trio` where it read
+  `outcome`, group on `h.trio` instead of `h.side`, set `left_won = (winning_trio == 1)`,
+  take the rating gap from `trio_1_rating - trio_2_rating`, and put `blue_trio` on the
+  `Match` dataclass (also added here, so the field exists before anything reads it).
+
+  **The intercept stays unconditionally `1.0` in this task.** Changing what it means is
+  Task 10's single job, and keeping the two apart is what lets Task 10's golden test prove
+  the fit did not move.
 - `finalise_identity` (:507) currently builds `sides = {"left": [], "right": []}` and calls `comps_key(event_slug, sides["left"], sides["right"])`. It becomes trio-grouped; `comps_key` still takes two lists and is orientation-free, so passing `(trio_1, trio_2)` produces the identical key. Verify that on a real row rather than assuming it.
 - `record_odds` / `odds_for` move to `trio_1_pool` etc.
 - `pushable_matches` emits the v5 shape: `winning_trio`, `trio_N_*`, `predicted_trio_1`, heroes with `trio`. No `side`, no `outcome`, no player names.
@@ -2146,20 +2204,20 @@ def test_a_fit_with_no_pooled_rows_is_unchanged(golden_local_matches, golden_coe
 Run: `uv run pytest tests/games/afk_journey/services/solstice/test_odds_intercept.py -v`
 Expected: FAIL - the intercept column is unconditionally 1.0.
 
-- [ ] **Step 3: Capture the golden baseline BEFORE changing anything**
+- [ ] **Step 3: Confirm the golden baseline captured in Task 6 Step 0 is present**
 
-Fit the current model on the current local matches and save BOTH the `Match` inputs and
-the resulting `Fit.beta` to `tests/.../data/golden_fit.json`, exposed as the
-`golden_local_matches` and `golden_coefficients` fixtures. Capture it with the CURRENT code,
-before touching `odds.py` - after the edit the baseline is unrecoverable, and without it the
-last test cannot prove the change is inert for local-only data, which is the whole reason
-the change is acceptable.
+It is `tests/games/afk_journey/services/solstice/data/golden_fit.json`, committed before any
+schema or `odds.py` change. **It cannot be captured here** - round 14 caught that: by Task 10
+the database has been reshaped and `load_matches` re-pointed, so the legacy code that
+produced the baseline can no longer run against the current data.
+
+If the file is missing, STOP and go back. Re-deriving it after the reshape produces a
+baseline from the new code, which proves nothing.
 
 - [ ] **Step 4: Implement**
 
-- `load_matches` groups by `h.trio` instead of `h.side`; `y = (winning_trio == 1)`; heroes in trio 1 get `+1` and trio 2 get `-1`; the rating gap becomes `trio_1_rating - trio_2_rating`.
-- Add `blue_trio: int | None = None` to the `Match` dataclass at `odds.py:138`, and populate it in `load_matches` from the column Task 8 added to `matches_for_fit`. Without this the next bullet references an undefined name.
-- `odds.py:249`, the intercept column, becomes `1.0 if match.blue_trio is not None else 0.0`. `blue_trio IS NOT NULL` is the single condition for contributing to the intercept - the Part 6 distinction expressed as data rather than as branching logic.
+- `Match.blue_trio` and the trio-shaped `load_matches` already exist - Task 8 added them, because its own suite could not go green otherwise. Confirm they are there before editing.
+- `odds.py:249`, the intercept column, becomes `1.0 if match.blue_trio is not None else 0.0`. **This is the whole of Task 10's production change.** `blue_trio IS NOT NULL` is the single condition for contributing to the intercept - the Part 6 distinction expressed as data rather than as branching logic.
 - Nothing else changes. Hero terms and the rating gap are correct as they stand for a pooled row, because the encoding is antisymmetric.
 
 - [ ] **Step 5: Run to verify it passes**
@@ -2436,6 +2494,7 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 5. **The sidecar must be re-keyed to `comps_key` before `0007` can use it** (Task 3 Step 1). `0006` rewrote every surviving `natural_key`, so the raw sidecar joins to nothing and would silently null the whole pool's draft-relative values. Read the `dropped_without_comps_key` count before proceeding.
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
+12. **The golden baseline is captured in Task 6 Step 0, before ANY schema or `odds.py` change**, and `load_matches` is re-pointed in Task 8 alongside `matches_for_fit` rather than in Task 10. Both are ordering constraints: after the reshape the legacy fit cannot run, and a `matches_for_fit` whose shape has changed breaks positional unpacking immediately.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
 11. **`wire_left_trio` exists only so version-4 pull is byte-compatible, and it is the DRAFT-left trio.** For an uncorrected mirrored row that is the opposite of the trio whose heroes were stored on the left - orienting on the stored side would emit a row whose heroes and ratings disagree. It is the same value `canonicalise_row` computes for the draft-relative group, returned rather than re-derived. Read by `to_v4_wire` alone; nothing in the v5, ingest or fit paths may touch it, and it is deleted when version 4 support is dropped.
 10. **Every recording path must end in `finalise_summary` or `mark_unrepresentable`.** A row left with `canonical_state IS NULL` is read by the Task 7 predicate as "the reshape has not run", so the migration re-runs on every launch.

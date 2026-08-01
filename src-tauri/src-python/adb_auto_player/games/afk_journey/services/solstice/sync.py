@@ -248,15 +248,27 @@ class SyncClient:
     # -- pull --------------------------------------------------------------
 
     def pull(self) -> int:
-        """Fetch pooled matches. Returns how many were newly stored."""
+        """Fetch pooled matches and tombstones. Returns how many were newly stored.
+
+        TWO cursors, moved independently. Marking a match superseded does not
+        advance its `seq`, so supersessions ride their own server sequence; driving
+        them from the match cursor would either re-read page one forever or, once
+        the match cursor ran ahead, permanently miss retirements published behind
+        it.
+        """
         if not self.enabled:
             return 0
 
         since = max(0, self._store.pull_cursor() - PULL_OVERLAP)
-        body = self._request("GET", f"/v1/matches?since={since}&limit={PULL_LIMIT}")
+        supersession_since = self._store.supersession_cursor()
+        body = self._request(
+            "GET",
+            f"/v1/matches?since={since}&limit={PULL_LIMIT}"
+            f"&supersession_since={supersession_since}",
+        )
         if body is None:
-            # Do NOT advance the cursor on failure - it is the only record of
-            # what has been seen.
+            # Do NOT advance either cursor on failure - they are the only record
+            # of what has been seen.
             return 0
 
         stored = 0
@@ -267,9 +279,41 @@ class SyncClient:
             highest = max(highest, int(row.get("seq", 0)))
         self._store.set_pull_cursor(highest)
 
-        if stored:
-            logging.info(f"[SC-35] sync: pulled {stored} new")
+        retired = self._apply_supersessions(body, supersession_since)
+
+        if stored or retired:
+            logging.info(f"[SC-35] sync: pulled {stored} new, retired {retired}")
         return stored
+
+    def _apply_supersessions(self, body: dict, since: int) -> int:
+        """Consume the tombstone page and advance ITS cursor. Never raises.
+
+        Args:
+            body: The decoded pull response.
+            since: The supersession cursor we sent, used as the floor so a server
+                that omits or garbles its own cursor cannot rewind us.
+
+        Returns:
+            How many local rows were retired.
+        """
+        retired = 0
+        for entry in body.get("superseded") or []:
+            key = (entry or {}).get("natural_key")
+            if not key:
+                continue
+            match_id = self._store.match_by_natural_key(key)
+            if match_id is not None and self._store.retire_for_tombstone(match_id):
+                retired += 1
+
+        cursor = body.get("supersession_cursor")
+        if cursor is not None:
+            try:
+                self._store.set_supersession_cursor(max(since, int(cursor)))
+            except (TypeError, ValueError):
+                logging.warning(
+                    f"[SC-38] ignoring unusable supersession cursor {cursor!r}"
+                )
+        return retired
 
     def pull_themes(self) -> tuple[int, int]:
         """Adopt the pool's theme windows, then re-file matches they now cover.

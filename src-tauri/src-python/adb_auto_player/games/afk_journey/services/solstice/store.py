@@ -750,12 +750,18 @@ class MatchStore:
         """(predicted_left, outcome, predicted_source, predicted_locked) for review.
 
         The rows that answer "where was the logic confidently wrong".
+
+        Superseded rows are excluded. One match observed twice is ONE prediction,
+        not two - counting both would inflate every accuracy figure by however many
+        duplicates the capture loop happened to produce, and duplicates are not
+        distributed evenly across the outcomes.
         """
         with self._connect() as con:
             return con.execute(
                 "SELECT predicted_left, outcome, predicted_source, predicted_locked"
                 "  FROM match"
                 " WHERE predicted_left IS NOT NULL AND outcome IN ('left','right')"
+                "   AND superseded_by IS NULL"
             ).fetchall()
 
     def matches_for_fit(self) -> list[tuple]:
@@ -771,6 +777,11 @@ class MatchStore:
         sync - they never earn a natural_key - but a naive COUNT(*) would still count
         them toward the display gate, opening it on evidence that does not exist.
 
+        Superseded rows are excluded. Their hero rows are kept - they are this
+        install's own evidence and the side-integrity audit reads them - but a match
+        seen twice must weigh once in the fit, or every duplicate silently doubles
+        one comp's contribution to the model.
+
         Returns (match_id, outcome, theme_id, event_id, left_player, right_player,
         left_rating, right_rating, side, slug) joined, because a three-a-side check needs
         the heroes anyway. `load_matches` unpacks these positionally, so a new column
@@ -784,6 +795,7 @@ class MatchStore:
                 "       h.side, h.hero_slug"
                 "  FROM match m JOIN match_hero h ON h.match_id = m.id"
                 " WHERE m.outcome IN ('left','right') AND h.hero_slug IS NOT NULL"
+                "   AND m.superseded_by IS NULL"
                 " ORDER BY m.id, h.side, h.slot"
             ).fetchall()
 
@@ -918,20 +930,26 @@ class MatchStore:
         it under the canonical one, and the next pull returns that match under a
         key matching nothing locally - so it is inserted a second time.
 
-        The collision branch is not an edge case. If another contributor already
-        pushed this match and we already pulled it, a synced row is sitting on
-        the canonical key and rewriting ours would violate UNIQUE. Keep OUR row -
-        it is this install's own observation, with its own hero evidence - and
-        drop the synced copy.
+        The collision branch is ORIGIN-AWARE, and that distinction is the whole
+        point of it. A clashing SYNCED row is someone else's copy of a match we
+        also observed ourselves, so it is dropped and ours is kept - it carries
+        this install's own hero evidence. A clashing LOCAL row is never deleted.
+        Under an orientation-invariant `comps_key` two of our own captures of one
+        match land on one canonical key, and deleting either would destroy the
+        frame-confirmed evidence the side-integrity audit reads.
         """
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as con:
             clash = con.execute(
-                "SELECT id FROM match WHERE natural_key=? AND id<>?",
+                "SELECT id, origin FROM match WHERE natural_key=? AND id<>?",
                 (natural_key, local_id),
             ).fetchone()
+            takes_key = True
             if clash is not None:
-                con.execute("DELETE FROM match WHERE id=?", (clash[0],))
+                if str(clash[1]) == "synced":
+                    con.execute("DELETE FROM match WHERE id=?", (clash[0],))
+                else:
+                    takes_key = self._resolve_local_clash(con, local_id, int(clash[0]))
             theme_id = None
             if theme_slug:
                 row = con.execute(
@@ -939,12 +957,107 @@ class MatchStore:
                 ).fetchone()
                 theme_id = row[0] if row else None
             con.execute(
-                "UPDATE match SET natural_key=?, pushed_at=?,"
+                # COALESCE, not a bare `?`: when this row loses the clash it becomes
+                # a member of another occurrence and must stay UNKEYED, while still
+                # being marked pushed so the backlog does not re-send it forever.
+                "UPDATE match SET natural_key=COALESCE(?, natural_key), pushed_at=?,"
                 " theme_id=COALESCE(?, theme_id),"
                 " theme_resolved_by=COALESCE(?, theme_resolved_by)"
                 " WHERE id=?",
-                (natural_key, now, theme_id, theme_resolved_by, local_id),
+                (
+                    natural_key if takes_key else None,
+                    now,
+                    theme_id,
+                    theme_resolved_by,
+                    local_id,
+                ),
             )
+
+    def _supersession_root(self, con: sqlite3.Connection, match_id: int) -> int:
+        """Follow `superseded_by` to the end of the chain.
+
+        Guarded against a cycle rather than trusting there is none. A cycle would
+        make both rows inactive forever - every analysis filter drops them and
+        retirement skips them, so nothing left in the system could break it.
+        """
+        seen = {match_id}
+        current = match_id
+        while True:
+            row = con.execute(
+                "SELECT superseded_by FROM match WHERE id=?", (current,)
+            ).fetchone()
+            if row is None or row[0] is None:
+                return current
+            nxt = int(row[0])
+            if nxt in seen:
+                return current
+            seen.add(nxt)
+            current = nxt
+
+    def _resolve_local_clash(
+        self, con: sqlite3.Connection, local_id: int, clash_id: int
+    ) -> bool:
+        """Settle two LOCAL rows competing for one canonical key.
+
+        Exactly one row may hold the key, and it must be the one that is still
+        active - `natural_key` is UNIQUE here, and a key parked on a superseded row
+        means the surviving occurrence is unrecognisable on the next pull.
+
+        Args:
+            con: The open transaction. Both writes belong to it.
+            local_id: The row currently adopting the server's key.
+            clash_id: The local row already holding it.
+
+        Returns:
+            True when `local_id` may take the key, False when it must stay unkeyed
+            because another row is the root of its occurrence.
+        """
+        root = self._supersession_root(con, clash_id)
+        if root != local_id:
+            # Point at the ROOT, never at the clashing row itself: a link into the
+            # middle of a chain is what review round 1 found could close a cycle.
+            con.execute("UPDATE match SET superseded_by=? WHERE id=?", (root, local_id))
+            return False
+        # We ARE the root and a row below us holds the key. Move it up in this same
+        # transaction - assigning it while the other row still holds it raises.
+        con.execute("UPDATE match SET natural_key=NULL WHERE id=?", (clash_id,))
+        return True
+
+    def retire_for_tombstone(self, match_id: int) -> bool:
+        """Give up a server identity the pool has retired.
+
+        All three push-gate fields are cleared TOGETHER. Clearing `natural_key`
+        alone leaves `pushed_at` set and the row is never re-sent; clearing both but
+        leaving `push_rejected_reason` is the same dead end, because
+        `pushable_matches` requires all three.
+
+        A row already superseded LOCALLY is skipped. It is not the active member of
+        its occurrence - the root is, and the root re-pushes on its behalf - so
+        reopening it would restart the push/retire cycle on every pull.
+
+        A SYNCED row is deleted instead of cleared. It is not our evidence; it is a
+        copy of a match the server has now folded into another, which arrives under
+        the surviving key on this same pull. Keeping it unkeyed would leave a
+        permanent duplicate in the fit with nothing left to dedupe it by.
+
+        Returns:
+            True when the row was retired, False when it was missing or skipped.
+        """
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT origin, superseded_by FROM match WHERE id=?", (match_id,)
+            ).fetchone()
+            if row is None or row[1] is not None:
+                return False
+            if str(row[0]) == "synced":
+                con.execute("DELETE FROM match WHERE id=?", (match_id,))
+                return True
+            con.execute(
+                "UPDATE match SET natural_key=NULL, pushed_at=NULL,"
+                " push_rejected_reason=NULL WHERE id=?",
+                (match_id,),
+            )
+        return True
 
     def mark_push_rejected(self, local_id: int, reason: str) -> None:
         """A row the server refuses is not a failed push - retrying is pointless."""

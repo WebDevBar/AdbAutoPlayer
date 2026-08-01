@@ -66,6 +66,7 @@ def main() -> int:
                COALESCE(t2.name, m.theme, '?') AS theme
         FROM match m LEFT JOIN theme t2 ON t2.id = m.theme_id
         WHERE m.predicted_left IS NOT NULL AND m.outcome IN ('left', 'right')
+          AND m.superseded_by IS NULL
         """
     ).fetchall()
 
@@ -111,6 +112,7 @@ def main() -> int:
                COUNT(*) n, SUM(m.outcome = 'left') L
         FROM match m LEFT JOIN theme t ON t.id = m.theme_id
         WHERE m.outcome IN ('left', 'right')
+          AND m.superseded_by IS NULL
           AND (m.contributor_uuid IS NULL
                OR m.contributor_uuid NOT IN (SELECT instance_uuid FROM install))
         GROUP BY t.name, m.origin, who HAVING n >= 20 ORDER BY t.name, n DESC
@@ -120,11 +122,13 @@ def main() -> int:
 
     loc = con.execute(
         "SELECT COUNT(*) n, SUM(outcome='left') L FROM match "
-        "WHERE theme_id=4 AND origin='local' AND outcome IN ('left','right')"
+        "WHERE theme_id=4 AND origin='local' AND outcome IN ('left','right') "
+        "AND superseded_by IS NULL"
     ).fetchone()
     rem = con.execute(
         "SELECT COUNT(*) n, SUM(outcome='left') L FROM match "
         "WHERE theme_id=4 AND origin='synced' AND outcome IN ('left','right') "
+        "AND superseded_by IS NULL "
         "AND contributor_uuid NOT IN (SELECT instance_uuid FROM install)"
     ).fetchone()
     z, pv = two_prop_z(loc["L"], loc["n"], rem["L"], rem["n"])

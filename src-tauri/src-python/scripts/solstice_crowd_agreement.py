@@ -76,6 +76,7 @@ def load(con: sqlite3.Connection, theme_id: int) -> list[Row]:
         FROM match m JOIN match_odds d ON d.match_id = m.id
         WHERE m.theme_id = ? AND m.predicted_left IS NOT NULL
           AND m.outcome IN ('left','right')
+          AND m.superseded_by IS NULL
           AND d.left_pool IS NOT NULL AND d.right_pool IS NOT NULL
           AND d.left_pool <> d.right_pool AND d.spectators IS NOT NULL
     """

@@ -37,35 +37,44 @@
 --
 -- `tally` is a_wins - b_wins, computed rather than stored, so it can never disagree with
 -- the counts that produced it. Keep BOTH: a tally of +1 from one match and from nine at
--- 5-4 mean entirely different things, and any sane weighting damps by `observations`.
+-- 5-4 mean entirely different things, and any sane weighting damps by `observations`.--
+-- SCHEMA v6: `outcome` and `side` are gone, replaced by `winning_trio` and
+-- `match_hero.trio`. The translation was direct, because this view was ALREADY
+-- orientation-free in spirit - it asked whether the side holding the lexicographically
+-- smaller hero won. `winning_trio = 1` IS "the smaller composition won", so what the
+-- view computed by hand now falls out of the schema.
+
 DROP VIEW IF EXISTS hero_matchup;
+
 CREATE VIEW hero_matchup AS
 WITH complete AS (
-  SELECT m.id, m.event_id, m.theme_id, m.outcome
+  SELECT m.id, m.event_id, m.theme_id, m.winning_trio
     FROM match m
-   WHERE m.outcome IN ('left','right','draw')
-     AND 3 = (SELECT COUNT(*) FROM match_hero h
-               WHERE h.match_id = m.id AND h.side = 'left'  AND h.hero_slug IS NOT NULL)
-     AND 3 = (SELECT COUNT(*) FROM match_hero h
-               WHERE h.match_id = m.id AND h.side = 'right' AND h.hero_slug IS NOT NULL)
+   WHERE m.canonical_state = 'canonical'
+     AND (SELECT COUNT(*) FROM match_hero h
+           WHERE h.match_id = m.id AND h.trio = 1 AND h.hero_slug IS NOT NULL) = 3
+     AND (SELECT COUNT(*) FROM match_hero h
+           WHERE h.match_id = m.id AND h.trio = 2 AND h.hero_slug IS NOT NULL) = 3
 )
 SELECT
   c.event_id,
   c.theme_id,
   MIN(l.hero_slug, r.hero_slug) AS hero_a,
   MAX(l.hero_slug, r.hero_slug) AS hero_b,
-  -- hero_a is the LEFT hero exactly when l.hero_slug < r.hero_slug, so hero_a won when
-  -- that fact agrees with "left won".
-  SUM(c.outcome <> 'draw' AND (c.outcome = 'left') =  (l.hero_slug < r.hero_slug)) AS a_wins,
-  SUM(c.outcome <> 'draw' AND (c.outcome = 'left') <> (l.hero_slug < r.hero_slug)) AS b_wins,
-  SUM(CASE WHEN c.outcome  = 'draw' THEN 0
-           WHEN (c.outcome = 'left') = (l.hero_slug < r.hero_slug) THEN 1
-           ELSE -1 END)                                                            AS tally,
-  SUM(c.outcome = 'draw')                                                          AS draws,
-  SUM(c.outcome <> 'draw')                                                         AS observations
+  -- A draw has no winning_trio, so it counts as an observation and neither a win nor
+  -- a loss - the same treatment the old `outcome = 'draw'` branch gave it.
+  SUM(c.winning_trio IS NOT NULL
+      AND (c.winning_trio = 1) =  (l.hero_slug < r.hero_slug))              AS a_wins,
+  SUM(c.winning_trio IS NOT NULL
+      AND (c.winning_trio = 1) <> (l.hero_slug < r.hero_slug))              AS b_wins,
+  SUM(CASE WHEN c.winning_trio IS NULL THEN 0
+           WHEN (c.winning_trio = 1) = (l.hero_slug < r.hero_slug) THEN 1
+           ELSE -1 END)                                                     AS margin,
+  SUM(c.winning_trio IS NULL)                                              AS draws,
+  SUM(c.winning_trio IS NOT NULL)                                          AS observations
 FROM complete c
-JOIN match_hero l ON l.match_id = c.id AND l.side = 'left'  AND l.hero_slug IS NOT NULL
-JOIN match_hero r ON r.match_id = c.id AND r.side = 'right' AND r.hero_slug IS NOT NULL
+JOIN match_hero l ON l.match_id = c.id AND l.trio = 1 AND l.hero_slug IS NOT NULL
+JOIN match_hero r ON r.match_id = c.id AND r.trio = 2 AND r.hero_slug IS NOT NULL
 -- A mirror pick puts the same hero on both sides. "X vs X" is not a matchup.
 WHERE l.hero_slug <> r.hero_slug
 GROUP BY c.event_id, c.theme_id, hero_a, hero_b;

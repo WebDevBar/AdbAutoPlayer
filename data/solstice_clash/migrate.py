@@ -15,15 +15,23 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import os
 import sqlite3
 import uuid
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# The three pure functions, from the sibling module beside this file. NOT imported from
+# `adb_auto_player` - this script runs standalone from the repo root and is loaded by
+# path outside the package in the shipped build, so the package is not importable here.
+sys.path.insert(0, HERE)
+from canon_rows import canonical_trios, map_side_pair, trio_index_for  # noqa: E402
+
 SCHEMA = os.path.join(HERE, "schema.sql")
 VIEWS = os.path.join(HERE, "views.sql")
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Columns added after a table's original CREATE. schema.sql has them in the CREATE for
 # fresh databases; these entries upgrade databases that predate them.
@@ -43,7 +51,10 @@ ADD_COLUMNS = [
     # is the only evidence that says where the logic is wrong. Without recording it at
     # the time, that question can never be asked - the fitted model changes as data
     # arrives, so it cannot be reconstructed later.
-    ("match", "predicted_left", "REAL"),
+    # `predicted_left` is DELIBERATELY absent. This list exists to upgrade databases
+    # that predate a column, so leaving it here would re-add it EMPTY on the launch
+    # after the reshape drops it - a schema that looks current with the value gone.
+    ("match", "predicted_trio_1", "REAL"),
     ("match", "predicted_source", "TEXT"),
     ("match", "predicted_locked", "INTEGER"),
     ("match", "predicted_at", "TEXT"),
@@ -86,6 +97,20 @@ ADD_COLUMNS = [
     ("match_hero", "stat_shield", "INTEGER"),
     ("match_hero", "power", "INTEGER"),
     ("match_hero", "identified_by", "TEXT"),
+    # Schema v6. Added before the reshape classifies anything, and `canonical_state`
+    # is the one column the "not done yet" predicate depends on.
+    ("match", "winning_trio", "INTEGER"),
+    ("match", "blue_trio", "INTEGER"),
+    ("match", "trio_1_rating", "INTEGER"),
+    ("match", "trio_2_rating", "INTEGER"),
+    ("match", "trio_1_rank", "INTEGER"),
+    ("match", "trio_2_rank", "INTEGER"),
+    ("match", "canonical_state", "TEXT"),
+    ("match_hero", "trio", "INTEGER"),
+    ("match_odds", "trio_1_pool", "INTEGER"),
+    ("match_odds", "trio_2_pool", "INTEGER"),
+    ("match_odds", "trio_1_odds", "REAL"),
+    ("match_odds", "trio_2_odds", "REAL"),
 ]
 
 # Column renames for the 2026-07-27 blue/red -> left/right position rename. Guarded on
@@ -112,26 +137,59 @@ SIDE_TABLES = ("cell_registry", "match_hero", "match_pool", "identification_audi
 DEFAULT_CONFIG = [
     ("icon_source", "game", "decoded from files/data/ui/icon (AST/LZ4/ASTC 6x6)"),
     ("icon_priority", "game,wiki", "game_icon is PRIMARY; wiki_icon is fallback only"),
-    ("gamma", "0.5556", "exponent 1/1.8; best on labelled ADB cells (median 0.9550->0.9718)"),
+    (
+        "gamma",
+        "0.5556",
+        "exponent 1/1.8; best on labelled ADB cells (median 0.9550->0.9718)",
+    ),
     ("astc_block", "6", "every observed file is ASTC 6x6"),
     ("accept_score", "0.70", "minimum top score to accept an identification"),
-    ("accept_margin", "0.10", "minimum margin over runner-up; this catches the real errors"),
-    ("scale_chain", "1.01,0.95,1.08", "locked_pick / draft_locked_pick scale fallback chain"),
+    (
+        "accept_margin",
+        "0.10",
+        "minimum margin over runner-up; this catches the real errors",
+    ),
+    (
+        "scale_chain",
+        "1.01,0.95,1.08",
+        "locked_pick / draft_locked_pick scale fallback chain",
+    ),
     ("scale_draft_card", "1.19,1.10,1.30", "draft_card scale fallback chain"),
-    ("scale_summary_hero", "0.48,0.47,0.49,0.46,0.50",
-     "measured: all six summary cards peak at 0.47-0.48"),
+    (
+        "scale_summary_hero",
+        "0.48,0.47,0.49,0.46,0.50",
+        "measured: all six summary cards peak at 0.47-0.48",
+    ),
 ]
 
 # Screens Mode A reads. crop_* are the screen-level defaults a per-hero transform may
 # override. Summary values are measured; the two spectate screens are seeded without a
 # crop until Task 6 measures them.
 DEFAULT_SCREENS = [
-    ("solstice_summary", "Post-match summary: both comps, winner, per-hero stats",
-     "1080x1920", 26, 18, 30),
-    ("spectate_draft_picks", "Spectate draft: the six pick slots in the top strip",
-     "1080x1920", None, None, None),
-    ("spectate_prematch", "Spectate prematch: six locked cards, three per side",
-     "1080x1920", None, None, None),
+    (
+        "solstice_summary",
+        "Post-match summary: both comps, winner, per-hero stats",
+        "1080x1920",
+        26,
+        18,
+        30,
+    ),
+    (
+        "spectate_draft_picks",
+        "Spectate draft: the six pick slots in the top strip",
+        "1080x1920",
+        None,
+        None,
+        None,
+    ),
+    (
+        "spectate_prematch",
+        "Spectate prematch: six locked cards, three per side",
+        "1080x1920",
+        None,
+        None,
+        None,
+    ),
 ]
 
 # Measured on summary_01.png at 1080x1920. Card centres: x=90, ally y=476/566/656,
@@ -143,24 +201,144 @@ DEFAULT_SCREENS = [
 # with a scale of 0.48, comfortably inside the accept_score/accept_margin gates.
 # Bounds below are centre +-20, tight enough to exclude the frame entirely.
 DEFAULT_SUMMARY_CELLS = [
-    ("solstice_summary", "summary_left_1", "summary_hero", 70, 456, 110, 496, "left", 1),
-    ("solstice_summary", "summary_left_2", "summary_hero", 70, 546, 110, 586, "left", 2),
-    ("solstice_summary", "summary_left_3", "summary_hero", 70, 636, 110, 676, "left", 3),
-    ("solstice_summary", "summary_right_1", "summary_hero", 70, 1103, 110, 1143, "right", 1),
-    ("solstice_summary", "summary_right_2", "summary_hero", 70, 1195, 110, 1235, "right", 2),
-    ("solstice_summary", "summary_right_3", "summary_hero", 70, 1287, 110, 1327, "right", 3),
+    (
+        "solstice_summary",
+        "summary_left_1",
+        "summary_hero",
+        70,
+        456,
+        110,
+        496,
+        "left",
+        1,
+    ),
+    (
+        "solstice_summary",
+        "summary_left_2",
+        "summary_hero",
+        70,
+        546,
+        110,
+        586,
+        "left",
+        2,
+    ),
+    (
+        "solstice_summary",
+        "summary_left_3",
+        "summary_hero",
+        70,
+        636,
+        110,
+        676,
+        "left",
+        3,
+    ),
+    (
+        "solstice_summary",
+        "summary_right_1",
+        "summary_hero",
+        70,
+        1103,
+        110,
+        1143,
+        "right",
+        1,
+    ),
+    (
+        "solstice_summary",
+        "summary_right_2",
+        "summary_hero",
+        70,
+        1195,
+        110,
+        1235,
+        "right",
+        2,
+    ),
+    (
+        "solstice_summary",
+        "summary_right_3",
+        "summary_hero",
+        70,
+        1287,
+        110,
+        1327,
+        "right",
+        3,
+    ),
 ]
 
 # spectate_draft_picks: top strip, from live/match01/raw/000039317.png.
 # Cards span y 400-530; the "Lvl 240" badge covers the bottom ~30px, so the art ends
 # at 495. Centres x: 120/260/400 (blue) and 678/822/965 (red).
 DEFAULT_DRAFT_PICK_CELLS = [
-    ("spectate_draft_picks", "draft_pick_left_1",  "draft_pick",  75, 410, 165, 495, "left", 1),
-    ("spectate_draft_picks", "draft_pick_left_4",  "draft_pick", 215, 410, 305, 495, "left", 4),
-    ("spectate_draft_picks", "draft_pick_left_5",  "draft_pick", 355, 410, 445, 495, "left", 5),
-    ("spectate_draft_picks", "draft_pick_right_2", "draft_pick", 633, 410, 723, 495, "right", 2),
-    ("spectate_draft_picks", "draft_pick_right_3", "draft_pick", 777, 410, 867, 495, "right", 3),
-    ("spectate_draft_picks", "draft_pick_right_6", "draft_pick", 920, 410, 1010, 495, "right", 6),
+    (
+        "spectate_draft_picks",
+        "draft_pick_left_1",
+        "draft_pick",
+        75,
+        410,
+        165,
+        495,
+        "left",
+        1,
+    ),
+    (
+        "spectate_draft_picks",
+        "draft_pick_left_4",
+        "draft_pick",
+        215,
+        410,
+        305,
+        495,
+        "left",
+        4,
+    ),
+    (
+        "spectate_draft_picks",
+        "draft_pick_left_5",
+        "draft_pick",
+        355,
+        410,
+        445,
+        495,
+        "left",
+        5,
+    ),
+    (
+        "spectate_draft_picks",
+        "draft_pick_right_2",
+        "draft_pick",
+        633,
+        410,
+        723,
+        495,
+        "right",
+        2,
+    ),
+    (
+        "spectate_draft_picks",
+        "draft_pick_right_3",
+        "draft_pick",
+        777,
+        410,
+        867,
+        495,
+        "right",
+        3,
+    ),
+    (
+        "spectate_draft_picks",
+        "draft_pick_right_6",
+        "draft_pick",
+        920,
+        410,
+        1010,
+        495,
+        "right",
+        6,
+    ),
 ]
 
 # spectate_prematch: from live/match01/raw/000104002.png. Cards span y 940-1120 with the
@@ -171,19 +349,82 @@ DEFAULT_PREMATCH_CELLS = [
     # the star crown occupies its top ~40px, so a window starting at 965 crops the crown
     # into the template and depresses the score. With 965 only 3 of 6 cells identified
     # (0.53-0.78); with 1005 all 6 do, at 0.94-0.99 with margins 0.36-0.50.
-    ("spectate_prematch", "prematch_left_1",  "prematch_pick",  87, 1005, 177, 1085, "left", 1),
-    ("spectate_prematch", "prematch_left_2",  "prematch_pick", 225, 1005, 315, 1085, "left", 2),
-    ("spectate_prematch", "prematch_left_3",  "prematch_pick", 360, 1005, 450, 1085, "left", 3),
-    ("spectate_prematch", "prematch_right_1", "prematch_pick", 632, 1005, 722, 1085, "right", 1),
-    ("spectate_prematch", "prematch_right_2", "prematch_pick", 765, 1005, 855, 1085, "right", 2),
-    ("spectate_prematch", "prematch_right_3", "prematch_pick", 900, 1005, 990, 1085, "right", 3),
+    (
+        "spectate_prematch",
+        "prematch_left_1",
+        "prematch_pick",
+        87,
+        1005,
+        177,
+        1085,
+        "left",
+        1,
+    ),
+    (
+        "spectate_prematch",
+        "prematch_left_2",
+        "prematch_pick",
+        225,
+        1005,
+        315,
+        1085,
+        "left",
+        2,
+    ),
+    (
+        "spectate_prematch",
+        "prematch_left_3",
+        "prematch_pick",
+        360,
+        1005,
+        450,
+        1085,
+        "left",
+        3,
+    ),
+    (
+        "spectate_prematch",
+        "prematch_right_1",
+        "prematch_pick",
+        632,
+        1005,
+        722,
+        1085,
+        "right",
+        1,
+    ),
+    (
+        "spectate_prematch",
+        "prematch_right_2",
+        "prematch_pick",
+        765,
+        1005,
+        855,
+        1085,
+        "right",
+        2,
+    ),
+    (
+        "spectate_prematch",
+        "prematch_right_3",
+        "prematch_pick",
+        900,
+        1005,
+        990,
+        1085,
+        "right",
+        3,
+    ),
 ]
 
 
 def table_exists(con: sqlite3.Connection, name: str) -> bool:
-    return con.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-    ).fetchone() is not None
+    return (
+        con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
 
 
 def columns(con: sqlite3.Connection, table: str) -> set[str]:
@@ -237,6 +478,12 @@ def _backfill_comps_key(con: sqlite3.Connection) -> int:
     """
     if not table_exists(con, "match") or "comps_key" not in columns(con, "match"):
         return 0
+    # SHAPE-AWARE. The query below reads `match_hero.side` and `m.outcome`, and a
+    # database created fresh from schema.sql v6 has neither - it starts canonical and
+    # has no rows to backfill. Without this check `_apply` raises before the reshape
+    # is even reached, so a brand-new install breaks.
+    if "side" not in columns(con, "match_hero"):
+        return 0
 
     rows = con.execute(
         """
@@ -277,12 +524,382 @@ def _backfill_comps_key(con: sqlite3.Connection) -> int:
     return done
 
 
+def _load_orientation_sidecar() -> dict:
+    """The committed audit verdicts, keyed by comps_key.
+
+    Keyed by comps_key rather than natural_key because the key survives everything:
+    it is orientation-free and outcome-free by construction.
+
+    Returns:
+        {comps_key: verdict}, or {} when the sidecar is not bundled.
+    """
+    path = os.path.join(HERE, "trio-orientation-by-comps-key.json")
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as handle:
+        payload = json.load(handle)
+    out = {}
+    for key, entries in (payload.get("verdicts") or {}).items():
+        # One entry per key in practice - the generator reported 0 keys with multiple
+        # occurrences - so a single verdict is unambiguous. More than one and we
+        # decline rather than pick: ambiguity is exactly where a wrong guess binds one
+        # match's ratings to another's trios.
+        if len(entries) == 1:
+            out[key] = entries[0]["verdict"]
+    return out
+
+
+def _reshape_to_trios(con: sqlite3.Connection) -> int:
+    """Repair the mirrored rows AND reshape onto trios, in ONE step.
+
+    These cannot be sequenced by asking. `_ensure_schema` runs on every launch, so the
+    contributor's build reshapes the moment it starts - and a reshape that ran first
+    would derive `blue_trio` from a legacy `left` that is WRONG for exactly the 76 rows
+    the audit identified, irreversibly. So the migration consumes the audit itself.
+
+    The rule, which review got wrong twice:
+
+    - The WINNER needs no verdict. Heroes and outcome are read from the same panel pair
+      in the same pass, so "the trio in this panel won" survives a swap intact.
+    - Only `blue_trio` and the DRAFT-relative group - ratings, ranks, prediction, odds,
+      read from the header and the draft - need one, and they invert together.
+    - No verdict means NULL. We do not guess: 8% of audited rows were mirrored.
+
+    Args:
+        con: Open connection, mid-migration.
+
+    Returns:
+        How many rows were classified.
+    """
+    if not table_exists(con, "match") or "canonical_state" not in columns(con, "match"):
+        return 0
+    # THE PREDICATE, expressed purely in terms of what SURVIVES the reshape. Both
+    # earlier attempts read columns the migration removes: one looped forever on the
+    # five-hero row, the other failed on the second launch with a missing column.
+    pending = con.execute(
+        "SELECT COUNT(*) FROM match WHERE canonical_state IS NULL"
+    ).fetchone()[0]
+    if not pending:
+        return 0
+
+    legacy = "side" in columns(con, "match_hero")
+    if not legacy:
+        # A fresh database is already canonical and has no legacy rows. Classify
+        # whatever is there so the predicate settles, and stop.
+        con.execute(
+            "UPDATE match SET canonical_state='canonical' WHERE canonical_state IS NULL"
+        )
+        return 0
+
+    verdicts = _load_orientation_sidecar()
+
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS legacy_side_snapshot(
+          match_id       INTEGER PRIMARY KEY,
+          sides_json     TEXT,
+          outcome        TEXT,
+          predicted_left REAL,
+          left_rating    INTEGER, right_rating INTEGER,
+          left_rank      INTEGER, right_rank   INTEGER,
+          odds_json      TEXT,
+          captured_at    TEXT
+        )
+        """
+    )
+
+    match_cols = columns(con, "match")
+    odds_cols = columns(con, "match_odds") if table_exists(con, "match_odds") else set()
+
+    def col(name, default="NULL"):
+        # Guarded per column: a database old enough to predate `predicted_left`
+        # exists - the collaborator's did, and it failed with "no such column".
+        return f"m.{name}" if name in match_cols else default
+
+    rows = con.execute(
+        f"""
+        SELECT m.id, m.comps_key, {col("outcome")}, {col("predicted_left")},
+               {col("left_rating")}, {col("right_rating")},
+               {col("left_rank")}, {col("right_rank")}
+          FROM match m
+        """
+    ).fetchall()
+
+    heroes: dict[int, list[tuple]] = {}
+    for match_id, side, slot, slug in con.execute(
+        "SELECT match_id, side, slot, hero_slug FROM match_hero"
+    ):
+        heroes.setdefault(match_id, []).append((side, slot, slug))
+
+    odds: dict[int, list[dict]] = {}
+    if {"left_pool", "right_pool"} <= odds_cols:
+        for row in con.execute(
+            "SELECT match_id, sampled_at, left_pool, right_pool, left_odds, right_odds"
+            "  FROM match_odds"
+        ):
+            odds.setdefault(row[0], []).append(
+                {
+                    "sampled_at": row[1],
+                    "left_pool": row[2],
+                    "right_pool": row[3],
+                    "left_odds": row[4],
+                    "right_odds": row[5],
+                }
+            )
+
+    classified = 0
+    for (
+        match_id,
+        comps,
+        outcome,
+        predicted_left,
+        left_rating,
+        right_rating,
+        left_rank,
+        right_rank,
+    ) in rows:
+        mine = heroes.get(match_id, [])
+        con.execute(
+            "INSERT OR REPLACE INTO legacy_side_snapshot(match_id, sides_json, outcome,"
+            " predicted_left, left_rating, right_rating, left_rank, right_rank,"
+            " odds_json, captured_at)"
+            " VALUES(?,?,?,?,?,?,?,?,?,(SELECT captured_at FROM match WHERE id=?))",
+            (
+                match_id,
+                json.dumps(
+                    [{"side": s, "slot": sl, "hero_slug": g} for s, sl, g in mine]
+                ),
+                outcome,
+                predicted_left,
+                left_rating,
+                right_rating,
+                left_rank,
+                right_rank,
+                json.dumps(odds.get(match_id, [])),
+                match_id,
+            ),
+        )
+
+        by_side = {"left": [], "right": []}
+        for side, _slot, slug in mine:
+            if slug and side in by_side:
+                by_side[side].append(slug)
+
+        try:
+            trio_1, _trio_2 = canonical_trios(by_side)
+        except ValueError:
+            # Cannot form two complete trios. TERMINAL, not pending - which is what
+            # stops the predicate looping on it forever.
+            con.execute(
+                "UPDATE match SET canonical_state='unrepresentable' WHERE id=?",
+                (match_id,),
+            )
+            classified += 1
+            continue
+
+        left_is = trio_index_for("left", trio_1, by_side)
+        right_is = 2 if left_is == 1 else 1
+
+        winning_trio = None
+        if outcome == "left":
+            winning_trio = left_is
+        elif outcome == "right":
+            winning_trio = right_is
+
+        verdict = verdicts.get(comps)
+        if verdict == "mirrored":
+            blue_trio = right_is
+        elif verdict == "agree":
+            blue_trio = left_is
+        else:
+            blue_trio = None
+
+        if blue_trio is None:
+            t1_rating = t2_rating = t1_rank = t2_rank = predicted = None
+        else:
+            t1_rating, t2_rating = map_side_pair(left_rating, right_rating, blue_trio)
+            t1_rank, t2_rank = map_side_pair(left_rank, right_rank, blue_trio)
+            predicted = predicted_left
+            if predicted is not None and blue_trio == 2:
+                predicted = 1.0 - predicted
+
+        con.execute(
+            "UPDATE match SET winning_trio=?, blue_trio=?, trio_1_rating=?,"
+            " trio_2_rating=?, trio_1_rank=?, trio_2_rank=?, predicted_trio_1=?,"
+            " canonical_state='canonical' WHERE id=?",
+            (
+                winning_trio,
+                blue_trio,
+                t1_rating,
+                t2_rating,
+                t1_rank,
+                t2_rank,
+                predicted,
+                match_id,
+            ),
+        )
+        for side, slot, slug in mine:
+            con.execute(
+                "UPDATE match_hero SET trio=? WHERE match_id=? AND side=? AND slot=?",
+                (1 if slug in trio_1 else 2, match_id, side, slot),
+            )
+        if blue_trio is not None:
+            for sample in odds.get(match_id, []):
+                p1, p2 = map_side_pair(
+                    sample["left_pool"], sample["right_pool"], blue_trio
+                )
+                o1, o2 = map_side_pair(
+                    sample["left_odds"], sample["right_odds"], blue_trio
+                )
+                con.execute(
+                    "UPDATE match_odds SET trio_1_pool=?, trio_2_pool=?,"
+                    " trio_1_odds=?, trio_2_odds=? WHERE match_id=? AND sampled_at=?",
+                    (p1, p2, o1, o2, match_id, sample["sampled_at"]),
+                )
+        classified += 1
+
+    left_null = con.execute(
+        "SELECT COUNT(*) FROM match WHERE canonical_state IS NULL"
+    ).fetchone()[0]
+    if left_null:
+        raise RuntimeError(
+            f"{left_null} match rows left unclassified; a partially reshaped database "
+            "is worse than an unmigrated one"
+        )
+
+    bad = con.execute(
+        """
+        SELECT COUNT(*) FROM (
+          SELECT match_id,
+                 MIN(CASE WHEN trio = 1 THEN hero_slug END) AS a,
+                 MIN(CASE WHEN trio = 2 THEN hero_slug END) AS b
+            FROM match_hero WHERE hero_slug IS NOT NULL GROUP BY match_id
+        ) t WHERE t.a IS NOT NULL AND t.b IS NOT NULL AND t.a > t.b
+        """
+    ).fetchone()[0]
+    if bad:
+        raise RuntimeError(f"{bad} matches are not canonically ordered")
+
+    _drop_legacy_columns(con)
+    return classified
+
+
+def _drop_legacy_columns(con: sqlite3.Connection) -> None:
+    """Remove the columns the trio shape replaced.
+
+    SQLite 3.35+ supports ALTER TABLE DROP COLUMN, which is what the bundled runtime
+    has. Each drop is guarded, so a re-run is a no-op rather than an error.
+
+    Args:
+        con: Open connection, mid-migration.
+    """
+    # Indexes AND VIEWS that reference a dropped column BLOCK the drop - SQLite
+    # validates every remaining definition afterwards and aborts on the first that no
+    # longer resolves. `hero_matchup` is rebuilt from views.sql at the end of _apply,
+    # against the finished shape.
+    for index in ("idx_match_outcome", "idx_match_hero_side"):
+        con.execute(f"DROP INDEX IF EXISTS {index}")
+    con.execute("DROP VIEW IF EXISTS hero_matchup")
+
+    _rebuild_match_hero(con)
+
+    for table, names in (
+        (
+            "match",
+            (
+                "outcome",
+                "predicted_left",
+                "left_rating",
+                "right_rating",
+                "left_rank",
+                "right_rank",
+            ),
+        ),
+        # match_hero is NOT here - `side` is part of UNIQUE(match_id, side, slot), and
+        # SQLite refuses to drop a constrained column. It gets a full table rebuild.
+        ("match_odds", ("left_pool", "right_pool", "left_odds", "right_odds")),
+    ):
+        if not table_exists(con, table):
+            continue
+        present = columns(con, table)
+        for name in names:
+            if name in present:
+                con.execute(f"ALTER TABLE {table} DROP COLUMN {name}")
+
+
+def _rebuild_match_hero(con: sqlite3.Connection) -> None:
+    """Rewrite match_hero into the trio shape.
+
+    A rebuild rather than a DROP COLUMN, because `side` is part of
+    UNIQUE(match_id, side, slot) and SQLite refuses to drop a constrained column. The
+    new table carries the full constraint set: trio and slot domains, one slot per
+    trio, and one appearance per hero per MATCH - the last being what stops two
+    identical trios, which would make both pointers meaningless.
+
+    Args:
+        con: Open connection, mid-migration.
+    """
+    if "side" not in columns(con, "match_hero"):
+        return
+    con.execute(
+        """
+        CREATE TABLE match_hero_new(
+          id            INTEGER PRIMARY KEY,
+          match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+          trio          INTEGER NOT NULL CHECK(trio IN (1,2)),
+          slot          INTEGER NOT NULL CHECK(slot IN (1,2,3)),
+          hero_slug     TEXT REFERENCES hero(slug),
+          art_ref       TEXT,
+          status        TEXT NOT NULL,
+          score         REAL,
+          margin        REAL,
+          cell_type       TEXT,
+          cell_name       TEXT,
+          candidate_scope TEXT,
+          pool_miss       INTEGER,
+          runner_up_slug  TEXT,
+          runner_up_score REAL,
+          crop_path       TEXT,
+          frame_path      TEXT,
+          stat_sword      INTEGER,
+          stat_heart      INTEGER,
+          stat_shield     INTEGER,
+          power           INTEGER,
+          identified_by   TEXT,
+          UNIQUE(match_id, trio, slot),
+          UNIQUE(match_id, hero_slug)
+        )
+        """
+    )
+    # Rows the reshape could not classify have no trio and cannot enter the canonical
+    # shape. Their evidence is already in legacy_side_snapshot.
+    con.execute(
+        """
+        INSERT INTO match_hero_new(id, match_id, trio, slot, hero_slug, art_ref, status,
+          score, margin, cell_type, cell_name, candidate_scope, pool_miss,
+          runner_up_slug, runner_up_score, crop_path, frame_path, stat_sword,
+          stat_heart, stat_shield, power, identified_by)
+        SELECT id, match_id, trio, slot, hero_slug, art_ref, status,
+               score, margin, cell_type, cell_name, candidate_scope, pool_miss,
+               runner_up_slug, runner_up_score, crop_path, frame_path, stat_sword,
+               stat_heart, stat_shield, power, identified_by
+          FROM match_hero
+         WHERE trio IN (1,2) AND slot IN (1,2,3)
+        """
+    )
+    con.execute("DROP TABLE match_hero")
+    con.execute("ALTER TABLE match_hero_new RENAME TO match_hero")
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id)"
+    )
+
+
 def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
-    con.executescript(open(SCHEMA).read())          # CREATE IF NOT EXISTS throughout
-    # Derived views live in their own file because the CLIENT executes them too - a
-    # shipped build never runs this script. DROP-then-CREATE, so re-running is free
-    # and a changed definition reaches a database that already has the old one.
-    con.executescript(open(VIEWS).read())
+    con.executescript(open(SCHEMA).read())  # CREATE IF NOT EXISTS throughout
+    # views.sql is executed at the END of this function, AFTER _reshape_to_trios.
+    # `hero_matchup` reads `winning_trio` and `match_hero.trio`, which do not exist on
+    # a database that still has `side` - so building it here would abort the whole
+    # script on every legacy database, before the reshape that creates those columns.
 
     added = []
     for table, col, decl in ADD_COLUMNS:
@@ -329,6 +946,20 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         con.execute("UPDATE match SET outcome='right' WHERE outcome='red'")
 
     _backfill_comps_key(con)
+    _reshape_to_trios(con)
+
+    # AFTER the reshape, for the same reason idx_match_pushable is created here: the
+    # columns do not exist until it has run.
+    if "trio" in columns(con, "match_hero"):
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_match_hero_trio"
+            " ON match_hero(match_id, trio, hero_slug)"
+        )
+    if "winning_trio" in columns(con, "match"):
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_match_winning_trio ON match(winning_trio)"
+        )
+    con.executescript(open(VIEWS).read())
 
     if table_exists(con, "cell_registry"):
         # REPLACE is a no-op on rows without the substring, so this is safe to run on
@@ -341,7 +972,9 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         )
 
     for cells in (
-        DEFAULT_SUMMARY_CELLS, DEFAULT_DRAFT_PICK_CELLS, DEFAULT_PREMATCH_CELLS,
+        DEFAULT_SUMMARY_CELLS,
+        DEFAULT_DRAFT_PICK_CELLS,
+        DEFAULT_PREMATCH_CELLS,
     ):
         for screen, name, cell_type, x0, y0, x1, y1, side, slot in cells:
             con.execute(
@@ -370,9 +1003,7 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
             ("sync_cursor", "pull_cursor"),
         ):
             if old_col in install_cols and new_col not in install_cols:
-                con.execute(
-                    f"ALTER TABLE install RENAME COLUMN {old_col} TO {new_col}"
-                )
+                con.execute(f"ALTER TABLE install RENAME COLUMN {old_col} TO {new_col}")
                 renamed.append(f"install.{old_col}->{new_col}")
 
     # Created HERE, not in schema.sql: it references pushed_at, and schema.sql is
@@ -398,8 +1029,10 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     # to each other, with no coordination and no central issuer.
     con.execute(
         "INSERT OR IGNORE INTO install(id,instance_uuid,created_at) VALUES(1,?,?)",
-        (str(uuid.uuid4()), datetime.datetime.now(datetime.UTC).isoformat(
-            timespec="seconds")),
+        (
+            str(uuid.uuid4()),
+            datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+        ),
     )
 
     # ---------------------------------------------------------------------
@@ -433,20 +1066,25 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     # it would have resolved to Unknown / Default.
     themes = [
         # slug,               name,                starts_at, ends_at,    default
-        ("unknown",           "Unknown / Default", None,      None,       1),
-        ("tranquil-grounds",  "Tranquil Grounds",  None,      None,       0),
-        ("fierce-duel",       "Fierce Duel",       None,      None,       0),
+        ("unknown", "Unknown / Default", None, None, 1),
+        ("tranquil-grounds", "Tranquil Grounds", None, None, 0),
+        ("fierce-duel", "Fierce Duel", None, None, 0),
         # Rotates 02:00 Europe/Skopje on 2026-07-29, which is exactly midnight UTC -
         # and therefore also an hour-bucket boundary, so no match straddles it.
-        ("converging-paths",  "Converging Paths",  None,      "2026-07-29T00:00:00Z", 0),
+        ("converging-paths", "Converging Paths", None, "2026-07-29T00:00:00Z", 0),
         # Both boundaries confirmed on the in-game Themes screen 2026-07-29 00:25 UTC:
         # Flourishing Wilds shown as Current, Tactical Grounds as "Starts in 2d 23h",
         # which lands on 2026-08-01 midnight UTC - 02:00 Europe/Skopje, the same wall
         # clock every rotation has used, and an hour-bucket boundary so no match
         # straddles it. A three-day cadence, matching Converging Paths.
-        ("flourishing-wilds", "Flourishing Wilds", "2026-07-29T00:00:00Z",
-         "2026-08-01T00:00:00Z", 0),
-        ("tactical-grounds",  "Tactical Grounds",  "2026-08-01T00:00:00Z", None, 0),
+        (
+            "flourishing-wilds",
+            "Flourishing Wilds",
+            "2026-07-29T00:00:00Z",
+            "2026-08-01T00:00:00Z",
+            0,
+        ),
+        ("tactical-grounds", "Tactical Grounds", "2026-08-01T00:00:00Z", None, 0),
         # The operator expects the final theme of the event to run two days rather than
         # three. That is inference from the event end date, not an observed boundary, so
         # it is written here and NOT in the table: a guessed window would file matches
@@ -476,9 +1114,7 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
 
     # Backfill matches recorded before the tables existed. Matched on the raw OCR
     # name, which is all those rows have; from here on theme_id is set at capture.
-    con.execute(
-        "UPDATE match SET event_id=? WHERE event_id IS NULL", (event_id,)
-    )
+    con.execute("UPDATE match SET event_id=? WHERE event_id IS NULL", (event_id,))
     con.execute(
         "UPDATE match SET theme_id=("
         "  SELECT t.id FROM theme t"
@@ -518,8 +1154,16 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
     print(f"  columns added: {added or 'none'}")
     print(f"  columns renamed: {renamed or 'none'}")
     print(f"  config rows inserted: {inserted}")
-    for t in ("hero", "hero_alias", "hero_skin", "hero_skill", "solstice_roster",
-              "cell_registry", "art_transform", "library_config"):
+    for t in (
+        "hero",
+        "hero_alias",
+        "hero_skin",
+        "hero_skill",
+        "solstice_roster",
+        "cell_registry",
+        "art_transform",
+        "library_config",
+    ):
         n = con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
         print(f"  {t:16s} {n:>5} rows")
     return summary

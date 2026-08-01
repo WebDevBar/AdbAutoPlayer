@@ -344,14 +344,29 @@ class MatchStore:
             # five-hero read, cannot make this return False on every startup.
             unkeyed = con.execute(
                 "SELECT 1 FROM match m WHERE m.comps_key IS NULL"
-                " AND m.outcome IN ('left','right')"
+                " AND m.winning_trio IS NOT NULL"
                 " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
-                "      AND side='left' AND hero_slug IS NOT NULL) = 3"
+                "      AND trio=1 AND hero_slug IS NOT NULL) = 3"
                 " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
-                "      AND side='right' AND hero_slug IS NOT NULL) = 3"
+                "      AND trio=2 AND hero_slug IS NOT NULL) = 3"
                 " LIMIT 1"
             ).fetchone()
             if unkeyed is not None:
+                return False
+
+            # THE RESHAPE PREDICATE, and it reads nothing but what SURVIVES the
+            # reshape. Both earlier attempts were phrased in terms of the dropped
+            # columns: one looped forever on the five-hero row, the other raised
+            # `no such column` on the second launch - which the bare `except
+            # sqlite3.Error` below would have swallowed, returning False on EVERY
+            # launch and re-running the migration forever.
+            match_columns = {r[1] for r in con.execute("PRAGMA table_info(match)")}
+            if "canonical_state" not in match_columns:
+                return False
+            pending = con.execute(
+                "SELECT 1 FROM match WHERE canonical_state IS NULL LIMIT 1"
+            ).fetchone()
+            if pending is not None:
                 return False
             return True
         except sqlite3.Error:

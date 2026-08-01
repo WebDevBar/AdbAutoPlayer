@@ -1,0 +1,5502 @@
+{
+ "dropped_without_comps_key": 13,
+ "keys_with_multiple_occurrences": 0,
+ "verdicts": {
+  "sha256:9ead9582fab64973bd9313d087cc0259530fed47bf8721586e3f8b475b438c49": [
+   {
+    "captured_at": "2026-07-29T00:20:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:967676447f640c6237a3dcad930ad7002fb8f28b60138c295863e527fd044464": [
+   {
+    "captured_at": "2026-07-29T00:23:41+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:3321d68d886984fe96ddb38971d78fdf49902687f790c37d1aeb7e58a3bb295f": [
+   {
+    "captured_at": "2026-07-29T01:49:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ca0929dfeae0a83df8931d7d52e23ce96ca43929c7de4cd40a858cbc7145d40a": [
+   {
+    "captured_at": "2026-07-29T01:51:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e89981d41bb902c864b39e3c9c07e505c2e28f24ac0df8759c3a29f5b2587997": [
+   {
+    "captured_at": "2026-07-29T01:54:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2ecc6884fd6bdf1263ff8ea4b677993db9a3d187f609ae4de8e8e5003dd90be0": [
+   {
+    "captured_at": "2026-07-29T01:57:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5355f2a91f83ad651e9c5f867eaa1d9eaedb759d03710748eed7e2bd495c476a": [
+   {
+    "captured_at": "2026-07-29T02:00:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:45c2785d5581f639efd3458822e03cec365afc61e76b00a4046f6abbeee4e4f8": [
+   {
+    "captured_at": "2026-07-29T02:03:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c522bde6dfb15ef8184b6a9ac369c2d1bbb017939de3312f637a921b56f9a393": [
+   {
+    "captured_at": "2026-07-29T02:07:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f982f7b17d933510d1ed0b695d612feac739b56f44e0c53bf4d17b64ab8c7fed": [
+   {
+    "captured_at": "2026-07-29T02:10:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5feeac19dc241eabf65e6064b69898ab06c247cb9343db9c6df7368c456cfb8a": [
+   {
+    "captured_at": "2026-07-29T02:15:47+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:7e92b4c23257708bd9ed8f1ed7efd244f607b2792128fec15e7a76a74775f15e": [
+   {
+    "captured_at": "2026-07-29T02:17:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:054169823df2ad364a3d3bcf99a2a7a4333a82eaf607e9d2065e497bd0216df3": [
+   {
+    "captured_at": "2026-07-29T02:20:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:09681ea7a3e2f0dcd4731a7333e9ff312d58a0c178d72bff7d2ef75cd2b1dc3c": [
+   {
+    "captured_at": "2026-07-29T02:23:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e08dccc5702f48568427853395efcb1d8c6875e678e8fdb48bedd9619bd1f21e": [
+   {
+    "captured_at": "2026-07-29T02:31:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0e0427065cf99b7699884a38f5c66e11e6fb9def20f3a83029ed4a24fa4ef60a": [
+   {
+    "captured_at": "2026-07-29T02:34:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6e0ec5826325778ddbffff80a14431727e7fe611488b1ff2bf249543ec34affa": [
+   {
+    "captured_at": "2026-07-29T02:36:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c4c113d2fda75c775ca7f6f340710eeb09f2e0347037b3d2766f5a2db718cd40": [
+   {
+    "captured_at": "2026-07-29T02:38:54+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:72da38828ee16c3fb2cbd7d3363f04d362fd7e4dd035ddd4e12674d9b08544eb": [
+   {
+    "captured_at": "2026-07-29T02:42:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0e18ae94a8452e40ea5bb7027bddbbc61849f0b9e40aa2668dd4970e68e7df07": [
+   {
+    "captured_at": "2026-07-29T02:45:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f52e92b51df6d8d9db53a60867c6dc0699b75f6e7b39a1a2e4c4ec9aeba7f919": [
+   {
+    "captured_at": "2026-07-29T02:49:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d8a0227654a7788b313726d582c438c71c7c12f050cdb42d11ccb8c1564a2531": [
+   {
+    "captured_at": "2026-07-29T02:52:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:77f5b26843d813f86a3237e76efc878d9e4891a3dd7d9d68e91a6bbfcba0e6c8": [
+   {
+    "captured_at": "2026-07-29T02:55:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:058af79b1611905f2a35710e3dfef22a460fffdd8a6a000df24d34310567a2a1": [
+   {
+    "captured_at": "2026-07-29T02:58:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:488cea105aa87a5ec44ec93acd15d944fcc0986248f6a31da39e1f21f0453d6e": [
+   {
+    "captured_at": "2026-07-29T03:00:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f3710b4cd27a1bf0aa43e4a433a692817ca85b500caac78989f16c671a2fba90": [
+   {
+    "captured_at": "2026-07-29T03:04:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:14c820bfe5a2de5f6ac7a7101e8d3de3fe0fac12866722b1c4804a267cfe4074": [
+   {
+    "captured_at": "2026-07-29T03:07:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e14bbe1312d03323912a9a380a75408441e638de1e140b2728272b333c269532": [
+   {
+    "captured_at": "2026-07-29T03:10:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f241451d6ca56d7a34539021fb7a7ecf5fb4f14623a9122548fc39493c766761": [
+   {
+    "captured_at": "2026-07-29T03:13:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:22fa388149dcbf765aa01e557ea6419a8fd5ad8f90da19b2233aa2998e0da352": [
+   {
+    "captured_at": "2026-07-29T03:15:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:26910a8b098c0f764455fdcbdf162cec0d119ed8c064ede604a97db32ba7c424": [
+   {
+    "captured_at": "2026-07-29T03:18:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d43d31544412202229aa3e69d10bd23811c8f0fe861bad66a56200df4131a5d9": [
+   {
+    "captured_at": "2026-07-29T03:21:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:28f2a6effc560221dbc2202ab54d8460e3c05d7c3d13d5a2971a40a07031ae46": [
+   {
+    "captured_at": "2026-07-29T03:25:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:65c3c49f6430bc57d5eabbc10159400a63732e7277136fa15855e2957ef3bdbd": [
+   {
+    "captured_at": "2026-07-29T03:31:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2b2a184fd5ed9596b3d7b9d67e734ed7c74948a4c471ee018cf1379722b1f57f": [
+   {
+    "captured_at": "2026-07-29T03:33:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:593ce2a171f0aeaeceafc0e36b97ff2b1b3c0976fa0b7558a6ca2d1470fc776a": [
+   {
+    "captured_at": "2026-07-29T03:38:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:243d231ba90a2136736ef25b8f38b07cfac4e59a250f67b13391a03a0b5fe97e": [
+   {
+    "captured_at": "2026-07-29T03:41:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6b96bc1eebbca6d8b6f979c5756ebfaf1010407791e2a42fe2dd2aef2e6e43ea": [
+   {
+    "captured_at": "2026-07-29T03:44:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ba49e0c2226fc2c7fe12c3df1cf838dc74d5c38cd48275ddf80839e7fee0b4ab": [
+   {
+    "captured_at": "2026-07-29T03:46:24+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:dd514c7702c63f6b8dc64c2cbc9595c3d6ae3995dc97e0e3113a5d5b32e71537": [
+   {
+    "captured_at": "2026-07-29T03:48:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5c6ebb6f063ef96d6be006794fa41ed235ffd4ab5fbfc5d04abde226333da481": [
+   {
+    "captured_at": "2026-07-29T03:51:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d48d089e8d75f6232a407c90751da692eee9345cb8dd6c92ef06f934952c80dc": [
+   {
+    "captured_at": "2026-07-29T03:54:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cf0474301d36648f695e7da07741f690b2a1d3ea224473dd33de8e04af60afbc": [
+   {
+    "captured_at": "2026-07-29T03:56:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:19e4081b4b24db503098d7a727970772aa0b47d956c2f3fb4d91a85653ce36ba": [
+   {
+    "captured_at": "2026-07-29T03:59:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4a584706e09b238466032893ef17644f874901489cd8350220c3534f65b23239": [
+   {
+    "captured_at": "2026-07-29T04:02:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:baf16312185b8700c0cda3f47f35d8ba260297e213bc4fe92972882b7569584d": [
+   {
+    "captured_at": "2026-07-29T04:05:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e35f1940e33edd46108f5ba8ce86db51522241b7f67997ffd1fb0a58cb3345ba": [
+   {
+    "captured_at": "2026-07-29T04:08:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bab1ec44f09a308fcf83edeff01da40ee390949ab193393102fea64440c9ecd5": [
+   {
+    "captured_at": "2026-07-29T04:11:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:32f35c9061b5328d830a2f45da930f0472004893833c1580732a6ec13683b648": [
+   {
+    "captured_at": "2026-07-29T04:14:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:75b42d2d00dd05585ed72e95e700dd32ac25d300cf1333ec42645812a557bb10": [
+   {
+    "captured_at": "2026-07-29T04:16:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a1a35f8fa15bea568cd544784c4c9935c25610628819b9a083f28ef2d561a6ec": [
+   {
+    "captured_at": "2026-07-29T04:19:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2fffb812c7a4bea30fd37ca78c3b7a190ab400324f8da502c7318bbe8c9f01a2": [
+   {
+    "captured_at": "2026-07-29T04:22:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bdc3e5e2b9b3f0682ef7173c4fb3dbf0cf216446c21b4445f9a91e9dffd532bd": [
+   {
+    "captured_at": "2026-07-29T04:26:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e63d6e388bc74f8d4ae94883f2b958752e58188fc7a57d6f40a79f5f12a2a336": [
+   {
+    "captured_at": "2026-07-29T04:28:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0c5b17c4b08e92755fed3e6668c6457fc3780e08b39aef4e6ad6e1474ffb698d": [
+   {
+    "captured_at": "2026-07-29T04:35:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:edd4da72e0c7e5a86dee3320c1de86e7499614cee8577123674cddcf950ef5c3": [
+   {
+    "captured_at": "2026-07-29T04:37:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a187858592f6bb716a19009660b65135997f7242e32414296974a16eb3dbdfe2": [
+   {
+    "captured_at": "2026-07-29T04:41:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:270dd306af384564aad69eb9df0f1349f945868d3cc6a80495edae63792ef72b": [
+   {
+    "captured_at": "2026-07-29T04:48:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5c80adf28f3db4d66e30f27ab4b04400340c8cc371ab433de986c8e356395036": [
+   {
+    "captured_at": "2026-07-29T04:51:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:78275882a5cea1c92bb5e29977e7b23f92b642cc630fd37350e6fe66d178a2e0": [
+   {
+    "captured_at": "2026-07-29T05:02:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8ce9d63443d41f5ffbd68f931e8cb09e8964a07230ae4f81dca6833d52f6d869": [
+   {
+    "captured_at": "2026-07-29T05:05:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5310339e9a2260b247f432a2703845d8cf29e5b3a764b81b9614b4f5fae1a3b2": [
+   {
+    "captured_at": "2026-07-29T05:08:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d2446b8dd98413319f1e8d4287d39f6d32435d557fa27c63823c778f7ed1a303": [
+   {
+    "captured_at": "2026-07-29T05:11:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:73470e2674fd89c06133f03d3ff7887d9fd45031200f1f9f2f18d5def6f5a752": [
+   {
+    "captured_at": "2026-07-29T05:16:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0686ba263a0a515f7208972ccb727b47fd515d627b5aa6c657a0d12b360060a2": [
+   {
+    "captured_at": "2026-07-29T05:18:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7651db37a8b888f152d96fb9ab12e87bfbebdf6814c3b26231082b54dde4cff7": [
+   {
+    "captured_at": "2026-07-29T05:24:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:027808be4bf0fcaa257e43c141c3c57e6fa38eff1fbd86bc09de41662721816f": [
+   {
+    "captured_at": "2026-07-29T05:27:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:52b71c4394457747c3915ba82ff0a6fc2d8f555206a32fadbf0bd45a322a729a": [
+   {
+    "captured_at": "2026-07-29T05:32:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cc628dfbf38d8c136e688fa6a90cbe43c58191c3471c80e929069ba37974e707": [
+   {
+    "captured_at": "2026-07-29T05:37:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2ce0d5e13298552470f0728e83d850af060c59e207291d017b44434cd34e1915": [
+   {
+    "captured_at": "2026-07-29T14:26:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9993529edef390d190d4e856e0553c5de07c9852abbed08cb4df4896e96c8a84": [
+   {
+    "captured_at": "2026-07-29T14:29:22+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:2720754b0b22efc8f5cb8ab732e95dd00bc21820f962e03dfe2c5c1c3b765e16": [
+   {
+    "captured_at": "2026-07-29T14:31:59+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:10d5fff4fb8b220eebe16ccb61bdd889c84ddf9c3266a3a1063d81d83edd1efa": [
+   {
+    "captured_at": "2026-07-29T14:36:03+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:7f3fee98b157e875beba6eb91e92bb1c85846703b3eb7cd6c6187d41565a05f6": [
+   {
+    "captured_at": "2026-07-29T14:38:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fe2090079e861ca4462cfa62a46c371a69d1c160020673d196adf81d0ae1e9cd": [
+   {
+    "captured_at": "2026-07-29T14:41:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fe246657c4ecf72e09cfe20e2762970c13af7b6adf8cd2a14ea7ad49069aed91": [
+   {
+    "captured_at": "2026-07-29T14:43:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3ea19708400e6d422d384e277a7f3ed7a3f7bc0738f0f73773b538e2711dd8b0": [
+   {
+    "captured_at": "2026-07-29T14:45:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e9a7f538b69b04626843209513f3efe2fa02d291d2ceb0a5c37c7e7586ed4aea": [
+   {
+    "captured_at": "2026-07-29T14:47:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:11d8bf6e24d633fcf34526097c41bf9eda844c2986ce0f4178cd9684b6e98516": [
+   {
+    "captured_at": "2026-07-29T14:50:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ff10f43247160ea024583789ed336f528761cda6b41769aac68ac9939f76a98d": [
+   {
+    "captured_at": "2026-07-29T14:53:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:718828472528750a35e08ced6c081bca8902678ba52e2e567b705192e61e1d04": [
+   {
+    "captured_at": "2026-07-29T14:55:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e55ee63f44ca6d0f3adc5053e5cffe1c3a257be2d5b7f7aedbed33f302b07112": [
+   {
+    "captured_at": "2026-07-29T14:59:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2c7011c656f6f18f708f0b96c68b0f11ca9572db50409325be84e0f9dd33f111": [
+   {
+    "captured_at": "2026-07-29T15:03:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3cc988d660ec18f3d9075c8e1b9114c09103f4d5d6ac229a4adacf7ae3106952": [
+   {
+    "captured_at": "2026-07-29T15:06:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:acbee3f8a46436ad6a66b2a984c45e9555f8f8d0119f4cd9a37b80540e6bbb95": [
+   {
+    "captured_at": "2026-07-29T15:12:18+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4ea5711ee5400c5242bfdbfe8e91a950eb45809f2574d44b9ecf288a171655bd": [
+   {
+    "captured_at": "2026-07-29T15:14:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:81bf67b07801e00d4521c5534aec3939f73fb41d72a69a688bc7f6a57a6bbc03": [
+   {
+    "captured_at": "2026-07-29T15:17:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2cfb49f8fbff49dcaeb041204434284038a91bf76361d7c1ad89b7ac8fc71fbf": [
+   {
+    "captured_at": "2026-07-29T15:20:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7b05b84865f34eb3c45ce2685765c1b70e8bfabbe9067f21d7f53713add606d8": [
+   {
+    "captured_at": "2026-07-29T15:22:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:45f36e285710d19897b03b90af85195dae0cc463d7779fcde3973a309cf3a880": [
+   {
+    "captured_at": "2026-07-29T15:25:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72bfba12ee6c5a7cefb23069055d277d00321dca753fcead9fac3c0c3d6c6775": [
+   {
+    "captured_at": "2026-07-29T15:27:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ede392c6e85f549632aa49c407822bf924e50f3bb0825a3b33e858a8f41575c4": [
+   {
+    "captured_at": "2026-07-29T15:31:02+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:74bf2745e8f2aca77b39ed4d1af871d93dfc2b108d70479227b6102a097dce1e": [
+   {
+    "captured_at": "2026-07-29T15:38:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:52f5f73a7c519866ef61b3c71e3238883dd0aac6b829f326f7d1fe54e4eba455": [
+   {
+    "captured_at": "2026-07-29T15:41:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ad65b17004358f141c06a1545042e8ee92473eff150b362f25e1d790cf471bb4": [
+   {
+    "captured_at": "2026-07-29T15:43:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a105dd3170eba8a6bb8221a38eb2d0382bd786012e48c77ff3dcf7c23aacd7bd": [
+   {
+    "captured_at": "2026-07-29T15:45:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7e71d9d5273bde491f7bfe4422e410b967db5073d9f9b57538ac897feff4e7ef": [
+   {
+    "captured_at": "2026-07-29T15:48:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:84276bb025e5cf9676bfa9b6f0b81cdcd304f2b91c84a1313f3fcb6ab9e49dea": [
+   {
+    "captured_at": "2026-07-29T15:50:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4c1daa204fba8b1bfae55436af44de4a3ca146d574788d79ef62fa3d2168ca45": [
+   {
+    "captured_at": "2026-07-29T15:54:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:85ce81ebbf69f10c2a017b7f466527058a899ed53c658edd3f45be2f2c6d61b8": [
+   {
+    "captured_at": "2026-07-29T15:56:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7a3a69dfe30106f16b920ca0ffe009a9804db355683e12ce632a39c3d0948589": [
+   {
+    "captured_at": "2026-07-29T15:58:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ba8b8e2130c4a98d342cb6fa35abfa26db38499591a6d858b4738d916d1282ef": [
+   {
+    "captured_at": "2026-07-29T16:00:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d6b16d6590b97212f0c465a568c3c3f8259253f80d0a5c83a8a6caca6dd132ea": [
+   {
+    "captured_at": "2026-07-29T16:03:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7326282e5681c13b0f3323cd21fa8ee2fc10c2ec69e00a953add6df44a996ce8": [
+   {
+    "captured_at": "2026-07-29T16:07:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1fea5c6ff7f2a661b07db08c3fd30ab0006ab2246f7a3e1d4a1b4f5535b0fa98": [
+   {
+    "captured_at": "2026-07-29T16:11:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:474ffc0baea94896a1188a1388a19cc6679a860588e97fdb4435c744800195c9": [
+   {
+    "captured_at": "2026-07-29T16:13:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:579183110b0fac49f92675a51a4c1cec15d49d0b08c6c27f92a028399d5d8fcd": [
+   {
+    "captured_at": "2026-07-29T16:16:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:86cfe4940e6cc586d60e5160fb3a671046b2b224d7d0332d27760234ca8ae52c": [
+   {
+    "captured_at": "2026-07-29T16:19:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ba9f399dc9de7eaf773cad6742fed505c18b4ed9d9c4f81597a8639b83da87d1": [
+   {
+    "captured_at": "2026-07-29T16:22:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7313645a176a06d7544132b27a8c10fd4731de5772d99cee515bbfae49e9107c": [
+   {
+    "captured_at": "2026-07-29T16:25:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:10a3d31455cf6820aa226c5b96d521ebfeddc3e901cd1588e0393f927e0aa19b": [
+   {
+    "captured_at": "2026-07-29T16:28:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:548ef8b3c9f54cd1200700c20a72a3d6ea5f12d4ed08ad7349c7eccf5dead503": [
+   {
+    "captured_at": "2026-07-29T16:30:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7ed18f361b3a47c3a85071f1a0d55b21c4a3780cbb9895f95a24784b12fbe1ca": [
+   {
+    "captured_at": "2026-07-29T16:32:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c3f59fd9c63fe0cdde91d0587ccefeb108f2475cec3fa86f484c386498560024": [
+   {
+    "captured_at": "2026-07-29T16:35:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d1b390b5ccfbd7b7118dc2cb3de6fd7aa3c6c6707deec721bf792d4333c8a0c9": [
+   {
+    "captured_at": "2026-07-29T16:37:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9e04b4fb55cee2810513fb1ddae4f74c7fe7be8dbe186f359876a6a2dd59f35a": [
+   {
+    "captured_at": "2026-07-29T16:40:43+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:90edc558b65a97d060121f53efbdfe33eb960842dec0ea3a844d171d538c96a8": [
+   {
+    "captured_at": "2026-07-29T16:43:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:431969223473fce8a9631002a20b39f204710bd2fefbf5efddf13fa299ee1d9c": [
+   {
+    "captured_at": "2026-07-29T16:46:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5b66167e7f3a3ff4753b2ccf033801270ad4f14e96c0860df287497a3e674f3b": [
+   {
+    "captured_at": "2026-07-29T19:06:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2f525f51eba4b49ecf9f639d26e7ee0477925c2737d215e22c00f5ddb27f5e64": [
+   {
+    "captured_at": "2026-07-29T19:10:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d73ac5c85a40e001b041550460bca2195ec056f1d71bfb9f69e5c12dbcb7dc0c": [
+   {
+    "captured_at": "2026-07-29T19:14:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:22b11cdfb6adae360e9b183d89b02368151385b2138c93cb119b4d8eec6b781f": [
+   {
+    "captured_at": "2026-07-29T19:17:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ab9dd076fa740d6e55b3ac482edf07c2cc824b67e87108844ab391cebccd42cc": [
+   {
+    "captured_at": "2026-07-29T19:19:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6a0f78368a4f072eb3a6df5a48ea061785ef9d44536b1f33e6fa02aec5cec9ba": [
+   {
+    "captured_at": "2026-07-29T19:23:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d6880b9b19162be867961b1facf9f5cead82b3bdc25168d821609f2d5ebef7c7": [
+   {
+    "captured_at": "2026-07-29T19:26:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72239db663be529f1d373fb71d1a8751dc2468915ed67d28a022a0296bfdfc4d": [
+   {
+    "captured_at": "2026-07-29T19:31:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:76e0f5aae77d9407defbd66d19949e2758166b0ab86272d3603117d3a225a773": [
+   {
+    "captured_at": "2026-07-29T19:34:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a148fd6c04541d277a79f4014fdd9fc2b8e70ac013f0f66788f2199aac079190": [
+   {
+    "captured_at": "2026-07-29T20:31:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:49ffce512b458fbc04bc5120afd0b29b0be3e76523738a7616db6e2017b84432": [
+   {
+    "captured_at": "2026-07-29T20:33:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dbd1a07782b8cf7307ea3612e7d2a8d839cc77d45596dc10045d40157b06ae55": [
+   {
+    "captured_at": "2026-07-29T20:36:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:014ecf3720f99d77078e1dc8562d730c83e56d092df3bd9980e700ff87af4d6e": [
+   {
+    "captured_at": "2026-07-29T20:39:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3bc17f591f36df4c3a610e0cff76263193fc111d2efb50bb9aea34d37402a72f": [
+   {
+    "captured_at": "2026-07-29T20:41:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ace6df48e7200738177b33670d1eb5d41fe32cda5c7b9185029a1cabe7cab891": [
+   {
+    "captured_at": "2026-07-29T20:44:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0a760bbb2065f0ff9e51e76a9c099bcd18a640f2062837223ac409f8f882c721": [
+   {
+    "captured_at": "2026-07-29T20:48:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f63c8ff9d73585f8cf54038d69581135eafe8bada4b45d94288f4e8f1317a845": [
+   {
+    "captured_at": "2026-07-29T20:50:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8545375586f4e53ec9516b4c247e8e22dcf93488265129429b6b7f4ed089aaf0": [
+   {
+    "captured_at": "2026-07-29T20:52:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c217f810b2ec8022d7ce23997bfd66f20d17597a258f2c733338fefb9848aefc": [
+   {
+    "captured_at": "2026-07-29T20:54:46+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:bf4ee178bbe6bf1a451eb40861dfbdf464931e90404ab72706635c74c4c2de7b": [
+   {
+    "captured_at": "2026-07-29T20:56:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b491451b37c1a169e8535777f7b06123662348fc879d4bca221f57daf38fe9c1": [
+   {
+    "captured_at": "2026-07-29T20:58:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:51194ff49103070c731df77bbb224ce38b6a3dfbc856c53b525626a6ae9ad523": [
+   {
+    "captured_at": "2026-07-29T21:01:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f171b530e6f1d398d93985a8ad9d4c2c7fa72ec4e6ab8e00991a265f70b5d363": [
+   {
+    "captured_at": "2026-07-29T21:04:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a46fef6907ba0a73354c53764caecb6776b6c910c5b8e02976cb9fabf867a8d4": [
+   {
+    "captured_at": "2026-07-29T21:06:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:275643a32ec5daf96e4ea56594ace4748e48ed47a91a53fc49fa18ad24e086bf": [
+   {
+    "captured_at": "2026-07-29T21:09:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:45b6d7d1a4ccb0a9d6d1c67edbc1c7706b3c126913f9a88621482000936a42e5": [
+   {
+    "captured_at": "2026-07-30T01:56:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8f25ab8b9a2c1330912f2bead9cf28eadf4f7b495dd66e44546cac848eca9a1f": [
+   {
+    "captured_at": "2026-07-30T01:58:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2753dbd84723671ad0ba6b486ff8315976e8b37679a570953ecd49d64f8e4683": [
+   {
+    "captured_at": "2026-07-30T02:01:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:95b34e2003c40f1f55e1018fc7c3fc31a878a615864c4eac03b34b224896e4df": [
+   {
+    "captured_at": "2026-07-30T02:05:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d22f736f50a24e938e8add9d69cbc0b6c065f16012369e3b60836ed1cc81cf2f": [
+   {
+    "captured_at": "2026-07-30T02:08:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c77a6383746fec905d3ccd0f0d502c2c202a1961731df094ca201538e8dab1d2": [
+   {
+    "captured_at": "2026-07-30T02:12:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:23c370cf67efe2171021a2b3c71f0fc66e2a91da4571b0875fdadec331709c4b": [
+   {
+    "captured_at": "2026-07-30T02:14:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f7b55c1de6d0a6e28a43a4bc7d22ff66ce221e71c0aa48fda427c16c0e6c0713": [
+   {
+    "captured_at": "2026-07-30T02:16:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:895ffac0837921e0ec7e478d043496aa09158ecdead6213ac0c49c22c9fd02ec": [
+   {
+    "captured_at": "2026-07-30T02:22:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3157788bb7f9630204a405e32751b959a2afe38fd5535a64cf4fcd4e2fb593e3": [
+   {
+    "captured_at": "2026-07-30T02:25:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:55775097d2251dd368a0e5e034006bc91a49857743faa72493b92111c2f7c5a2": [
+   {
+    "captured_at": "2026-07-30T02:27:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c57aa165cd0c0f3d9707153b766ba1587f5c78f42aaab931480380b20210fa82": [
+   {
+    "captured_at": "2026-07-30T02:30:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c3221ad500cc2128bbccd32bc2ae34e049f269b83eb8676a8157762bbf3cdc8a": [
+   {
+    "captured_at": "2026-07-30T02:33:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c1e1c49a9e88ea4997d30db8d223dee6903abd26475b5d83a4ea02296cc0e3f": [
+   {
+    "captured_at": "2026-07-30T02:36:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1687852ad10407aaf05744206bb976366fe950dec5ac4ab7f0a9300b029e5f49": [
+   {
+    "captured_at": "2026-07-30T02:39:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:07605d3b15d056b6dee38b63a6515fd890ade20884eef2da54a48e22521da81e": [
+   {
+    "captured_at": "2026-07-30T02:41:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e4ba9983cc4a57842a13dfd83f9e4d886137619b90b5ba6ccbb534d90baa5f4c": [
+   {
+    "captured_at": "2026-07-30T02:44:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:98f1c99ce6470b421568f04be4588eea99a2c63b3da229b0cc2aae97fa653130": [
+   {
+    "captured_at": "2026-07-30T02:50:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f2f7851ec3ec02b13f1da906f89d0ceeedaa20803d17abddc7914ee50b6d1715": [
+   {
+    "captured_at": "2026-07-30T02:52:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1aec04e7a18ac320b9090dab0ac41da110689c272ae56dd4f66fc7f8a020a75c": [
+   {
+    "captured_at": "2026-07-30T02:55:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7e89053a93faad756c809f16f451e33a3a0a4eed97229c42da2733a94c8f6606": [
+   {
+    "captured_at": "2026-07-30T02:57:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dbf45f748d7b119cbdfdde173077c72c8cc8d861d1155765e1a93b436de8d00c": [
+   {
+    "captured_at": "2026-07-30T03:00:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9c812d0f38e8214830cd48e402f7151f786b72c0a7e6c0c32200805bfe99e438": [
+   {
+    "captured_at": "2026-07-30T03:03:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:68aa894d53968113945ffa722f6d7ca1bfedb5d6848b74e719b2da45cea4ba23": [
+   {
+    "captured_at": "2026-07-30T03:06:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e700cca0ac894feb4793ec240d6167fa3b98b57eafc2ca2eabb5fb5a64ffc6aa": [
+   {
+    "captured_at": "2026-07-30T03:08:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:66145c5e55895bd2145575cb588ce47dce60591eb1c6798ae63a6752a97e90b7": [
+   {
+    "captured_at": "2026-07-30T03:12:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d621198314b882fdaf1c37c885b9dbaf32ddf92ecdb72c72ee124b9a79f09c4f": [
+   {
+    "captured_at": "2026-07-30T03:14:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9e9961017f20165e0f77fed455edbc2197851c2ecee730ea14cade237a04686c": [
+   {
+    "captured_at": "2026-07-30T03:17:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d5185514427510c63c631a7f79c92d822ad0785ea6bfd7588e5637c34cccb5b0": [
+   {
+    "captured_at": "2026-07-30T03:19:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:397c1a82a6f5edfbfcda753593e01730c2ff27b578ed0dff43e7b300354801f2": [
+   {
+    "captured_at": "2026-07-30T03:22:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a3a9f47cfd6743ea79165c16f9bce2172fc52ba08880bbd29f95536c81a15204": [
+   {
+    "captured_at": "2026-07-30T03:24:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:30a224bddd00252145eec23af85b3ad38a7c67c61a77d4233e1e0333dc4cade1": [
+   {
+    "captured_at": "2026-07-30T03:27:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:71770816dba3be8ca4dda4e70443d2608b4e48352f7d2e0a8fcbbee2c92b680f": [
+   {
+    "captured_at": "2026-07-30T03:30:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1240ebec0b609bf841eebfc424cda5c823d59ba450b2fccb38565e81d950b136": [
+   {
+    "captured_at": "2026-07-30T03:33:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bbfe5a65e2a56e612c0116f9a4241d3383416a465c94ffc2d9364b4bf52e82d2": [
+   {
+    "captured_at": "2026-07-30T03:35:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5a9232452fe0b13520b6210a7108e4e4f40bb0c9a39536738739df362c6a80ad": [
+   {
+    "captured_at": "2026-07-30T03:38:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a1543befe852aa9d219ac9bf4904b6fce0cb4fcacfa5fb16b13149399d83d197": [
+   {
+    "captured_at": "2026-07-30T03:40:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7d074820785c1992b58cc187a823478fc4a01ec64b9aa227c77a73affcf6ba03": [
+   {
+    "captured_at": "2026-07-30T03:43:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:308ca1aee2238a0af5205d1428b2f768460956df8b915057f48024af88592ada": [
+   {
+    "captured_at": "2026-07-30T03:46:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ad4dea644448edba9c5f150a646733b911e3ed75c3a4d85ca7155e949e3d20ac": [
+   {
+    "captured_at": "2026-07-30T03:48:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:50fed3505b384175c4ffc48d550233e5aac9416586b278818ac5730ce269b517": [
+   {
+    "captured_at": "2026-07-30T03:52:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e493b775ee2e24d5a6854584013f6886296754e971239436b414b02549049a4e": [
+   {
+    "captured_at": "2026-07-30T03:54:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7a2499845c30a292f518914c25133feaaed5369a189b1fdb4e4d6cbfff5cbb3e": [
+   {
+    "captured_at": "2026-07-30T03:56:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d427b80b4ee49e2ddc1b30221be01e981a838a431b1d1fde41610dc63eac7c13": [
+   {
+    "captured_at": "2026-07-30T03:59:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:eb0faafca2a3bc04bba1c917443435404e22e22bcf79bac19b90564ea8a17c91": [
+   {
+    "captured_at": "2026-07-30T04:01:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3053f61299a1e644121c9859a544c751317aa77214565a107848fc285ee186d7": [
+   {
+    "captured_at": "2026-07-30T04:04:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c648d0d24d460e5914b2c9342bac4a25ca7be09138181811fcc58902706f76a9": [
+   {
+    "captured_at": "2026-07-30T04:06:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6b6c1f5abac6ea33c7756f73ee547138b45be87150ad0eff295982b1f2cf2871": [
+   {
+    "captured_at": "2026-07-30T04:09:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5b53cd16ee81fa51abb4e3c01cce2b41f6957fb227a3eb6a69199860978360c5": [
+   {
+    "captured_at": "2026-07-30T04:12:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6e0eb3bf42eef69065828e84b22e88d2b5873fb25f03a2f4f54f154b2d1e072": [
+   {
+    "captured_at": "2026-07-30T04:15:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:298350ee34f875366cf2f0ae0fa3527a5c2e11184762517913933227a7f430a3": [
+   {
+    "captured_at": "2026-07-30T04:17:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2bf5b021b08dc79ae21e3fd821484590dd3b08f81ca8b276e52fe659bc25e678": [
+   {
+    "captured_at": "2026-07-30T04:19:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bee8ffb6378c6817efa1ea9419130968a1c1eb35f1b0b4f2d386f7ef2830478d": [
+   {
+    "captured_at": "2026-07-30T04:22:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4d073840a70c7b97c5fe6ba9fa5803f37e4f2b54c1564673dd96d2b7b0d1bf85": [
+   {
+    "captured_at": "2026-07-30T04:25:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:89d7ef857451daa1403194c961bc8fe13c20a37dda3af6013b93bac06f887039": [
+   {
+    "captured_at": "2026-07-30T04:28:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e5a0e66a2658d51b9a8cd61735bbf59524a0ebc30f98a95d4022720e1da90edc": [
+   {
+    "captured_at": "2026-07-30T04:31:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3a44bea0a4e8c343d8b4cba616cdffae4e0b430a77643b333a8d75c4605d7702": [
+   {
+    "captured_at": "2026-07-30T04:33:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:51827ab2ce7b6c2c06119ce95c3bd1b4a59a85425fdebb4b9176cb111edc7b38": [
+   {
+    "captured_at": "2026-07-30T04:37:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c5d856e8745a986b4b7b0beb52930492d6a9e620476b6a4a261317a1fe122dbd": [
+   {
+    "captured_at": "2026-07-30T04:41:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:217d31e1b4779fc6dbb861e5bb6e30fbb3047fa565a0546028d65d2f7b31512b": [
+   {
+    "captured_at": "2026-07-30T04:43:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3a0501890d4df8d7afe58cb57562902040d9911834e8c7477b93d9024cd32004": [
+   {
+    "captured_at": "2026-07-30T04:47:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:29e6fc019d8809b7fd3b2d803ed18e7fdd84dcc6a59e5b777bdddeed64dafd25": [
+   {
+    "captured_at": "2026-07-30T04:49:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5aec1c1af8cc11941c7641172f931c21f8a46e72b8119da72d5ba22634eddca7": [
+   {
+    "captured_at": "2026-07-30T04:52:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:060bcfac34c652989815d463efc23b98f1c01e05e6dcbac592d8e4bc61244b0d": [
+   {
+    "captured_at": "2026-07-30T05:00:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4278ce6b7f7ca78033e37a5bbf1268f58cd3de79c170441acaf46f3a9bc22988": [
+   {
+    "captured_at": "2026-07-30T05:03:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4b0ed0f330e067d5e598652f399412fbe329a6ad81edb6777a51dec8748b04ad": [
+   {
+    "captured_at": "2026-07-30T05:05:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:162eb97064a902411b5af5f418979ebe98de905d810601a1bfd63f1e564630da": [
+   {
+    "captured_at": "2026-07-30T05:08:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6e9baed14524b10e505f09a669735297769b59c08d294a3b11941bb16654d76c": [
+   {
+    "captured_at": "2026-07-30T05:10:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:98d37a6e2700d56d1a9e43e9a6cdfeb5f81491ed300fb151399514401992b5b1": [
+   {
+    "captured_at": "2026-07-30T05:12:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1386fa2a6a480d1fd9a047e8621ae6f42e1a8c49820c8d09d0bc13e09b19f312": [
+   {
+    "captured_at": "2026-07-30T05:21:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6376e563756a3d6bbe36a61cd9840a6cf2379cbc0af248362f900bb591494846": [
+   {
+    "captured_at": "2026-07-30T05:24:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ae141f23d50823599036ec82102594c2562d0feef1ca395a719c4f44af4604e9": [
+   {
+    "captured_at": "2026-07-30T05:27:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c253c163b3d3db932e39376bcccb307925927dbdf2cba9aefde91ab51a3f3593": [
+   {
+    "captured_at": "2026-07-30T05:30:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:47e7fec0d1b836a73ec53c43bdc7bf455222b6658673026421eca501d6b836a8": [
+   {
+    "captured_at": "2026-07-30T05:33:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4759d1859bedd2903fee82810b78255b44671275614c1876ca3daf51371d5d59": [
+   {
+    "captured_at": "2026-07-30T05:35:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e617ba00bf9d6c87a9fe3d59fbbff88b47a72e74825ad4fcba1259dbe8036738": [
+   {
+    "captured_at": "2026-07-30T05:37:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5b5c7f6737e9d196269d3f09b533238f3d654089a610c2aaf5b8c4c5b6c46e6d": [
+   {
+    "captured_at": "2026-07-30T05:39:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:87a6686d66150ec1c46c787e3bd58b89cb839f0c68b871aa73a464123dd7017e": [
+   {
+    "captured_at": "2026-07-30T05:42:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cc0ce36cbfed90202066d37ed2451639910d60ad970127ce36548592ef6831ea": [
+   {
+    "captured_at": "2026-07-30T05:44:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:01796db8beab282773178d2cb86599fa911dc0784a76f3e4febc4c6d5f0b95b0": [
+   {
+    "captured_at": "2026-07-30T05:47:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d93df5c0ed7029244444656487ee6ddab22b45927275f1a641c3628ec35dd16d": [
+   {
+    "captured_at": "2026-07-30T05:49:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1f164126b742491b08fea25b36ec2f77a3d2b3923c711c0dc742ec149ab5d850": [
+   {
+    "captured_at": "2026-07-30T05:51:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:48936908a71c9b82afdf0f768404777a65392b997e6396471318a5c79b346ba7": [
+   {
+    "captured_at": "2026-07-30T05:54:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3de323cb31d0548d43d0ab76bbb8ef2a7d9546a34276dbdf7de9a9da0d2612f0": [
+   {
+    "captured_at": "2026-07-30T05:57:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e59d3755090dd03f48724b44a185f9f2ee2077cefac21e5c83c4b7ed31a2ad89": [
+   {
+    "captured_at": "2026-07-30T05:59:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:365d4a9acea4969bc223b59376724afd335739af1f1419d9a886b29c600a2119": [
+   {
+    "captured_at": "2026-07-30T06:01:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f8fe7825b09c21e9b0513b16cf1e18c75b006982336ccaa7ef467ac0c6203321": [
+   {
+    "captured_at": "2026-07-30T06:04:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f695dc3c185b5e8f27bf8dd6906a094887db6db5825075eab3f160bcb4e564d5": [
+   {
+    "captured_at": "2026-07-30T06:07:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c398dd01a865774d975f7d5da277bc4e2ec055e67100592d60e26b161c740211": [
+   {
+    "captured_at": "2026-07-30T06:10:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:161f3d48d0d1aada1fe3b8333212cd289795b39ebe2fd290b1a09d7885878b99": [
+   {
+    "captured_at": "2026-07-30T06:12:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8e65f2609586da27f3183f1b34af7ebbe731e40a0eff5b3c0c22d2b357efd9cc": [
+   {
+    "captured_at": "2026-07-30T06:14:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:541a0a50ff79fc70d838a04da7329b83d29a5950ce6bd50f67ec978a6f336957": [
+   {
+    "captured_at": "2026-07-30T06:17:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1a4de45f79a0f09f1d1498940312ac686aebbc4b4ce123585d7631191e70e464": [
+   {
+    "captured_at": "2026-07-30T06:20:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d8b15441bf5a04f8f2756f63681251610bc49260a9695190b5adf0745682acb7": [
+   {
+    "captured_at": "2026-07-30T06:23:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:722691fef37c05b79c8711a564910447b8db72815e9d5563509d1a66ea6402a6": [
+   {
+    "captured_at": "2026-07-30T06:25:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:74e9051bbfee947cbded3d17e9f992d6be0db230cf75d9e8b0c93f42b0f86224": [
+   {
+    "captured_at": "2026-07-30T06:31:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e55dd967c0006eecd45d1823cddccc65de25bd6070b4a6ecbfdafe96b464c5cd": [
+   {
+    "captured_at": "2026-07-30T06:33:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4481fedec7c0303d9857f94796192423354166cf6a030b63127ab0cd5671a5c6": [
+   {
+    "captured_at": "2026-07-30T06:36:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:553437d79ec3732c42349a731817c345ed349cb11edf3491b74603a527ce5af6": [
+   {
+    "captured_at": "2026-07-30T06:39:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3f4cc79ac4843419bee87519b4886c6abd07753f254f42e2b7b18b38ec919ce1": [
+   {
+    "captured_at": "2026-07-30T06:43:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:13dd193ee55b3690f3d66f134a04104b14a6011d070c78e128070d76e5c8c267": [
+   {
+    "captured_at": "2026-07-30T06:46:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4dbe451c50c6211fb4b9d93fed4b4fedf08026950ff143ab44ab077ad537a4cf": [
+   {
+    "captured_at": "2026-07-30T06:48:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8667112d5cfc56bafaec8fe738705e670580e9994f14b970a91ac88d91cd1632": [
+   {
+    "captured_at": "2026-07-30T06:50:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f22ae8ca585a7bc49bee2767e6149d197763b13cf3048d80264b022d3b612f66": [
+   {
+    "captured_at": "2026-07-30T06:57:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fc9b9b717cbe141b8c5c063cdc037d0570bb29c1510f9e1cb9caf8a3317d6855": [
+   {
+    "captured_at": "2026-07-30T06:59:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:98d7050da311bf8b61707c9194831258f6b3ac1777f27b7741d3d2448a17b831": [
+   {
+    "captured_at": "2026-07-30T07:02:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4a8561df40c4b1a414e679415d68b105d265e01722e9ddb28440cf42b25aa0a1": [
+   {
+    "captured_at": "2026-07-30T07:04:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a92c35fa887f5c1082fb0d942a32a6c6d90c01d625982a3fe51a03d1922f066c": [
+   {
+    "captured_at": "2026-07-30T07:06:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a7a18fb895745e2e694544d6b37a6dd5ee763c5826d07df82919d8465c2ef68c": [
+   {
+    "captured_at": "2026-07-30T07:09:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4c91bf1fdd388c9034f5a171fcde08154d90b6c945f0119d30ced5576bf279c6": [
+   {
+    "captured_at": "2026-07-30T07:11:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cadbcaa6ddd1522ad0897eb908ac038315c19fe8ba017ecd029c5375d77f6cf8": [
+   {
+    "captured_at": "2026-07-30T07:14:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:41d35e6885a35f010adff483234595a348af3d3f6bf4a26cad3ba5dcc343d985": [
+   {
+    "captured_at": "2026-07-30T07:17:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fcbcdd981d9bd7981f8ddff2e05c8e50a34c47dc8ffc0332b72ed1029908d392": [
+   {
+    "captured_at": "2026-07-30T07:19:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d1314d8f4bb60312245c90e622198669131bdd0e0c66f08e6f0e7f2b699b5af4": [
+   {
+    "captured_at": "2026-07-30T07:22:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d3d1c96d991953cabe5f798091cc35a7b8e096b46949a05864b74936b6ccfcd4": [
+   {
+    "captured_at": "2026-07-30T07:25:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0821ca0c98b1c3fdd751bd19ea45d2352dde94d49505afbd39c78d3afd154d81": [
+   {
+    "captured_at": "2026-07-30T07:31:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f1de23c6c2be3675f2a5e900b8ba9c8804069497b6ddcddd15452a080e910870": [
+   {
+    "captured_at": "2026-07-30T07:34:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9cc09a99ceddcbc20e141c7107cb88b52eb8dd9030ffbc3daa4dc5090ceeb370": [
+   {
+    "captured_at": "2026-07-30T07:37:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1cd3bfe4b71186d7b76fcca2a49a13b4f8dead7a364bcbaef4da57b3029c15c1": [
+   {
+    "captured_at": "2026-07-30T07:40:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a6e065e399adc16f1f91fc902974abb7cca0b4c6c3b3b13f7a0d8bf0abfdec6e": [
+   {
+    "captured_at": "2026-07-30T07:42:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9ec586b54b095e33ef35bae1901d9092570f16ca59d5be70c2c41e96ced81e52": [
+   {
+    "captured_at": "2026-07-30T07:45:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:44e52423a0a8b088529f91a824d4948b93c43a62e71a0a5146a918ad043c2916": [
+   {
+    "captured_at": "2026-07-30T07:48:18+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:57c12cc99bd8ee80cb998d2246e23a5274f6a10f1c22b3dfbf752f6c8f37fe11": [
+   {
+    "captured_at": "2026-07-30T07:51:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:99ac3861cea4a45ad6ab85add0c186c9f3e41e085022657edb1ec5aa3d8904a9": [
+   {
+    "captured_at": "2026-07-30T07:53:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8e589ff32c7360aaed069dd3a5ecd18be743fdcd712bc1a61542ba592cfdaa75": [
+   {
+    "captured_at": "2026-07-30T07:56:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3090bff4dcc6bb3e42d3c2e7f442bd25aa0c9a26f30888037ad9277e792f516b": [
+   {
+    "captured_at": "2026-07-30T07:59:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:da54f27b365781c7f3a9c9d8065249c53530e1de1a1d472e4281ff9d89ad88c0": [
+   {
+    "captured_at": "2026-07-30T08:04:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:07f68dab02610d555e596e45fd6094f1715a34aa07f0aaa74856779a9c7d60e2": [
+   {
+    "captured_at": "2026-07-30T08:06:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5335dbe98d8971eb4043279170142e35de2e98854664e23b2daee85ed98fe0f0": [
+   {
+    "captured_at": "2026-07-30T08:10:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:53417e4b279aa9400202b2a3626d66f149ead8d8f85360cec749c792869d28b8": [
+   {
+    "captured_at": "2026-07-30T08:13:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f83ea982b752143a815d74367325fff8ee787404ce551b6d8055ba3ed956de55": [
+   {
+    "captured_at": "2026-07-30T08:16:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:61a983f3cf2caadd414f917541c1f32d7f868b58369c3c8301aba4342c7d2ee3": [
+   {
+    "captured_at": "2026-07-30T08:18:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:359b9c986f953a0ed399b5e84f09974d0eb160501cdc75b7f52ed14904c6762d": [
+   {
+    "captured_at": "2026-07-30T08:21:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6450cfe11ba897ee2af55ea3576feef969bbc6b48ab86b6ccbdfec1f531a2580": [
+   {
+    "captured_at": "2026-07-30T08:23:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:216194cb967887a24acccfc8b40bd27f09d4abd81e1f9ea5529ac58d40a4677e": [
+   {
+    "captured_at": "2026-07-30T08:29:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:39618ea612cbbbdbd4b70d5fe573d9c4e4f89e29f335d88fe67b077ed323a3a7": [
+   {
+    "captured_at": "2026-07-30T08:31:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:96de66e5e495e0922c40e8e952311a0f388843be0d32be83901449f06166f338": [
+   {
+    "captured_at": "2026-07-30T08:33:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d880afbc15724d22af25b3d7433ae22482f89b943e933f79325397343d7e2964": [
+   {
+    "captured_at": "2026-07-30T08:36:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4ff52aa33e026263c6866329141ea53df87088351a334ecd0d333cfbc4ca11fc": [
+   {
+    "captured_at": "2026-07-30T08:41:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5386700336884631ee6de20eb5959b30ffbde89c1754a9b9fbaad438a56a9eee": [
+   {
+    "captured_at": "2026-07-30T08:45:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3cf533b15043901a1f926b98237c47a2bd25eb7540ad5e59dfd983cc5999b42b": [
+   {
+    "captured_at": "2026-07-30T08:47:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:abc42ac959533bdee5d8caf6390f4bf273aff27ef268314e9b7bb6f93486494d": [
+   {
+    "captured_at": "2026-07-30T08:50:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:64e2f8b6319408ca530398ef4e221c0f12a72a919a2c9d65f21fd21126450ffb": [
+   {
+    "captured_at": "2026-07-30T08:53:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:70b4dbc96f6f5fb8e3b73c2b6d27adcb75dd057c595e454b394969fc70735da2": [
+   {
+    "captured_at": "2026-07-30T08:55:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2fb0a93f3dd30fd6e2f27696e2f985cc416784ff415259e5abc729acf1a87b9e": [
+   {
+    "captured_at": "2026-07-30T08:57:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c115bd1a46e860570f33e4d7e1e4576916fbfdc32c60ff43e69c1fa7630d2fd0": [
+   {
+    "captured_at": "2026-07-30T08:59:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0b8d8f216901f48afaca10df220ab6b3909fc32bba36edab221c3a73ff8a9a60": [
+   {
+    "captured_at": "2026-07-30T09:02:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c05130203f3b38418d421ac033aa636e7ac32e95c8c6c7d8112b48a1609190ec": [
+   {
+    "captured_at": "2026-07-30T09:04:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:27d243f8680f1f7729e16603dc254ce7f4910f3004eae66729e6a92966059c8e": [
+   {
+    "captured_at": "2026-07-30T09:06:55+00:00",
+    "verdict": "unreadable"
+   }
+  ],
+  "sha256:f48838dc59f0efb17ab4c43d48b693a656b7deb516ae84e526b07668de4abfa2": [
+   {
+    "captured_at": "2026-07-30T09:09:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:512ea5fbd0df6846150a7578321f35b2ec722c2dcebb0500ea586c6b061232e6": [
+   {
+    "captured_at": "2026-07-30T09:11:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2295ebf6e4f135d0e90c9355e90973a8863a6b0477b8aa7a7d90d3de4ca52b62": [
+   {
+    "captured_at": "2026-07-30T09:15:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fb55dd1dfb1f413073ebd5ec09f2765a4bece040669f7e3beccc1746c0aa7437": [
+   {
+    "captured_at": "2026-07-30T09:17:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:78fb95157ef39ad051c9a36fd95a864899ee8744feea08e431147b6d2e41a315": [
+   {
+    "captured_at": "2026-07-30T09:21:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:54e768ce065a2f1a671626d6f3a9e1180620c44420dd1133c3d8b68d5d4a2846": [
+   {
+    "captured_at": "2026-07-30T09:23:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:77019f55ad9d0e05306ceba8684d3b80fb62ac9b481fda6f4879e6acd254753e": [
+   {
+    "captured_at": "2026-07-30T09:25:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4b6869b3a7c5c786b69cfbd2f3f945de02837353ca2aa4a3c1a1d1feed21e91d": [
+   {
+    "captured_at": "2026-07-30T09:27:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:650356bdce93cef5a55ddb39108c5b4cae1ce8fbdcf715c0ccb0368cf588201c": [
+   {
+    "captured_at": "2026-07-30T09:30:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a9c8d30e700c95c8cfb416497a53f508eceb47eda39f59599f397c12c27e0e3a": [
+   {
+    "captured_at": "2026-07-30T09:32:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:34eda36b696e47fc8c9751c6703da925b81f860d322995e3e7095090b6e9aeb0": [
+   {
+    "captured_at": "2026-07-30T10:22:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:950c12204b3c1c8bcb24c64c5ddee6f6bdfbcdf25a75a2f8b9965c8527d6ed23": [
+   {
+    "captured_at": "2026-07-30T10:24:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9a6d034fb257d8c2f85cffb0d6e69d77135fb5e389678889183b957a7bc7769d": [
+   {
+    "captured_at": "2026-07-30T10:46:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:630b8654627056a357c9d19e065e2e5082b2b505b714d3180cefe064a399b32b": [
+   {
+    "captured_at": "2026-07-30T10:49:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0d90eedf490b78f9ed2fdc035f492b82b248e43341f3a4cee1176ad0c1161c7d": [
+   {
+    "captured_at": "2026-07-30T10:51:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f49416b16ab255d8f971040166144d0f8756243b76f9c5802ef3982d49e61d89": [
+   {
+    "captured_at": "2026-07-30T10:53:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6c364515898ccc4e6826efc95fda45479fd91c865509fceb791307964d78b2b": [
+   {
+    "captured_at": "2026-07-30T10:57:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:66b1ad7f8ef3fbf9a0c7dfa6cc82abb037954d1ed4f52cfc195719362fda55e9": [
+   {
+    "captured_at": "2026-07-30T10:59:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:404fd4030a0636a73bb14e870d9ce9ccc41950cdbd4b394339469b9fd99d7c46": [
+   {
+    "captured_at": "2026-07-30T11:01:46+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:07bd41fd257322d0dd948c6e97e941e74fb615012426599803eeb807a4b120ee": [
+   {
+    "captured_at": "2026-07-30T12:42:18+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0066f48fd69cee458c0cf90eef9bdfa654c7791ec545ab15f11a6b58119bf1fe": [
+   {
+    "captured_at": "2026-07-30T12:45:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c3f34682018a2532e8bcaeda45308a10e99fd9f86307a9a2ac35b29c800937b": [
+   {
+    "captured_at": "2026-07-30T12:47:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5be07828f77d45b1ed8b0dac0913f8918ac21741a8d87bfe4115f02f9fe9fb3f": [
+   {
+    "captured_at": "2026-07-30T12:50:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f96d18f220fd0a52550c8629f56c8a0b3e02036c877ddc98df2028c978b524ed": [
+   {
+    "captured_at": "2026-07-30T12:52:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5d40eddb9699b3c4bd85c58391cd17e08808f7d61493eab096398892694bad34": [
+   {
+    "captured_at": "2026-07-30T12:55:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bfe6ee95ba097a7200b06ba55e56ac28120ed8c512ca71572f31ab221747f3dd": [
+   {
+    "captured_at": "2026-07-30T12:57:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:82e8c120fa905b187ca5b138bf766acbdf791a4eb4c1824f245018ece7ba6372": [
+   {
+    "captured_at": "2026-07-30T13:00:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9f096aaf574ad39790c68fa24662ddbdec56107d70530288c1b5b4ca409a3dc1": [
+   {
+    "captured_at": "2026-07-30T13:02:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0cc5e292a66a58dea9280c0c3ea9ea0ee44a6c979b978cfd121c67ae262605c0": [
+   {
+    "captured_at": "2026-07-30T13:06:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d90ca99aaf9c4d6fcd854ccea81cc66d57d01ff1b85e7cc983b4121fed4f8851": [
+   {
+    "captured_at": "2026-07-30T13:09:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c969148cfc08c41b5c80baa4fad594ee9665f8f3d30565525015fad56f78ff4e": [
+   {
+    "captured_at": "2026-07-30T13:11:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:43f545f27c1dfae8a37debd0f3346ec1ba5e6077954b06f5e722f34456e021a9": [
+   {
+    "captured_at": "2026-07-30T13:14:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a85027f3f1d9aa13558de0568737a5637d5774458ce74fc1d309e0ad7ea6a890": [
+   {
+    "captured_at": "2026-07-30T13:17:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d9232061bb8aeaaea11513416d475bdc668a845017903621e096fee76fceae7b": [
+   {
+    "captured_at": "2026-07-30T13:20:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2fadfbe49e585282b3da1ba01611304fe4fd8ae4672998366c527f4df0e45488": [
+   {
+    "captured_at": "2026-07-30T13:23:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5f97bac67e5e8322c6b900dfd8a14171ae22217c3b11803bcb15f0dc9f4f75f1": [
+   {
+    "captured_at": "2026-07-30T13:25:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1431c293a6397fa9c42083bda2fef64546a050771a12e1ff8b9025854fb40b15": [
+   {
+    "captured_at": "2026-07-30T13:29:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5476fe1027c4b2d1e9910973edb897be5fdc2f51c671a860f6d27c541cf84ed7": [
+   {
+    "captured_at": "2026-07-30T13:32:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:073785f428a3afbd5b6995c4a5b4c8da240a1e4e7801b974b7df5b6b69f04707": [
+   {
+    "captured_at": "2026-07-30T13:36:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4d1c80d27bc8d18610ed1eeb047b24af6f590041d24878d8289dfd26d79b329a": [
+   {
+    "captured_at": "2026-07-30T13:37:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fa3072adf32eca2f82fefce462200cca4ee2601e4d3c9acf98ab1f9404b3c5fe": [
+   {
+    "captured_at": "2026-07-30T13:40:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b02d010d231583a0c6058e169c838c1b5152a22d095d7d8c4733d4f255f4888c": [
+   {
+    "captured_at": "2026-07-30T13:44:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f663b9e4354d5fc27d9791cd3aca67733d7bf71dbd4830b7b19d338aa244570b": [
+   {
+    "captured_at": "2026-07-30T13:48:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a0ff6ac00938acaa0a70482f1e2e941fb74cb0378ca73affebb90672f87ca11c": [
+   {
+    "captured_at": "2026-07-30T13:51:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3f5b088ba6e0a17332dc129510c8ae6c6404b4257862884c86f03f343ad90efd": [
+   {
+    "captured_at": "2026-07-30T13:54:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e4b758ded18da8fb1269d03ed5403e459cede643432988e321c9c0334d572f0e": [
+   {
+    "captured_at": "2026-07-30T13:56:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:96424b4ebd08639f47f0dd1495bbe3fdf53c905043360e4dc319131254add60e": [
+   {
+    "captured_at": "2026-07-30T13:59:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9c00732f5a0b21592fa9ebb9046d7dd01a4eadd98d8c02bbd81a6dbb36d79b31": [
+   {
+    "captured_at": "2026-07-30T14:44:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e05a678b6d770909d72fcae572bfdaf6403556ce914cbd18364d0bdbc17a155b": [
+   {
+    "captured_at": "2026-07-30T14:47:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:311c1f1d0116819a97f889ee0889bdfe009b2351659158708c9fd5fe7bbd75f1": [
+   {
+    "captured_at": "2026-07-30T14:50:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:216d097b9a6405e8a96ac1435fa5f23153c9e44905371a127884529bad25006e": [
+   {
+    "captured_at": "2026-07-30T14:53:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:496b4fb669b6d8d3e7fb3616f0e46e9c8f9bdff2d2761c6a9446a3320afdcaf3": [
+   {
+    "captured_at": "2026-07-30T14:56:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3ef61f0d1e4e4efa2a842d7562644734502dc62ee9a747281ccd1dad7dc817ac": [
+   {
+    "captured_at": "2026-07-30T14:58:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:89b4ff939688a120bb3a7ff72dfdd1300b21e6509856f96c70945cd65c70ab70": [
+   {
+    "captured_at": "2026-07-30T15:00:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1a7687f74ee35ad9f77e638a007235d40c6594bd0290eba13f56d39ec7efd67a": [
+   {
+    "captured_at": "2026-07-30T15:03:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e2d0a8d1a1cde8e21dc77f1d9666e53cc8d0c1f42576d975afe8d29640376536": [
+   {
+    "captured_at": "2026-07-30T15:05:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1a9e003e3a9beafb438ecc0a35a9743ab9dd87bf505d4ef80f155a64c04730b0": [
+   {
+    "captured_at": "2026-07-30T15:08:18+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:636ad25df45d14322659aa809c5f8a9501017c10ad78679bfaf887b10ef2236b": [
+   {
+    "captured_at": "2026-07-30T15:11:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5382248438bf6cc0e9e83a52f971667b6cc9141a3b4f83155614c3480453522a": [
+   {
+    "captured_at": "2026-07-30T15:13:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4fe78a7eb20da80e0be6fb962a90226fb597d2caf1aaf6b98d61b1691c3381c2": [
+   {
+    "captured_at": "2026-07-30T15:16:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:272120dde6f31b354198dc61ffb3c1417176aba7357647a5c41994918ea7568b": [
+   {
+    "captured_at": "2026-07-30T15:18:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ea4060f5c6a0cb83e969a6c5b1624e514e2e6114b08f798622bc6de932fa1711": [
+   {
+    "captured_at": "2026-07-30T15:22:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c5ed5064b2a79e1d48d452546d5beb5a4ab2f7d86941b00e29279f5575315a88": [
+   {
+    "captured_at": "2026-07-30T15:25:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c49730770f09070e89fabbc93e6349645e59f4cf0dd959461539eba7d5a4cd57": [
+   {
+    "captured_at": "2026-07-30T15:28:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9a85dcb9d3a66cdc7cd90637b2d420f1d1a7e3d35ffc3d8521f3406f8ed24918": [
+   {
+    "captured_at": "2026-07-30T15:30:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1c1857963459fb47a34f035a971567b1438f6f36d932125596820717118e9793": [
+   {
+    "captured_at": "2026-07-30T15:33:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:31d93773322f660b04cc0a4a7883041acbe279690d5b2f250c3a9cbd6d2cc178": [
+   {
+    "captured_at": "2026-07-30T15:36:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:73595f87491abc712640e52d403dd268975da4e2a4f267dbd0a4d16e45c8da47": [
+   {
+    "captured_at": "2026-07-30T15:43:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:29d72b7d7b6043a5b8e8ff98cdb46a7a89829c3b7dda1dc6966db2d31f5695e8": [
+   {
+    "captured_at": "2026-07-30T15:54:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ecf83ac7b6d9b57b77db1bee0988a229d3555a42da6223e684fb82f087bd304d": [
+   {
+    "captured_at": "2026-07-30T15:57:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c6a7b5497072b3ae2f237fb22b69e480dee49363a56da2eeea74ec0a0e3843bd": [
+   {
+    "captured_at": "2026-07-30T16:00:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e2df7a2e08aefd74dfc4622ea29e48fc904b0f94c625b187a8fbc4e51ebc9e4c": [
+   {
+    "captured_at": "2026-07-30T16:03:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:82266920b3973673107985e37263ecbd31768b7820391b0170fe350010541e49": [
+   {
+    "captured_at": "2026-07-30T16:09:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3c9b8f42c406dc634a149d6bf3efe18d59f5e38bd3d175e6cccc828adcd9fae8": [
+   {
+    "captured_at": "2026-07-30T16:12:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0004d6dbf7219a15948a0286639eecd2f01e0d4e307787a23ccb59b9bbd428b7": [
+   {
+    "captured_at": "2026-07-30T16:14:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:718c90cc629245155a935386b00687faec271b8f838dc0a531e7be26dbedd743": [
+   {
+    "captured_at": "2026-07-30T16:17:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8383b00a2a2ed360fd18ce0a880268582865c17be5de2d3c7ab4452e8ec727a4": [
+   {
+    "captured_at": "2026-07-30T16:20:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b5cb3698478abff488b5b8b019662e92fd21e7c59294ae5395492486a7693288": [
+   {
+    "captured_at": "2026-07-30T16:23:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:586c63ca524210269f3bc8a6e74cd0a5af10b0f6f40e3771f5abbb9e06409b75": [
+   {
+    "captured_at": "2026-07-30T16:25:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7f7c640a93aee19abd92b482690c93764f74db447f5c4101e377fc174b11ebfb": [
+   {
+    "captured_at": "2026-07-30T16:28:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:32e8b8a6b2474960773c37924186460a970883037062aae01eeac95a765c8e5e": [
+   {
+    "captured_at": "2026-07-30T16:32:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:db6a842ccadd3af13940117a184170b87662724c9698401098bb50043e5018eb": [
+   {
+    "captured_at": "2026-07-30T16:35:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bdae28db6b10b49547298de2c7ee808ba1d6f641da70fe31982fd776bfa6636f": [
+   {
+    "captured_at": "2026-07-30T16:38:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5063aadee17b1bd4dde1b9bd346aa0d2de135380fd78649802423f2804a4d99d": [
+   {
+    "captured_at": "2026-07-30T16:43:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0f16fb385e7200f5409d0cd2d7b8914763de64872759a2f966441e95be5330f1": [
+   {
+    "captured_at": "2026-07-30T16:47:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6ee1c6dd0fcd875c60b6f0cf4fbc01a482516c43b8ca9bd76fe28d2b782c96d9": [
+   {
+    "captured_at": "2026-07-30T16:50:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2062969a94a298e9f305c60c956397c63f82d8bcf2fcf3cc3dfd1b4bfe27fe05": [
+   {
+    "captured_at": "2026-07-30T16:53:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c75b1a791fdff6719a24d63170fc3479edab75d6896be5ac185ceca7f0834c16": [
+   {
+    "captured_at": "2026-07-30T16:55:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:742ec2f332815ad3b61cd7c858fde322e7b9e4db9f1c1f0c1023be0c49c1ea4d": [
+   {
+    "captured_at": "2026-07-30T16:57:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:33477aaa96fdb1f133ebef4b650b73010cfe47677fd6e5f0e2a1e2815ab885b0": [
+   {
+    "captured_at": "2026-07-30T17:00:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f3e66ba1e94b55d6b46ea866a997ef5665634b9e9515ee8e439b529401a680fc": [
+   {
+    "captured_at": "2026-07-30T17:03:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:59ff45a319658815bf07a321ab8d2fbd9190dde4eb19612bcc34969e17ddf739": [
+   {
+    "captured_at": "2026-07-30T17:06:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0f0f32cc7ca4e2f99ab9e8d8a214cd345bf63f88af64e59defb0055259254eba": [
+   {
+    "captured_at": "2026-07-30T17:09:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f8cae1a8b7813be5fbf882d545fc655246744e040b0b90969f0ac6110f3fbfc6": [
+   {
+    "captured_at": "2026-07-30T17:12:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:240a5e52ef2153ab084c08392328cdb64427757cbeca92b66ff38027915e3639": [
+   {
+    "captured_at": "2026-07-30T17:15:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:60a1304a46613a1c51e9777156c0c15eb8fdb6995f948677fb4e13ed6d950999": [
+   {
+    "captured_at": "2026-07-30T18:23:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a32013c5a4f856fe5d013a2816e7d8ad8cf7119ee57b1ebe8f9d9fdae83afc30": [
+   {
+    "captured_at": "2026-07-30T18:26:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:22cf167fbe64f879ff4116733bc1e489990e973696c6ba61dbb40d5c24756243": [
+   {
+    "captured_at": "2026-07-30T18:29:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3a54a1668b3b9773b42309790051faab77dfdc20499b9babf85a86231b839cb5": [
+   {
+    "captured_at": "2026-07-30T18:32:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e20f80b5e4f516c6e55c11f64e81a3847abeed7fe80b2e67b51d5b2d6238bd46": [
+   {
+    "captured_at": "2026-07-30T18:34:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:42230f184c496aadd7141db41b349ad51fc916f0985703093e60caff08a7c49c": [
+   {
+    "captured_at": "2026-07-30T18:36:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1b75949b07e21908b61569ad48ad1e6e61966348cfeed7c9a3fe915ba73385d1": [
+   {
+    "captured_at": "2026-07-30T18:40:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e5ff72d9b3794cb376a8e64616845b4ffb5473e7ffb98ceb3d6994fc0d76e31c": [
+   {
+    "captured_at": "2026-07-30T18:42:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:933eb096a6ee80286bd55a8a9b700f2a85337c340d5bdff84b698342a1e9a112": [
+   {
+    "captured_at": "2026-07-30T18:45:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7652ec20babe11f5426b17bc9c0294fc2018ed745f030640e065e475f7a140ec": [
+   {
+    "captured_at": "2026-07-30T18:52:27+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:9edcf2e6639bc55e064c29393898d2b2592e3668c5b9b20c64b3f10dbde0cd60": [
+   {
+    "captured_at": "2026-07-30T18:58:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:883ba0062c0aeb0681e978d0eefbeae0c5a2816b64bf1cf255c76c0a0bd05695": [
+   {
+    "captured_at": "2026-07-30T19:01:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3f0cd3d112eb84c7d750c14579ce54b00075603dd2dc6451569dbbb5c4253b15": [
+   {
+    "captured_at": "2026-07-30T19:04:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bc954b28f6763c23095e635338a0d74b27bf4734d45ab9719cc044ec9afd7187": [
+   {
+    "captured_at": "2026-07-30T19:07:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aba8e9629cb9fb317a379808492fbf87a94aecc1b15999e0c3395580e01357c5": [
+   {
+    "captured_at": "2026-07-30T19:10:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:490efd350d84005db55699f90dac3ccf8637d369d718c2dbdacd09a45e36050f": [
+   {
+    "captured_at": "2026-07-30T19:12:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:02e80f6992b898fd5a117b58777c137697db12b1ed7bb27778f0836d05de53d0": [
+   {
+    "captured_at": "2026-07-30T19:15:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c8602bf29b6829e72ecee8da0d0b371aaa256830d547c286be4920b6abc72eac": [
+   {
+    "captured_at": "2026-07-30T19:18:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e027ebbd6ffaa97da8a5781e45ab83f7a1a9a992a95d9280eb2e7e0ec1c6bf84": [
+   {
+    "captured_at": "2026-07-30T20:04:32+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:5256a46f5c2d619ae017dc7de6f5b6dbef3aae4a119e1891b4abe3757d51412e": [
+   {
+    "captured_at": "2026-07-30T20:07:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5e7df1958489d523cfe7bf794883a853d28b53396331e5940ec0c3e219549dfa": [
+   {
+    "captured_at": "2026-07-30T20:11:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:31cea3723d616bbea870f689d9d36a444e17948c1141a33f1db5718f040a1a58": [
+   {
+    "captured_at": "2026-07-30T20:13:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b82fd5918097fa28b63ad8ba866d694c5d7a0d477f8966702af620b25acd8859": [
+   {
+    "captured_at": "2026-07-30T20:17:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:606ca8b668d92d165cc7391f77138ed0b7343a28ad70ad6016fc55d4dd1b2040": [
+   {
+    "captured_at": "2026-07-30T20:20:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:274b70c15c1e8677d7dbd25548a72d24f1a11af170a472ab357edaf38b025763": [
+   {
+    "captured_at": "2026-07-30T20:24:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6ef427f61642a6e5bfffd5b534e8078d9359d59dc4b3f005a62def514ab540c1": [
+   {
+    "captured_at": "2026-07-30T20:27:24+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:aae368c9d1d7c7aa158f2e3fb897947fbddff6d47ce947f88500a1f400e16c9a": [
+   {
+    "captured_at": "2026-07-30T20:30:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b152eb0205532eddd096f5cb763732e1b7a039ebf01bf875d139560d8ea7b96a": [
+   {
+    "captured_at": "2026-07-30T20:33:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72bca670aac468b68bb617d04363c1b789a898de23c74498f37acf60280a4266": [
+   {
+    "captured_at": "2026-07-30T20:36:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:151c16491595b0db69e09a0fc887bd4985916b129a8e8d4234ad7c59d0a23ca8": [
+   {
+    "captured_at": "2026-07-30T20:37:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:591c420082364f4132af56103ed87d92a03e4492cc36be15fb9b6c3273030eef": [
+   {
+    "captured_at": "2026-07-30T20:40:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8a85275c4bef8b97fde56cc38a10fcf69cd7a91da7bd0b02baa819040e20adda": [
+   {
+    "captured_at": "2026-07-30T20:43:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5189ab6a4e8a22bb960d6aabb84344efacadf2a0b7da06380f7cd1bb1f75fac1": [
+   {
+    "captured_at": "2026-07-30T20:45:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:25e65a75124579d4425a5357f8334726ff39cb1a2c177d3f3a2103df738235a1": [
+   {
+    "captured_at": "2026-07-30T20:48:17+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:1d3e0f40dc663e016fbd343d0402b640a63d2fa11e59665d66cc71a87ebdff70": [
+   {
+    "captured_at": "2026-07-30T20:50:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8965ae9dbb5df10faad6da92cf28943751b7d064ab1f8915b5640d46c3ef97e7": [
+   {
+    "captured_at": "2026-07-30T20:53:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a62231b093d5e687d52cddb9e349a2cdf0bf206e7ec2f9573c841159837b6870": [
+   {
+    "captured_at": "2026-07-30T20:55:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a5c2738b03b4bd6945d4bc64d25f8c4639b792debeefee7eb72dcc84c291c9c0": [
+   {
+    "captured_at": "2026-07-30T20:58:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:536f41817f4c8d68829e00cd5813166afeb30429f3e076a5fca2ba621f8f9299": [
+   {
+    "captured_at": "2026-07-30T21:00:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:22ec12f5d93d8f7c379d78deb24ed46c3b37257a30121d142c6d1d0b6473fe84": [
+   {
+    "captured_at": "2026-07-30T21:02:55+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:343e0164271af2218529f639b75b32432cb86e16d35007045130f76b7940ba65": [
+   {
+    "captured_at": "2026-07-30T21:05:56+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:d8cb61f2a01d6dc94b442151e7f20d1bf15d7db973060cfae1b1c7c5425c2aa9": [
+   {
+    "captured_at": "2026-07-30T21:08:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d0eb1cf79be14fb01bac0690fd266e6ca6990ada017ce00abc912e223fec813b": [
+   {
+    "captured_at": "2026-07-30T21:10:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f2e8c9d3c1f42a680d258c0daff401e940351bebe369d427ac6d4770a447c8e0": [
+   {
+    "captured_at": "2026-07-30T21:13:06+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:9e3be2bc4190c7387abfc644aab752d8a3c5f535c6440ed90f3c33c41e333d9c": [
+   {
+    "captured_at": "2026-07-30T21:15:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bb5ea198d1ed7e7b6d93ee25fe4a018e7f307b40528bb2f0ecd868d1df5f8f2a": [
+   {
+    "captured_at": "2026-07-30T21:18:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1742f10b6a132969bd5f5ec32a2ca258407bb1b400c65ac37ae45950cc108001": [
+   {
+    "captured_at": "2026-07-30T21:21:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:add776ff7eae4a91762d97143663af0efdabd1e3e323a5170f8203dc55c9397b": [
+   {
+    "captured_at": "2026-07-30T21:24:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:052ae4c798cb07b97f288fbe2f71ac355334290a31e50171131ab7194e13863c": [
+   {
+    "captured_at": "2026-07-30T21:26:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5900cb6bace993bc3f8f32bf2643249d16b6f0ac5b3d05198c08e11913b90552": [
+   {
+    "captured_at": "2026-07-30T21:30:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fc9b4e0386737119d0745d50ede2789c8cb319bb983ed668f7a9bdb05d1c4de5": [
+   {
+    "captured_at": "2026-07-30T21:33:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:79a439ea0d14c673bbf1029c13873e205dc53cb05f10ee27c0e4a9c795fe4525": [
+   {
+    "captured_at": "2026-07-30T21:36:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:646604a720d5aeaba7c13812ef8af64b9a7b6298572803298994a9e029ee506a": [
+   {
+    "captured_at": "2026-07-30T21:46:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6903da2aa0bd357f3d41b52702e61e949aac88f4c54d91b0d1d9055049a5a523": [
+   {
+    "captured_at": "2026-07-30T21:48:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c226b491746b0b72367670d51f4eb85cfba2e525bf8e1a096bb47d7b55be9a5b": [
+   {
+    "captured_at": "2026-07-30T21:51:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6ade113c8e60abf3984738dd32eb5c0c6e961874e6e105c0a8473b6b4f7884ad": [
+   {
+    "captured_at": "2026-07-30T21:54:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a1fd39df69cd59436bc591169bed4591b3acf6a62ae2be7e95ab4270280ca294": [
+   {
+    "captured_at": "2026-07-30T21:56:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c4906f599393eff4df0d91011f60fb52c6ad9bdf669119810905c438fb234a51": [
+   {
+    "captured_at": "2026-07-30T21:59:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:85ad46669dbb5e373b4fa59fbd3b6dbeef8676b2647b4be2cde6a0386ebc4f4b": [
+   {
+    "captured_at": "2026-07-30T22:01:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bd6f3e41c32340c6886698bebe7a648d20dbb5601c0a9e00c02de27d67c441aa": [
+   {
+    "captured_at": "2026-07-30T22:04:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:befd981908bfdb6ac800db82c1844699e9d55a8f3f01a5dc5235d58b32f08c54": [
+   {
+    "captured_at": "2026-07-30T22:06:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:388beafb85c3690d279ed4d86bef25bf30ed049665ce6aefab9cf7e2c8eb1d08": [
+   {
+    "captured_at": "2026-07-30T22:08:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5ff887083e7f2d0993bf83bdceb7f8fb306c7892f5386e8ffbf9b67da783febb": [
+   {
+    "captured_at": "2026-07-30T22:10:54+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:655dfdb593798308824f1ade7ae313a1092658fb99813503b3accd8bf5dd881f": [
+   {
+    "captured_at": "2026-07-30T22:13:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7711b8d785ea1bb97e6624e61e1b7aeccb52bded455ae039618831f7c600c6d9": [
+   {
+    "captured_at": "2026-07-30T22:15:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:884fc3c3b984cb3c34b7d1f84c700622d0ca8abd0ac47da2e876366bb860e2c2": [
+   {
+    "captured_at": "2026-07-30T22:18:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1b54527c8d49c61a2c72ade90a86c0b7d3b17a24b1551ec9183c11c893cc8e6f": [
+   {
+    "captured_at": "2026-07-30T22:21:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:63224584517c135edc81a544ab6858ffdffdbab8c3c650ada3b5b5f6f4b11aaa": [
+   {
+    "captured_at": "2026-07-30T22:23:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:153bd83deada913fc5382109d3b556ee6d09c921720d534c791a218071388189": [
+   {
+    "captured_at": "2026-07-30T22:27:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aebc0c3f10a8ca9858e9274b45cceb1b91ad3213e3857be5c719495b0e0ad476": [
+   {
+    "captured_at": "2026-07-30T22:29:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c62962b36242d2e918afbc75a713f6cc27f479aeecde934acdfa8ffc64677549": [
+   {
+    "captured_at": "2026-07-30T22:32:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:db841782b57a3ebae23a10d351b8fe9867e048ee30eacf95cbb7ab9700e0aef4": [
+   {
+    "captured_at": "2026-07-30T22:36:05+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:4f76b0dd8679f5b6e06572e42c701e331df6781b921a4590747aae23b57b06c8": [
+   {
+    "captured_at": "2026-07-30T22:38:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72155b7e146eb8f07e2195dd49107601b02a330f3e3d513cdfaf0524cf64d1b0": [
+   {
+    "captured_at": "2026-07-30T22:41:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a2336f595772a1600c053d90ccef6bdfacfa21fc87c0bb44306ec1f75d81ab89": [
+   {
+    "captured_at": "2026-07-30T22:44:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1de97cbc78a2d678c4353a76686030f1ea4ea9cb6c6277436ee0a69756777c3a": [
+   {
+    "captured_at": "2026-07-30T22:47:22+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7cb64f27269fca943193ea6a5524dd74f1782a12db42d4577d6455d355f6123d": [
+   {
+    "captured_at": "2026-07-30T22:49:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:08f35ea16219700119d0b73b550999d6c2efa5c3c2be103147ec7fb538ca14e2": [
+   {
+    "captured_at": "2026-07-30T22:52:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:41ff14a39f128e291cb48fd9c823f8853c1681d4230a0e9c09b8f56812cc9b30": [
+   {
+    "captured_at": "2026-07-30T22:54:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b4be9695efd889ccc7ec1879c21ce23f68cab3571907fe15f825641edaf1df20": [
+   {
+    "captured_at": "2026-07-30T22:57:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f4c17b34313e90e0b975f05d2aa3edebf1495ea1401d8b3db970519e2306022f": [
+   {
+    "captured_at": "2026-07-30T22:59:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:12c9061477e86855912f325d56a7789365fd770e2083ffcf6a8e321579afe8eb": [
+   {
+    "captured_at": "2026-07-30T23:01:35+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:eb726a099d43ecf1a0d9de38af679f6f1890ea9233472b234bf9f62bb9bd9a1c": [
+   {
+    "captured_at": "2026-07-30T23:04:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4e299b85107f09df82d07dd36ded4a785d8c1e834b7f3f6a5c75480d968fab01": [
+   {
+    "captured_at": "2026-07-30T23:08:12+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:f627446665f705b7877f8f2675b7a264058d3861baa9b2b61f734c9150b6206f": [
+   {
+    "captured_at": "2026-07-30T23:10:49+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:34c84afcbcd4ba850fc7f7aaf7a399242a05456d2e07b068e4126ab589ba8e4c": [
+   {
+    "captured_at": "2026-07-30T23:13:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4e30984c59a88597ca795ef8bde52c9abaa1f43e19b301625922268e3677240d": [
+   {
+    "captured_at": "2026-07-30T23:16:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:470937af019ae4d6ed8c0d0b97ccc9bf5e48c0612a70795cf0f6e77e368954a4": [
+   {
+    "captured_at": "2026-07-30T23:18:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:05d5ea49d1228ecb9bc90a99b29f0af7c7b67e5ce45a67b00ed4f5cab0d8a207": [
+   {
+    "captured_at": "2026-07-30T23:20:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:10714f4b92d60e5087c46dd0ef0d670889701fe82baf8fa811b0cd9f46539806": [
+   {
+    "captured_at": "2026-07-30T23:22:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6d758a0f924abdbce32a59b65903259c6f130e336f30a324fbf47a3f5d1f82cd": [
+   {
+    "captured_at": "2026-07-30T23:24:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5926e529a2f629153ef5930a8c1d61f4300e5852d63727b147951dc494eec5b8": [
+   {
+    "captured_at": "2026-07-30T23:27:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:70fa1c660eae75bcb221cf77e5573f9cd55fa185a57211075f9f53c343f8abcc": [
+   {
+    "captured_at": "2026-07-30T23:33:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:230cd8b2653c0e3345036201176931a4ad207dfbfc347baee00d430037c4b3fd": [
+   {
+    "captured_at": "2026-07-30T23:36:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a42352800ba4fe8545d14e8d2be7af0e6f7568151556856fb7f67a886329a2e3": [
+   {
+    "captured_at": "2026-07-30T23:39:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:235b04a37a8d391245232268074e889fd0f5a9a640fadfffa797b197e636ec04": [
+   {
+    "captured_at": "2026-07-30T23:41:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ac2561330259df6e3920e009fce5268166e75736f189b079c13516fb8a7d0aee": [
+   {
+    "captured_at": "2026-07-30T23:43:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d6381fbc19cd72af223144bf3b0a741b6e9f5b3b051e10dc986cd06c84ee50d2": [
+   {
+    "captured_at": "2026-07-30T23:46:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dca10a73fbf03bc2cbed32ddede70c338c1b22bb411718666b218ba01f1d26c1": [
+   {
+    "captured_at": "2026-07-30T23:48:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:815129a99d3a7d9bfcf745e69b723aa40b53bee2f349643bcf116f5bfb720aca": [
+   {
+    "captured_at": "2026-07-30T23:51:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c92d91a647857cc2764bd4d1d97d9348e53fd29afd2f5f375b6d942d8cb09105": [
+   {
+    "captured_at": "2026-07-30T23:54:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8b3c4fbdaba8e58a4a885ab674099e84c9d78231899112ae55577cd150f17331": [
+   {
+    "captured_at": "2026-07-30T23:58:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:65e588f3b71e875566874fb5f12c6192abca676ecc92ec4aa9c35166ece8c0be": [
+   {
+    "captured_at": "2026-07-31T00:01:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:504cd06cee6441c61b65e846e0a430cc46ecff7c22981e434ac100fb6ffbeb4f": [
+   {
+    "captured_at": "2026-07-31T00:04:24+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:f3564c8d16fb9d638c4360b19c52b9d280974be4d9f19d49682c3ec4cf5e3556": [
+   {
+    "captured_at": "2026-07-31T00:06:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b03ca20a32b00ddef78c53b09365d8c6ab9e571ce9cbc686fa98975a2f89630c": [
+   {
+    "captured_at": "2026-07-31T00:09:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:54d3c834418b6d2cc6bd2059c4b98c59848c862ff955a34cb2419f9ea7f1eddb": [
+   {
+    "captured_at": "2026-07-31T00:13:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c6d32f352cfba3ae0c6e4afaec78876bf7568145e0e80422adeba03717eb07f": [
+   {
+    "captured_at": "2026-07-31T00:16:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:479d1c7b8b32fb265455d4e76a391880fd8c14f4c5a4c9c969c329ecb6b15858": [
+   {
+    "captured_at": "2026-07-31T00:20:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fd9582377e0211649befe7266807baef2951349f04871f5899b32cb586efdcde": [
+   {
+    "captured_at": "2026-07-31T00:24:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:932fef7a5aa8df21e3c3d9daf001d92702e33ebf0fded5296324d00a1861f39e": [
+   {
+    "captured_at": "2026-07-31T00:26:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b7d9399cae073fd648d45363696005de54d402ca2e3eedd5c0a29c3e02b48f50": [
+   {
+    "captured_at": "2026-07-31T00:29:16+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:961b8ee4cbe1382d4daefb30138d9c9f45b4e725ac9a33fb8036396179820cde": [
+   {
+    "captured_at": "2026-07-31T01:56:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f348ea3ed6a64a50410560c079b98062ac0c142d15b4add6991da7454b717027": [
+   {
+    "captured_at": "2026-07-31T01:58:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:71a5c1c06aabfe4ff29d4e29d47b9bbed30dd32dfb9b93a0020835e20fe2f224": [
+   {
+    "captured_at": "2026-07-31T02:01:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:04da45b987d9e5d747cc64097041497b64580f95100ba5aabbafc03412831642": [
+   {
+    "captured_at": "2026-07-31T02:04:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2bf6191d765f4ee20929265dda18f9f02944d4ce6d6f7d23fcc41b564d70e277": [
+   {
+    "captured_at": "2026-07-31T02:36:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d77adeb683fa71d06a86080d772e285d92f78eeab92d0cbe424899c968437c20": [
+   {
+    "captured_at": "2026-07-31T02:38:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6d81d89ac687485ba64c1030922fd8b19822619d41889a3453d86c6f74925d44": [
+   {
+    "captured_at": "2026-07-31T02:41:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b1f866eaf0d4341cec65b9339e89f1ee47b49f6e7e4282dadcf4d0a08e37e1fc": [
+   {
+    "captured_at": "2026-07-31T02:44:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c31385a0d94f10fb6a207b81a9965f5fd8fc1e2480fb8ea19f45c95f0cb40f8": [
+   {
+    "captured_at": "2026-07-31T02:46:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ba1c755bbb4f79e9d6ad6b85082861ea5610676f09fcfa2e6f4f5110c8460aef": [
+   {
+    "captured_at": "2026-07-31T02:49:09+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:685ccde5744172d5414b46f868e7c35af83a98440d224f4b64a92b0fd97ec47a": [
+   {
+    "captured_at": "2026-07-31T02:52:30+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:3ef46c7dfd1e6f7e2d1b4e379a178984f62bd0da7ba065c1ee9561c6a1225447": [
+   {
+    "captured_at": "2026-07-31T02:56:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3e4f2eb34315a0087965e67c5b157ed301afb10dda24b125eb3df4c52eb8d21f": [
+   {
+    "captured_at": "2026-07-31T02:59:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:27c99b977749cc38e30c2a32f1dc75d802bb02b0806ca8a93bdbea8fdb494568": [
+   {
+    "captured_at": "2026-07-31T03:01:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3e953039d258b84d3268e52f5acc2ef3c44c0072f2b581c5034ea1b437f1a2e9": [
+   {
+    "captured_at": "2026-07-31T03:03:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1758ab4a4a4abf1e078ee2ead1c23b27bcc5c6721e91404fe38b396b98b1ae57": [
+   {
+    "captured_at": "2026-07-31T03:06:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:80b5dac75004d71fd4d417afc088af614b70e0d68e5b763743d3e039538ab019": [
+   {
+    "captured_at": "2026-07-31T03:07:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cf2d4773ebb67b0face1590830cb4700297bbb5dc73d9ce1afe23746c1d7545f": [
+   {
+    "captured_at": "2026-07-31T03:10:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2865a75fe3b85706ce5ade6828259524d372397cf7562de86f25a38b848fde73": [
+   {
+    "captured_at": "2026-07-31T03:15:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:85e394f1a598ebb17e64d5e575e63ef8d74849f602fb53082160b335dcf1a253": [
+   {
+    "captured_at": "2026-07-31T03:19:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a2ddd1f12cca79644bccaa8be9c5954d2e6636e53fd37bf6a799e73b9685a512": [
+   {
+    "captured_at": "2026-07-31T03:21:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ed5bc1b5af90445ee538d87ca704c3c6bec9e5da3dc4b4bec35d374cd769e4b8": [
+   {
+    "captured_at": "2026-07-31T03:24:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a74312004d840ba8b39c170f36bb5da41614c67ee3a4d4beb06d0a331232b51e": [
+   {
+    "captured_at": "2026-07-31T03:27:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5d51afadab93484efbc2cc83110e7e2ecf7484cadcd89592abdd1b86d16db5e4": [
+   {
+    "captured_at": "2026-07-31T03:30:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b8d12936d9128fc52ffc386cac7cea4d481eef36673ba7509cf3204c9b618096": [
+   {
+    "captured_at": "2026-07-31T03:34:37+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:ec85b575360b50b523ce46ff43cb36c8083d0b3ffa875b2629fb890d17114ef4": [
+   {
+    "captured_at": "2026-07-31T03:36:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:423fd247e69a579d40ecb8e90bb1549cb7de2e76a208faf9f1deb3eef87e3a0e": [
+   {
+    "captured_at": "2026-07-31T03:39:14+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:6a2eb65fe182c7dc80c3e1adc99939f907b7f8ccad28c756e66f7040dac24498": [
+   {
+    "captured_at": "2026-07-31T03:41:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1eb1a6b7c8db73620201fa4c7187b8cd7af0ca771e61f04833708021c2b17d97": [
+   {
+    "captured_at": "2026-07-31T03:45:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6308d938f10aea1067237d1a42be169c1747d1906fcbeb44790abb98a20655f8": [
+   {
+    "captured_at": "2026-07-31T04:23:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b551136c0acfe7770e64a05e55dec4f49ab040c4bc145d48c338d0c9108fed93": [
+   {
+    "captured_at": "2026-07-31T04:25:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1ee817f7e052601a008c8e473db7f1f8605d03238db3deba688361d7deba1a47": [
+   {
+    "captured_at": "2026-07-31T04:28:02+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:e563959ee6eab98fba5decc2115fce4ca9f7780033e6479bf62ba7d1736f829e": [
+   {
+    "captured_at": "2026-07-31T04:59:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:408e936bb76b4ac1141e89cb75215af0aeaac902148f6cd438e268a9419c97aa": [
+   {
+    "captured_at": "2026-07-31T05:01:32+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:a07285be04aadff8c10cf4f12e4181eefcd8c224c5aa435cd89232734e056c46": [
+   {
+    "captured_at": "2026-07-31T05:04:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:412d36343b4ab801e595169cd2e9c470701def9a628b9ff9273cdab6751ec1c7": [
+   {
+    "captured_at": "2026-07-31T05:06:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d020d79f4d075e6441b8fb1ff6f7616292c740140cbabc36f259175bce10560d": [
+   {
+    "captured_at": "2026-07-31T05:08:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2832463eca99802170b39b8bcb0da5c690522c6592557290f32353922852ca47": [
+   {
+    "captured_at": "2026-07-31T05:10:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dfa3f6a35b11e65ad7c7ec0687ac3c951118a87aeeb955a21bee9821c615acf7": [
+   {
+    "captured_at": "2026-07-31T05:13:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9772670226ffe207f79a3e47ee94eeb5821c3db01f587a3c1cf87250a4d61766": [
+   {
+    "captured_at": "2026-07-31T05:16:18+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aa861f374941f1126b2988c45183b10b15564cd0ff41f4e66f9cde7423c29a99": [
+   {
+    "captured_at": "2026-07-31T05:19:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d2a55f8d8fa33383fc59bc88e8ae180e21eecc77bd724de47792bcd9e62a22b6": [
+   {
+    "captured_at": "2026-07-31T05:22:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4402eebf9c049f4e7c35d5889ed5e639f1d66a39404d462b0dc1fde360787885": [
+   {
+    "captured_at": "2026-07-31T05:25:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:952a3f2299518b8353cdc9c0a229603315f80204f66b7cd84db2e796ece2fb5c": [
+   {
+    "captured_at": "2026-07-31T05:27:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8d45d5761d883e25057193caf6fa54ccb364995eaa3262585e62fff832b613d9": [
+   {
+    "captured_at": "2026-07-31T05:31:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:58941cdcdee78f64980635ec1ee510d0a8d5406658d6371944e556917ed9753c": [
+   {
+    "captured_at": "2026-07-31T05:34:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f1c4f65bc66adb6b7a97758cc548d4cd65541b4c35b6745c0557d106857032f7": [
+   {
+    "captured_at": "2026-07-31T05:36:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4ba7a457550edf3ea850e986119b2dfb8a2caf67e67cfde23b4a968d65236d19": [
+   {
+    "captured_at": "2026-07-31T05:39:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6957322d46fa3cdcfc64b374bc9b33c73580f8adc691709fb9fba37031555b5d": [
+   {
+    "captured_at": "2026-07-31T05:41:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ccd3fdf3e9f419e3a05fe37e980f37487121cf4f620c3a685bb87626bdf5538e": [
+   {
+    "captured_at": "2026-07-31T05:44:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4f290d0a88c4e7381c8c8469635e05290bf4165679d28fa983013177ce37893f": [
+   {
+    "captured_at": "2026-07-31T05:47:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0c2334b9b410691e0f7e90b900c44e3cea2a1a2d5f5fd1bcf2bc6c81e1017683": [
+   {
+    "captured_at": "2026-07-31T05:49:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8f9e231b370cbe00a45cc2232bd749cce23e255dd441173f96f6a5961bf36059": [
+   {
+    "captured_at": "2026-07-31T05:52:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6e5a68dba8372b1ce3c2c44929d077dcbb5f48723ab3bb5a3f3ea2218fce0fc": [
+   {
+    "captured_at": "2026-07-31T05:55:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:59a5f620785aefcbac77f7a4346e31c42d8df738bd0edac2ed941a980c8e7a8f": [
+   {
+    "captured_at": "2026-07-31T05:57:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bf102498d80d3324a0bff723d9ee2158df0ce8855fcaa0493c088eed84e863ea": [
+   {
+    "captured_at": "2026-07-31T06:03:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4522ee4e38e803831655ee93edd53bd6331957e6ba5c7a5565c475a4d5fa8879": [
+   {
+    "captured_at": "2026-07-31T06:09:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c87df71fabed3af4db87c86bf91af566a189e8eb38268b0f497f2f70e969266b": [
+   {
+    "captured_at": "2026-07-31T06:15:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7b1cf58ed4b6fdb45926111d8672f1d432b7da969a2eab43d0232ed632e040c9": [
+   {
+    "captured_at": "2026-07-31T06:18:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c64a9ff89db0a24018767b24f4f801b5b4e857f863e601d70db7ee570a42b283": [
+   {
+    "captured_at": "2026-07-31T06:20:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e2f53bc6b60fb697a13e0446d8d0f13d98d0d2b56cbdbf98ac30ff8605ea8483": [
+   {
+    "captured_at": "2026-07-31T06:23:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1529d6b05f5fab8c04c89d478f75b1be97778278221924b91528f7dff2f3184d": [
+   {
+    "captured_at": "2026-07-31T06:25:54+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:335235d7b23110938b957affe9482bea6fd15bb46c8cc1f98d615cb40d73df30": [
+   {
+    "captured_at": "2026-07-31T06:28:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:02161839e2dd6a9a571b87a1091591abc00e22b159b3f8da794bd2cb58ff7b83": [
+   {
+    "captured_at": "2026-07-31T06:30:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:76ea1d4afff2c7567757aeb12f7c976fca4191c81b17af6586304887eec3bf9b": [
+   {
+    "captured_at": "2026-07-31T06:33:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ed4e69ec750dfc8cc0199aa72120276e599532db65360ab03f0d78a0aa0c5b24": [
+   {
+    "captured_at": "2026-07-31T06:39:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4e2707ab779b6987335b121b540463b475ce7b6e88399873aca61c852348ba4f": [
+   {
+    "captured_at": "2026-07-31T06:43:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7b784b8282b51e30f6615bd2cd2e6208ae278dbd1b4b2082f057ff57aa64ca82": [
+   {
+    "captured_at": "2026-07-31T06:45:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4b77e3e78b34fe7f07dd7093d3a2620fff1d0ac0427cb285f087b8cfe7c61564": [
+   {
+    "captured_at": "2026-07-31T06:47:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6888d519334abf1fe07d54ae4cf11df881cc60a3f0f414588baadf033e480c88": [
+   {
+    "captured_at": "2026-07-31T06:53:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aacf8bab0f99cf3683d4b58987a499d4975b3470f47030781d6061822cb3662a": [
+   {
+    "captured_at": "2026-07-31T06:56:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a35a49e9a5436c58bd2fc4bbdbbfa040df2f06a733439a4a7ee128fb78a2ebf2": [
+   {
+    "captured_at": "2026-07-31T06:59:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a2568be0b1182534a0cba3f9a8c009cbc73ce1657ee28e1854848a7bdffc5f2b": [
+   {
+    "captured_at": "2026-07-31T07:02:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:71b755933ad4cca8263e1a3eba10d303aace971fb4d5f494c1e86231d232b80e": [
+   {
+    "captured_at": "2026-07-31T07:04:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7341c8a85775ef0c4390f900adab47d7137febe9ee0791a340876b3ee5129859": [
+   {
+    "captured_at": "2026-07-31T07:10:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:349cc49e44eb049e26c6dff64b427b864b2f3aef45213983a97d81d07183fc02": [
+   {
+    "captured_at": "2026-07-31T07:12:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:51716b3135538ed59b104ac36db6da27ffc41ad266b2e15abed444b8355beba7": [
+   {
+    "captured_at": "2026-07-31T07:16:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5600a956f9932f309cfbf2a389cb0d369913f86a130e90ccbd16a6ab6607cd8b": [
+   {
+    "captured_at": "2026-07-31T07:20:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5ffa73db79fb157f5c42ecbdba49e4a7a6e3ebe36325df2ee8d84fdf1f1e856b": [
+   {
+    "captured_at": "2026-07-31T07:22:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ce5f0fa602b29d16211dcf39b763109227edbcd710e037a957e3a5dc39318b47": [
+   {
+    "captured_at": "2026-07-31T07:24:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ac27eb423f36431915377d893ce7accee319e7a47e478f7ea10a6034d4f34bc0": [
+   {
+    "captured_at": "2026-07-31T07:27:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:36e9588cb2ac1738bd6e150a24dde6ac8069227d1be06d3dc559d23b1ddd3013": [
+   {
+    "captured_at": "2026-07-31T07:30:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4468be0bae33424753af93605c7d98e229037c8ab4d39ca318ba41e29c2a90ba": [
+   {
+    "captured_at": "2026-07-31T07:33:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6e3f75f30d7689d8292559f791a4e7f7442dd94661d111f90e7208f772867335": [
+   {
+    "captured_at": "2026-07-31T07:35:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e68e969db4a55f0e8d654127d8031161047e56f21fa8f348b5453296a0851a6b": [
+   {
+    "captured_at": "2026-07-31T07:37:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cdb0b722f1f78ebc9520f4b4171da5852bda4429a67ba685570083ef5d5d1582": [
+   {
+    "captured_at": "2026-07-31T07:40:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:678301d96af7361421d2601f9dc2f6cbba52ec18895d8ddffe1318c489baba35": [
+   {
+    "captured_at": "2026-07-31T07:43:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e91f8cd3a467600cbffddd2550e51c410563f6571cd1850eceefce9e7d948561": [
+   {
+    "captured_at": "2026-07-31T07:46:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a9c0307e67538f411d43892735cf34bb4b957755f4d3092417cef5e957ac1804": [
+   {
+    "captured_at": "2026-07-31T07:48:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ca61454e57e24692308888b31a2dbe984ebfa31f40257393544c05e43bd27e0f": [
+   {
+    "captured_at": "2026-07-31T07:51:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:47b56493afd75fc6e7a4590ac9ca9ea9598ab8e48cf6cdc576bfcb46f0ec3aed": [
+   {
+    "captured_at": "2026-07-31T07:54:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cd64c7242ca84fc6cce7f7f44d770b795c2b7cfc77466490406564d0a64fe3d8": [
+   {
+    "captured_at": "2026-07-31T07:57:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6c296150edec005168239d22a70912c348a3fd727244dbba389d9ed2bfc0acd": [
+   {
+    "captured_at": "2026-07-31T08:00:28+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:a7adbb306686ab4622a4b79f657868269077031e518e4e67ff36a3c50b012ee3": [
+   {
+    "captured_at": "2026-07-31T08:03:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3e0a2e59d8f80cb51ef9d72f5b55ea6101db875e063e4336c7a105ec13c083aa": [
+   {
+    "captured_at": "2026-07-31T08:05:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:89fb752701bdbd895ddc882af98228a4f2fd64f335607617584b73eb783b098c": [
+   {
+    "captured_at": "2026-07-31T08:09:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f9a2e8de3c89aae18d2f5b4979e7155fad5e9154c1d260f596ee2359e10aad4a": [
+   {
+    "captured_at": "2026-07-31T08:12:39+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:bc47268394b6466e0730cb5e68e92523669c96c12d06f1f1a08ddbec620a0261": [
+   {
+    "captured_at": "2026-07-31T08:15:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c38cde0f1719f38886095a870086ddf2f6b5bdee8ad4ad475228440ee1f49791": [
+   {
+    "captured_at": "2026-07-31T08:18:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6c0b97e8e145f97703872fe886e9257ab1110c53148d1850943666e728428cd9": [
+   {
+    "captured_at": "2026-07-31T08:23:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:51192ed8b4d28450223e90da13c75da1dfc937118693292f6228d0ce3546aa5b": [
+   {
+    "captured_at": "2026-07-31T08:26:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b32c6f40b584d24f43ee5cabe0028eae22e69e6fb1e4836959399725b7f4b57b": [
+   {
+    "captured_at": "2026-07-31T08:28:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:27df7150028e71b3ce842ad75a667a0ee60c8d0c2433d160364e5eb9b18ddeb0": [
+   {
+    "captured_at": "2026-07-31T08:32:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:54b0eb504b17393bdb2b36f30346b49847417dab00325031cdcc7feb5a648138": [
+   {
+    "captured_at": "2026-07-31T08:34:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d27d17ed04a7b1c068bf80781e833ce50cb4ac8c8102c85941f5e5f1ff368f84": [
+   {
+    "captured_at": "2026-07-31T08:37:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2fff7bc70d9d7cfbc5d47b397e4a7853cc5265f9263982853ba16817c11a7f1d": [
+   {
+    "captured_at": "2026-07-31T08:42:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0df80a1818d3f8099a1c9cf210b5b3f68801cb1b63c5b337c384e4a7da399215": [
+   {
+    "captured_at": "2026-07-31T08:44:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:de25e5ae53c011b6508e26b4240054cca6e244782592be209e9136c4016480b4": [
+   {
+    "captured_at": "2026-07-31T08:47:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:113a9d07943913aa7bbb709c1374f94d4292e66a5b55efc12281f2e953b80a35": [
+   {
+    "captured_at": "2026-07-31T08:50:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cb0aa858672e9e587def6131e604b066adb4666f4b0b4574aeb47adfee0c21da": [
+   {
+    "captured_at": "2026-07-31T08:52:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9a0b4dc671e17fc6f62cbba8298e76e5c1320b77647fe836fceaf8caf77efafe": [
+   {
+    "captured_at": "2026-07-31T08:54:37+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:b140156cf9fe18b3ef5f2db9f9911a14b5bb40dcd40cf49d2921b0563ad027f0": [
+   {
+    "captured_at": "2026-07-31T08:57:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:39aac37bf7e99e285f0332a507b140a4cce72c90d5ad3a64d47e330e8297e4d7": [
+   {
+    "captured_at": "2026-07-31T08:59:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4151815055565bc75b869e607838d4c1c1a19f72172ae4414b14a271c0c931f5": [
+   {
+    "captured_at": "2026-07-31T09:01:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3a406852cce43c86d39b81d4bed48ab0a2abc4736f5290225012f35cf8a13cc3": [
+   {
+    "captured_at": "2026-07-31T09:04:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4785369c1208ad836a04e60df03629fd9dc4fcc1ec91d9cd546ef9a72edb20b4": [
+   {
+    "captured_at": "2026-07-31T09:10:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:438a3615e7ca989633038270eb18f3609ea751b4eca2c469c774cee2985f0704": [
+   {
+    "captured_at": "2026-07-31T09:13:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:57c577bd16ecc1ebc724e0d82c8a4dfd14fcfc88c1b6befd0f4ad92f9f32f985": [
+   {
+    "captured_at": "2026-07-31T09:15:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:084acc1448fa9f24e601b5cadb6d781811d11bcb3fb5eb5793ae861d5c652473": [
+   {
+    "captured_at": "2026-07-31T09:17:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:31255147ca853a4a29f7b7b309a730568bc01ea763d893a550fe291846debad2": [
+   {
+    "captured_at": "2026-07-31T09:24:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:91356cf49e392431cf36d16e33ea5c1d0b628a19ac581c76de3bd55c89b84d25": [
+   {
+    "captured_at": "2026-07-31T09:27:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:755081031b74c614fd320b1f5a75669721cc7913db088e842f9fdc45999bae15": [
+   {
+    "captured_at": "2026-07-31T09:29:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:12d6dfe3cceb74dca9e67dacae157565e525b372b805aed593410d8b3ec3dad6": [
+   {
+    "captured_at": "2026-07-31T09:31:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5a7f137f02be1de7961da631263cad88a037d215efc425576a1607ee62ab2787": [
+   {
+    "captured_at": "2026-07-31T09:37:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:178a94239b4d2c1585e65ff7e62a2c2aa4b51d585a462f836d989d00f02293af": [
+   {
+    "captured_at": "2026-07-31T09:40:15+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:7dbd8ac00171356e5a1572ab04eef146d4f956f5db8f8a99be079be5a7bc9f93": [
+   {
+    "captured_at": "2026-07-31T09:42:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:055a825742266ae1a63d4cc9abf69bd050e2900d45e43d51f22994a4f0afacbf": [
+   {
+    "captured_at": "2026-07-31T09:45:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e5292c3060fa1bf34f2c00ddba5502d7127da0e72ab9af0be19c263f91e692e9": [
+   {
+    "captured_at": "2026-07-31T09:47:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:75832051c66e55ffd6a6ef749a8d73036d1f644caec80d131217e09c3923ce5f": [
+   {
+    "captured_at": "2026-07-31T09:50:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aaaa9f4093359bde155bd9aaa60418b8c328232c4bf1348a46b3d49e4643e398": [
+   {
+    "captured_at": "2026-07-31T09:53:54+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:41f22522211313e8321a3a6151df0c856442f8ed342f13c9abbe22d5e0c81c54": [
+   {
+    "captured_at": "2026-07-31T09:56:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c0c304730a02aa2ba896c4a819e5c30f434125ee590251751980d20df359e678": [
+   {
+    "captured_at": "2026-07-31T10:05:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2a4c4d74511e385808026e6419e96033dcb2b82666107971c0f769d0b5973962": [
+   {
+    "captured_at": "2026-07-31T10:08:28+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:7416db05f10af6ffe3b8da2e5adc541202bc81588178fb1138d272f9e98ee575": [
+   {
+    "captured_at": "2026-07-31T10:10:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4ed74cc08582df74652befd8cea92bf2668c830a96efa62da1d0cddda5409f44": [
+   {
+    "captured_at": "2026-07-31T10:13:40+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:994980799ebc92eccbe73ad820fdbcda7dcf8dc7a2e02ef020d68b244b6f25ce": [
+   {
+    "captured_at": "2026-07-31T10:17:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d5e79c5f30b113be2b915e2423b6a08dd1adc5b29c9ac71e33fc6eec6646eee5": [
+   {
+    "captured_at": "2026-07-31T10:20:51+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:0ccebf471b536d2ecc645b1f8755b463f790fff4cb34aaf0def87c3a6157d868": [
+   {
+    "captured_at": "2026-07-31T10:24:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5fcd61e3a057e193b008c92ded5a2f66dd3d2d80e1b91366c6f89e1b1891bec3": [
+   {
+    "captured_at": "2026-07-31T10:27:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:39f37af4eb80d7fda23e496b46d0b9e1994674b26b30db2d875848251135ce8f": [
+   {
+    "captured_at": "2026-07-31T10:30:16+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:674658d37a7360fa1846e186c266f349c951c1c6fa7f236d4b57b6e706d4144f": [
+   {
+    "captured_at": "2026-07-31T10:32:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:938b4e4d551679ca5b8cc4b90aa106cf14fb889527cfb3c1f8d7e8560f7587f3": [
+   {
+    "captured_at": "2026-07-31T10:34:59+00:00",
+    "verdict": "unreadable"
+   }
+  ],
+  "sha256:f7a69e15226305d843b213ca4df1220cef3f656e5ec7c0dd01834ea60e0b50b2": [
+   {
+    "captured_at": "2026-07-31T10:38:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:73b65caaf721c577116cadfb994443714109665caf46c1d20679ab8114ce1a2c": [
+   {
+    "captured_at": "2026-07-31T10:42:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bd0f401a6d63d8c9c712756c4b6c4ddc8711c2a32a294b0a527150bda2a39d21": [
+   {
+    "captured_at": "2026-07-31T10:45:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c0a36f1b35502add6612a5fa5990c2ff53ba689cc774158e1de8e674534cf1da": [
+   {
+    "captured_at": "2026-07-31T10:49:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c42cd2a2ac64ab26ed4feff61fe92fbd088c921a602e7819f6907aee5f29e1d3": [
+   {
+    "captured_at": "2026-07-31T10:52:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a9458bb947ea47fe3549a85233729d292a6971252f9fa9c808c5b8586715093f": [
+   {
+    "captured_at": "2026-07-31T10:56:43+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5e91b2167e4a9bc569149866045a2c376e7a4e7156cbae69759956bf29e99078": [
+   {
+    "captured_at": "2026-07-31T11:03:41+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:8d8091c208e6e1e295be33c619819c97872cb9cf0e081bed80fb6e45d4e9e42f": [
+   {
+    "captured_at": "2026-07-31T11:06:34+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:0ea239b5aaedf7275b6fd3c7f7dff2c7b1e76744a153f40a416dc80bb47b1ce1": [
+   {
+    "captured_at": "2026-07-31T11:09:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:db9a52f166d72ff876b61c1dac101f67edf34206461fbdddc68d4999ee2be6e6": [
+   {
+    "captured_at": "2026-07-31T11:11:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:76cc7c2976c891edab56f8df8658ffec6847fdbaf9b1bf4f16c4bc248f575c2c": [
+   {
+    "captured_at": "2026-07-31T11:14:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cc4ebe1e8dee663f4b7ae7f4dfe2e2e26427b10556c72c85bd4f388b7ad3a98c": [
+   {
+    "captured_at": "2026-07-31T11:15:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5b7e5574b3af70707a5f045a8113a26a636a6bea9c57508e1b8de66d46d9f6ee": [
+   {
+    "captured_at": "2026-07-31T11:18:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:460c333c9e6b33539ab67744add9c84e43a25c4118c5a3f2b565b222a39a3cde": [
+   {
+    "captured_at": "2026-07-31T11:23:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bf19c783d17d30aad261a7d62bbf003ef633b5ed8e5251cac827a151326c7799": [
+   {
+    "captured_at": "2026-07-31T11:27:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a44abda193c871d4e256b9ac58c483eb4cf693980acc489c9583c34364eae9e0": [
+   {
+    "captured_at": "2026-07-31T11:29:50+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:94d33cae0535698f85e067d1bbdb22faf89b7f5c3865b0cf2fa0847507ea9dc0": [
+   {
+    "captured_at": "2026-07-31T11:32:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:80d0e73af9e6922fc199a050ebef916cfde3fbfdc823b16126c43e2a0017123f": [
+   {
+    "captured_at": "2026-07-31T11:35:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:86fcbc470c2146d1b89611578a065a754411f283b88e227aafe956e04cee1d4a": [
+   {
+    "captured_at": "2026-07-31T11:38:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c550b0f8130b28485ff40561de5489390bd170704fed2b0dcbe6c4ddab02e056": [
+   {
+    "captured_at": "2026-07-31T11:45:10+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c532901437821726d44700fd56ab818d7d762e35569377a2c95622297f30e012": [
+   {
+    "captured_at": "2026-07-31T11:47:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c2def1decd5cba64ae8defc8a1a4c4770eff6c24150d1ca7eaff429b5102af30": [
+   {
+    "captured_at": "2026-07-31T11:49:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9334f19fe672aa110d7ff207055532053cac9bc19190db5c451f583048b13d15": [
+   {
+    "captured_at": "2026-07-31T11:52:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2eca86657ddc6a0305306d5a8268f386f301bf61f110b4b4fdde5c8d9baa5517": [
+   {
+    "captured_at": "2026-07-31T11:55:11+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:adb56cfbab7bc8df26095260c0e009818b440da1059a88373defd51ed7b74b0b": [
+   {
+    "captured_at": "2026-07-31T11:57:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e37dab378109cc1ad573d7bb11b08859239dbb52f7daa4a679497b061f0cc1ff": [
+   {
+    "captured_at": "2026-07-31T11:59:59+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:ebcbcf2d013f07098358b39bb27920a5da4cb7d8049ede9d6f10a8927b52b7e9": [
+   {
+    "captured_at": "2026-07-31T12:02:37+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:c613bd7e3edf479616a2e2cd0a213bce55dab29113dc718d96845fd474fac5cd": [
+   {
+    "captured_at": "2026-07-31T12:06:02+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:3318aadce84edbd24951a62d8170f4484b2b96aca9811d3c703539bda4fbe98b": [
+   {
+    "captured_at": "2026-07-31T12:08:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f2ca4c76f9a1f61842a485b38bb721f6d8309d05455f5fc0cba764d4d379524d": [
+   {
+    "captured_at": "2026-07-31T12:10:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ee42c4519018c91a0a9bf62e8803720a695ef2dfec7576311898dbce1902267e": [
+   {
+    "captured_at": "2026-07-31T12:14:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1223b0f9398b0f138c8e93b9684a87e013aa8fb3b3a26ac36efc489e33d79465": [
+   {
+    "captured_at": "2026-07-31T12:17:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c24bcb603a976a4a19d895e7d95b3fffe3a564bb36310e1a32346f5589d5617c": [
+   {
+    "captured_at": "2026-07-31T12:19:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:61bd7f260cd4fb81d2686205a5b24ba50d6fe206141674169a93a69c35c0f30c": [
+   {
+    "captured_at": "2026-07-31T12:22:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:27a2bde7e751c1686a6ab499c5848bddebec460713cf1b383ebf3984b36fd6b7": [
+   {
+    "captured_at": "2026-07-31T12:26:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4fd36031c07ad5df13cfd991d4d53dae993f4b95ccc3ad65f2231c8f6538d288": [
+   {
+    "captured_at": "2026-07-31T12:29:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:17f8418075928859cdebe77591257a4f10421fe2888e2edd0d2593c6d7381005": [
+   {
+    "captured_at": "2026-07-31T12:32:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c579cc157e27244e672768d1983fb811054295ee6f31ea658632f6ef965bfd47": [
+   {
+    "captured_at": "2026-07-31T12:34:43+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:ad5d53e702aa69cb36554171839bd715877310306d37428f28cb89255c168a73": [
+   {
+    "captured_at": "2026-07-31T12:37:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1508ccf3a735b5467819925b7d5a7ca91b5abe4f7fd5a96797283b80ebe43a0c": [
+   {
+    "captured_at": "2026-07-31T12:39:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7dce3695fe559b901579bef86b741cd17e1de950c966a943aa51ffe868f9b573": [
+   {
+    "captured_at": "2026-07-31T12:44:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0fe8cf8c6e57e7e13fc61cca854d2f376af72b7ab26cfb671cad8a89a4e7ac3d": [
+   {
+    "captured_at": "2026-07-31T12:49:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8b45136677344f52c2aaf237213df6d7142acebd0b7a00cf3701c8d30ea477c1": [
+   {
+    "captured_at": "2026-07-31T12:52:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f1ad6788592ba325c9a0c5b957db8ba20633ccb1fef6d1fbdac1594de82fad81": [
+   {
+    "captured_at": "2026-07-31T12:57:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d05894062dc592b59c395bbaaf1ef4f75a4e921b314ed250e7e8e9223d9ffdb6": [
+   {
+    "captured_at": "2026-07-31T12:59:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2f51c072aa767d81c49453f0d9a9b821d6ad974517c5be4178a9d6501d28e58f": [
+   {
+    "captured_at": "2026-07-31T13:02:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dee48c948370626110cec102723e0297beadf6aa5784450f7ef06a0135490bc7": [
+   {
+    "captured_at": "2026-07-31T13:05:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a69487708c3a3342ec890d6af90f371b16c3c6d77075868b030112cf98e08716": [
+   {
+    "captured_at": "2026-07-31T13:09:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f451cd3e5a342e93a13ecad1d3989a2bcec235ee0f5c75dc406aaddb1b67b1cf": [
+   {
+    "captured_at": "2026-07-31T13:11:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:925627fd79b4bbe896fbdd54c4e09b2666fd974e55d7947ee0c619d7db090b66": [
+   {
+    "captured_at": "2026-07-31T13:14:35+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:d7d2daaf6db516b2729bb8c9077335106b6794998a7d1697f238f5ad61e6dbbe": [
+   {
+    "captured_at": "2026-07-31T13:17:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e547684943b405a2f893f4171b88697df96e3aac3610c08d02c1115de22eb151": [
+   {
+    "captured_at": "2026-07-31T13:21:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1728627b9b7710c92f4a86ea1e54eca5631f8c9cad84a037e08152d02430b342": [
+   {
+    "captured_at": "2026-07-31T13:24:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e79b77cdf7f3d6cf9a5ce933727543538056d57fd70a155f492c6b00b3419a12": [
+   {
+    "captured_at": "2026-07-31T13:27:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:93396f078a6084eab0a0239e9e0a376195c468d412abdc7ce967d7ac6c76c418": [
+   {
+    "captured_at": "2026-07-31T13:29:46+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:3acdb1ef8c67905b5344509ec716f111f570ae244e1295fc730714924c31aa08": [
+   {
+    "captured_at": "2026-07-31T13:32:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f8cab2bbebcf392e3198f1643bbd77be0762f5079ec40f1630dbfd416c2b128e": [
+   {
+    "captured_at": "2026-07-31T13:34:56+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:cdf5d2c743d53662d1833b01da1058a51b2e5a761570cd4f50efe64d9bebb6fe": [
+   {
+    "captured_at": "2026-07-31T13:37:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f9497223145e6b8cd0218ed9f3fcc3b0f30509257f82292e26265ca978a94294": [
+   {
+    "captured_at": "2026-07-31T13:40:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e086c5b3e7593d224f46437862ca1e6826e88312ad8e28f3a41083f77d3a9ee2": [
+   {
+    "captured_at": "2026-07-31T13:42:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5e62b13476b3189679d7c249d7b9d5dc299b0e6cdf615e5b566a7f3755fb0288": [
+   {
+    "captured_at": "2026-07-31T13:45:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0290e50843eee2bfc9d27b8537a60d4e22838be574ccbe1eb6f16f8d38a97ff7": [
+   {
+    "captured_at": "2026-07-31T13:47:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1ea7b408f90487e600c85d01dab5b38deeb973158263434da3606f5926cf8480": [
+   {
+    "captured_at": "2026-07-31T13:54:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72bd8a377b16b5e607e05c19e4ce186d069c3458e78784c6a6e55b4b46df5209": [
+   {
+    "captured_at": "2026-07-31T13:56:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4f9a1806374f7a7cbca93a916259c60df47a72fc2d1e5e587ada19d047196793": [
+   {
+    "captured_at": "2026-07-31T14:00:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b85d3c2eb331a368cbc73f5b5b762c24f6dd714e5bf97e70f7be527306026bd8": [
+   {
+    "captured_at": "2026-07-31T14:03:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:245504f4e8884e92f5e39352b68e001243ec7e222654ce69d756331cdd1f5dfc": [
+   {
+    "captured_at": "2026-07-31T14:08:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a9eb2c062a67f4a6217a8a24f176da5a52fdb3a45e9aebf6437c79f606f27532": [
+   {
+    "captured_at": "2026-07-31T14:11:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5994643e561a9db25514c877c6825b0eafafc66e3213db877ddb3c35c548aa87": [
+   {
+    "captured_at": "2026-07-31T14:13:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:88c3edb298a32f8aa39b78d5448e054f0ba7501d81b3b6c7e9164bed81a84e14": [
+   {
+    "captured_at": "2026-07-31T14:16:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:af077a8cc843960c2b8c190562ce97bd619cf196f623c17211e24694d368443b": [
+   {
+    "captured_at": "2026-07-31T14:19:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3ac930e6abb02d8319fbd70a5610727baae56c7533de51aafbc6b8850186aaed": [
+   {
+    "captured_at": "2026-07-31T14:22:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d7761bc80fc25b4592728bccb5b15b20b62387a90b9cc3082994d9f5a619f5b6": [
+   {
+    "captured_at": "2026-07-31T14:25:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e2a2a9843fc6a6b88d15a699edbeab41e108ae2e52b0c02390ceba921997926a": [
+   {
+    "captured_at": "2026-07-31T14:27:48+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:de0406748615782b712450060ad750e951ce2995193115223e5111854e401739": [
+   {
+    "captured_at": "2026-07-31T14:30:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b5be5ddccabe02326ecc60eb7905f7b32f38e1fea1de1f1eb5367a9c690359f4": [
+   {
+    "captured_at": "2026-07-31T14:34:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ef21e9b69ccadfb2803ef5b63b6fd33bb6a966fa648f05b3cc557fb4c651aa8e": [
+   {
+    "captured_at": "2026-07-31T14:36:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8311370a25d96088f63deb6e3b1d0f73ca6af98fc0d3457b2167be131c15aa02": [
+   {
+    "captured_at": "2026-07-31T14:39:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c726a73139c9f2af5662824fd8378d7515aaf2991d5387f88592b78b353b175d": [
+   {
+    "captured_at": "2026-07-31T14:41:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7b6f2cb89507363f4f2ac071209c313155086ee12d6a5324d392dbbef5c05a99": [
+   {
+    "captured_at": "2026-07-31T14:44:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:72ad454d06df483f205fd5f6b7861f28880717198603e17a6d8f0a22bb923365": [
+   {
+    "captured_at": "2026-07-31T14:46:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a71088f36f2e4fd283ed7869e907e615bab5f4d2fd2cb3dd868c91a7cc1baf66": [
+   {
+    "captured_at": "2026-07-31T14:48:58+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7a7cc439d200169eb996175c96be641386ab9dd45b71754a5351fb2eadd4b7dd": [
+   {
+    "captured_at": "2026-07-31T14:51:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:bff2c192085d5d76a34499ca7986a7736ed0c9fe313457537be47007920c76b4": [
+   {
+    "captured_at": "2026-07-31T14:54:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c248df8265fb44f79c8ba2bb84fe9eb87e6bc0b34e5e206a39b40fc6609bbe3a": [
+   {
+    "captured_at": "2026-07-31T14:59:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9991ce8fa3b2051ab3f25469a25de55f0ab7dcd80225607f42358d1e9136b0c8": [
+   {
+    "captured_at": "2026-07-31T15:02:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4105826d46d52578f0ceb47ef3cc99245358dc6a2e50d1e3eaf8a05c3bcada35": [
+   {
+    "captured_at": "2026-07-31T15:10:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e97cc2f79c5864908122fa7a7f34655f472493b4a9cf225393e8f99503f9e906": [
+   {
+    "captured_at": "2026-07-31T15:13:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:02166d5eab896ee6dfd971edc8fb0eed51231846afc7614b7bde045d0c40912f": [
+   {
+    "captured_at": "2026-07-31T15:16:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5cc04113a0cedb2ae1e0a94abb1363580adc1ae1bb3cbf9f801531deee8fd731": [
+   {
+    "captured_at": "2026-07-31T15:20:07+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:a7fcd78edc7806389523f4ddbf4f23a8622647ec4de8a2436b738c029806fbae": [
+   {
+    "captured_at": "2026-07-31T15:22:48+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:6fad7349e47cb36eba012f88f7a3c8670577426341eed5f29416462224583a7b": [
+   {
+    "captured_at": "2026-07-31T15:25:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f0bcf801004884828eb35fd5972632350ee15004edc62ae407be4effce7134f0": [
+   {
+    "captured_at": "2026-07-31T15:27:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:be90f1400d63f923c4b27a9058a219ed84dfea69574488cc01ff17316085f87d": [
+   {
+    "captured_at": "2026-07-31T15:30:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5d350e51594e09ee17bb88b97114fd82c338103f772cbea1f2573f68251a6816": [
+   {
+    "captured_at": "2026-07-31T15:33:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:11975a044e9e94f2ee3d8798d9677454bb5186525915d08fbd00cadc105cef4b": [
+   {
+    "captured_at": "2026-07-31T15:37:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:59b7375b4c3c451b86cc33dfa420b6333607969e097972d49247f1abb8fb6080": [
+   {
+    "captured_at": "2026-07-31T15:39:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c992887f0d86a88e0445ce172fb85cb563d73bf6155436a3af5c6a7bcd74392c": [
+   {
+    "captured_at": "2026-07-31T15:45:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:233bbd30e53a881cf4e639ce71611c75067d510d08a6ba02bb815cdf04f44c3f": [
+   {
+    "captured_at": "2026-07-31T15:48:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:05c8a1b84419fd82a6dadc3b916770a4a680b211e64d02f3db41b0efadcfd8f2": [
+   {
+    "captured_at": "2026-07-31T15:50:43+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:59b72182234b9591400e786b57e0f03c3fa5969432e988988d140ae42f051f9a": [
+   {
+    "captured_at": "2026-07-31T15:53:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e1ada0bb26c94707a9df113cbe496748e2ae7e1b6fb8b68393766b3b2cf6b435": [
+   {
+    "captured_at": "2026-07-31T15:55:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:363810120ccd56cdc3e579a59444b7a73297709e0c394b075224c944f5ed181b": [
+   {
+    "captured_at": "2026-07-31T15:59:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:311b88612612474c272298b6c14a781e24036d3ef3cb10f0bb56193bf5d12666": [
+   {
+    "captured_at": "2026-07-31T16:01:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4b86af0ab34a23e5496ddbeae1a8c9d57c1ca32485b3e53fd3cae3586b8fc8d4": [
+   {
+    "captured_at": "2026-07-31T16:04:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7c77a5ef6f0bbfbef65e50ef37d643a3d15139fc5fdb02758007112ab91a48a6": [
+   {
+    "captured_at": "2026-07-31T16:08:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9fe94022704395a51a9af73b9027bda168ab3b004edc8429546ca2a67cad7c9f": [
+   {
+    "captured_at": "2026-07-31T16:11:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9146eb59153e00d8cf8ba4b43dda0aed0b7ca17e12fed1ba2467e90e562b2531": [
+   {
+    "captured_at": "2026-07-31T16:14:56+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c175597acf7d87778b4f493a82106388a18a7d292ee1ddc89d325cbcc8aa90b2": [
+   {
+    "captured_at": "2026-07-31T16:17:21+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:d2c4caff0451ee48fbb0fcdce46d9ebd3b58f379d649cd25fb63990c1168f4e6": [
+   {
+    "captured_at": "2026-07-31T16:19:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:eab9493dbcb801e90e7dc53d3b09cc0dc749ae39877ae725c8f2d363441fdd49": [
+   {
+    "captured_at": "2026-07-31T16:22:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2f86d1702ded8bdf24e773f4f49dd114b615dfc9a9370d6be49db23787b4ed70": [
+   {
+    "captured_at": "2026-07-31T16:24:27+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:33ac01d05d553426903a24a0dd204a30b96d50fc32c4a99e42a37de378d65d05": [
+   {
+    "captured_at": "2026-07-31T16:27:23+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:708a6c26720c17565a063462741f14bec160ac2b702757999d0e88a292685dc6": [
+   {
+    "captured_at": "2026-07-31T16:29:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cafe50d80579d5c742bf7091563707fdc0aa79ef52b5c3d9c5420ba7a25c57b0": [
+   {
+    "captured_at": "2026-07-31T16:32:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:14ded28c590c58cf457e922a148f8ddf0325c8f2e61d34aaf9e7d0a3dbd47f95": [
+   {
+    "captured_at": "2026-07-31T16:36:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:33868d33fae4dd370692565fca6b4a104695fac225f964a81f0ee99a2d1fc1e5": [
+   {
+    "captured_at": "2026-07-31T16:38:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:062e59669356df51a824450411ec76cb807d246003aa3ac7b4bbb7027a2e8d1b": [
+   {
+    "captured_at": "2026-07-31T16:40:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c420ddb01f55641c6cbe7a26da6f69d55ada69bfdbcdd74b5801b23bd8bfad6c": [
+   {
+    "captured_at": "2026-07-31T16:43:24+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:a7096a20bd8817bade87f4cb8e300e6b053f94849534a76d2fe48d3caf01d699": [
+   {
+    "captured_at": "2026-07-31T16:46:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8e0c0dce84d6a5fb933f992a1a7e984776e1c3deaba4b3bd253a894653d32ee0": [
+   {
+    "captured_at": "2026-07-31T16:48:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8d8ad586d8025cd9f0f9e57777903c595fb19d07290b3a6a1fef73f39bc53b63": [
+   {
+    "captured_at": "2026-07-31T16:54:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f974bb01511d312effd51774a8771f755274f95804464f4b708a608d3b1f92e0": [
+   {
+    "captured_at": "2026-07-31T16:58:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c531ed2f5aeac1d035e570cf341f32298c64cf55490bc82d9bf7b77d6069d2c": [
+   {
+    "captured_at": "2026-07-31T17:01:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6f1c64de97ca9e33f48b7236e8c36a555a13d6e4544e4f4ab2c0736916f7a63": [
+   {
+    "captured_at": "2026-07-31T17:04:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f0c1e9932ce0dcb29ba73553fb0077e13386fbafc24768a8d43eca72c2126175": [
+   {
+    "captured_at": "2026-07-31T17:07:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:990ae8580766be313f9cd378ea788448534e07c288ec72cb38695cb07ab82719": [
+   {
+    "captured_at": "2026-07-31T17:09:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5ee81de2c93224217602741052330a54bac27fb6626c1f0a1f6c216bc9003c57": [
+   {
+    "captured_at": "2026-07-31T17:12:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cfb64a3ce6dafa1c74aebdb30d897f82192b4a0869fdc6d7350c3a63ab9f9053": [
+   {
+    "captured_at": "2026-07-31T17:16:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1f23b602ae33537ac1c7b9e14f65fe8d2627d5ed2c8aaebacfe8b73aac076407": [
+   {
+    "captured_at": "2026-07-31T17:19:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1baabf0977bb1d9ebbf4591edc0086a10f17d71e2a0cd8d42213a4a07d2d17d4": [
+   {
+    "captured_at": "2026-07-31T17:22:59+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cbc625ca712fd7b210e73d104b3aac7b3e7687d0885f0825e709aed3fdfaabf8": [
+   {
+    "captured_at": "2026-07-31T17:25:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c2cc45e6d36a2960e0c93c875c021bb179eb012e50d55181c0e2abd6c269801a": [
+   {
+    "captured_at": "2026-07-31T17:28:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dbffc5425a0f43122113f369c0b0a99826cfb6c6a22ab6947c44936f1d2a508e": [
+   {
+    "captured_at": "2026-07-31T17:31:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b9b22e5894776831df0635fe6237c98092bbcd2803851e32637ceefc60c4860e": [
+   {
+    "captured_at": "2026-07-31T17:37:39+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ab2ca778ea27b88de4c759035f8f1c7bcfc89e98c787323fcebc031b0668cac1": [
+   {
+    "captured_at": "2026-07-31T17:40:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e4c07499ac61b4f083ea741750b80ed9e8def51905cb7a79af8413b0513fd4cb": [
+   {
+    "captured_at": "2026-07-31T17:43:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9601f3c479e5aab7ab1669a1d830cfc660860692ed9cdff3b9dc58680ccf3393": [
+   {
+    "captured_at": "2026-07-31T17:45:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:39b7aec4c2ca60964351f744c080fee4f77f0e259243ffdf8d61e67075b4f16d": [
+   {
+    "captured_at": "2026-07-31T17:48:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:36ab94b083381efee5b6d17585180a12b9d4ca2112ccaeb9b73b112e6cd6f90b": [
+   {
+    "captured_at": "2026-07-31T17:53:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:db5059adb4c785599a9c7da5e8a8734c9b6f7ea86839489020eecbda7dfaaeb0": [
+   {
+    "captured_at": "2026-07-31T18:00:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:150f88aeff18d7b8167d59b7c1891181f003ba5b79a1f1282f45e02fd1d772d9": [
+   {
+    "captured_at": "2026-07-31T18:03:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f22d3a38c02cfa599cb55a96b46355987a226213226d9cc24ba61b77955e58c5": [
+   {
+    "captured_at": "2026-07-31T18:05:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2f0a6d85ae72d9807b4b3e027ed87caf00a4d7a3416c7e2e3c8fbfcd614281c4": [
+   {
+    "captured_at": "2026-07-31T18:09:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:41ba69d413c3dfffb2183eeb9fd4b7f1f3d54fd4b3d2e424698900545fd057d2": [
+   {
+    "captured_at": "2026-07-31T18:11:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:aa2f6ae9fff0b8c199cfa2978ec6a70832d0fddfde2d05362ff460320d685b56": [
+   {
+    "captured_at": "2026-07-31T18:13:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7719f155471c000e83a90da923309cb5ab7a2a32980e04e4833abeefbb797aec": [
+   {
+    "captured_at": "2026-07-31T18:16:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:34d144e3297a7dd4ec0c656958da95aee79501b7227f0c1d35b25f5fb61a6e8a": [
+   {
+    "captured_at": "2026-07-31T18:19:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b72690c34bb11f056abe3fc95bdbb25baedca086840a7807eb680d919909526f": [
+   {
+    "captured_at": "2026-07-31T18:21:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d8be5ecea7811858bb579901cd072059433f86f8bfedc96cffef985b7c8cfb27": [
+   {
+    "captured_at": "2026-07-31T18:24:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8e28ab9d4ea4b9066a594e1dba8cca2a724e4a12d096a1fdeb37233c11f6cbd0": [
+   {
+    "captured_at": "2026-07-31T18:27:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c00ee8b1d4f64a03c6b02d7bedd4922d4488c089703a4e8837c89e4c4bc56ae3": [
+   {
+    "captured_at": "2026-07-31T18:29:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9094d30e652768c6fe8826b5cff327be6f36a1a83b7ab9196e92926e16a0b994": [
+   {
+    "captured_at": "2026-07-31T18:32:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d3b87c0258280d1355c203e850dadbf507c76928324c5ee34765a725f1e97077": [
+   {
+    "captured_at": "2026-07-31T18:34:49+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c44663c4e2504bba6366c2c9875a0dd6f1da742e316bf221478b8d8764891ada": [
+   {
+    "captured_at": "2026-07-31T18:37:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:814920cb48ff1597d3aa51c6f130136ec9de75004d4b4fbb4da8f66b37a4d260": [
+   {
+    "captured_at": "2026-07-31T18:40:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5fb335f15b236c34830751843820491b64702bb38447c772dfb5e9f485217421": [
+   {
+    "captured_at": "2026-07-31T18:42:14+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:97fb9ac6ca239d1cd9e7a7eb9e33ed18147a225110f8d10d9d936290bf895643": [
+   {
+    "captured_at": "2026-07-31T18:45:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:17e86fcafc91d54d3b498118b56c632e225826d4cb1f8143f8a942130fdce607": [
+   {
+    "captured_at": "2026-07-31T18:48:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:34814c85e3bdf8a861754ed80108e7564deca92c7c4d2f60c6cf1f038da2bfd1": [
+   {
+    "captured_at": "2026-07-31T18:50:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b0b2648ea0c06b85814a1f7bde2c622be468a9f2f444abe30860661c740dead5": [
+   {
+    "captured_at": "2026-07-31T18:53:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cc115db4a86115d4018e5784da1ea4facf4fb70e4ba49f6784c2f728bbe07789": [
+   {
+    "captured_at": "2026-07-31T18:55:26+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4660d55c26dcc7d1fa1950e96fd7ee10b019e1c5ce80cfd865294ded7ea163b9": [
+   {
+    "captured_at": "2026-07-31T18:58:50+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9c30bfad81a77df713f8f7de06f06de4a6e6e1d12eb479a5c0f78b7fdbbf4c1f": [
+   {
+    "captured_at": "2026-07-31T19:02:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0a1ec2c82e1ee664c30de02f4cd3b8efe57347e5c44eed76c58b9e08c0340527": [
+   {
+    "captured_at": "2026-07-31T19:05:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:30206ae6bfa6fb48d462801cb7a51db90f2a37d600e40d75a20b74b2025d921e": [
+   {
+    "captured_at": "2026-07-31T19:09:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6861b91af3ba13f82c6c8f9a6dcdd2f82509cbe76c6925ec3b4b39106c2146c3": [
+   {
+    "captured_at": "2026-07-31T19:10:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a31d3386fb1675eee847f7a5ece7317f338e7150d633217ac55881c1155dae9f": [
+   {
+    "captured_at": "2026-07-31T19:17:44+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d225de9038c5f6267ba34ce18265ac0a11905340e5408e8df0f30781957558ba": [
+   {
+    "captured_at": "2026-07-31T19:20:53+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:28629f6ff5c098b895752d39d83379cef13cc74bc83f09cfffa973e024b86b10": [
+   {
+    "captured_at": "2026-07-31T19:22:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0e7670fd970779e51e3d682f050465fb910754770eac92bbe6d7d5bfccd7652f": [
+   {
+    "captured_at": "2026-07-31T19:25:05+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e234b870f9a22dec5caff757fd6e57c87e8c5dcb11a1c0c05980241e5669c427": [
+   {
+    "captured_at": "2026-07-31T19:27:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fff37e8713e39227268fa8341f8a955432aa570c04746a844a437cea80e10015": [
+   {
+    "captured_at": "2026-07-31T19:30:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4db4d5b39d16f14f8232bd377ff1de4fd0312a6852b06d4179c387000e3a70d4": [
+   {
+    "captured_at": "2026-07-31T19:33:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:41046bf6ac5c98d9d0eeaada69145b777f3945a6e2058042f4dfc620f93c2afc": [
+   {
+    "captured_at": "2026-07-31T19:36:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a4ea9608c56e7f91e85ac63ad6ec01fd114d12a235df772cd7db1e6bc7a1f8a9": [
+   {
+    "captured_at": "2026-07-31T19:39:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:642e8e5fc3d8603df37fb1104d62db655618727c5199369f7a831ad332596260": [
+   {
+    "captured_at": "2026-07-31T19:42:35+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:97b81ab1fcce18ab74c7e5f1d7252b6df737fcc058feac6d826f02186e39b35c": [
+   {
+    "captured_at": "2026-07-31T19:45:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8313dc6fa5f626a66eb43afdcefcc6a89346a81a9ff2fea322cbb757392983b1": [
+   {
+    "captured_at": "2026-07-31T19:47:17+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:c1fb72578f0be6af3401932ab35571d21a6d29a2635a7cdbf6ab386e387aa77c": [
+   {
+    "captured_at": "2026-07-31T19:49:52+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:8dfe8cb109fa4be973bb4fb76c151b1ac7e3b02324d91c368aaa79eee17e59dc": [
+   {
+    "captured_at": "2026-07-31T19:52:03+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f4514787238aef04f8d512b24ec56dcb834651ca7f7258c38ab3cc2915baac95": [
+   {
+    "captured_at": "2026-07-31T19:54:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c29cd703129935592014a7e602c5ccb17fd88f3894244f2f8dcab988444e7b9c": [
+   {
+    "captured_at": "2026-07-31T19:56:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:cbd637fe23ed30cf045634c9c531b6a9c226d902129fd1b61d5994d73b5dbfdf": [
+   {
+    "captured_at": "2026-07-31T19:59:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c66b7c81c1b7ae2ae242b55950f2df305ebb3c9c52e21b76768dde121d48fb44": [
+   {
+    "captured_at": "2026-07-31T20:02:58+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:0e8f3ffbd713d1bc80bd295b39048b12e31d9a240d81a58ee93596d6fff7887e": [
+   {
+    "captured_at": "2026-07-31T20:05:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5ed6e25a329db827262e2623e4f6d898f274bf1d81312bcc9fc3b962b45e4e1d": [
+   {
+    "captured_at": "2026-07-31T20:07:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a8ba5b8fb24119fcc3a13a8d8ff6039f1aac19c4d0550c863d04941e80f1ae76": [
+   {
+    "captured_at": "2026-07-31T20:13:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:89ccfa2b3da095af6dd467c5981a66c79a9fcdf8036ab3135eb4897a24489ff4": [
+   {
+    "captured_at": "2026-07-31T20:15:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8cae6b4867a54486977887e2ad429880d5c4f60228f69bba27607d34fc23e3dd": [
+   {
+    "captured_at": "2026-07-31T20:21:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9e6dc79d093e9578a433baca8a7455d1d6b4c3c6bbffcb7bd5f42af3f1956260": [
+   {
+    "captured_at": "2026-07-31T20:24:40+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c1fe6f4621ef7fe79db8cc015929aed339d0d1dc06e78504522996a0eece5688": [
+   {
+    "captured_at": "2026-07-31T20:27:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d7dde769e97acd64be12f0dcaac5ed95ede9d3df97b0e1f0109eac9551f5e59a": [
+   {
+    "captured_at": "2026-07-31T20:29:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8677a0366d45ab614a7fd40a5b5957a028a725a42947d9f2645bcb18328adf48": [
+   {
+    "captured_at": "2026-07-31T20:31:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:228b94559c0b5aa857d1299adeeb4804e32cedd67da6bb8a904d185a523f9fed": [
+   {
+    "captured_at": "2026-07-31T20:34:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e26666df5556bfe0247a9bed32f0603568ffe7a4702f2b501b886b29213f6fca": [
+   {
+    "captured_at": "2026-07-31T20:37:06+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8c423985d5ec7ceb810c09a002b894fc490355c4d2a887a75a1e282bc397bd65": [
+   {
+    "captured_at": "2026-07-31T20:43:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:209b8dd0d2a3aadd73f7c22f7f2dbc4dccfd1bd7facfd3f17b51fac1e3d095fe": [
+   {
+    "captured_at": "2026-07-31T20:46:46+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:02eb512e43ec2ed3c140dd7f1cb8f7619989f49a88a49c3cbc36816348a166b8": [
+   {
+    "captured_at": "2026-07-31T20:49:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:172af8ec3922f6c8554cd5fffcf692caacd1163e062865e334f26388703922bd": [
+   {
+    "captured_at": "2026-07-31T20:52:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:996cbaeb97eeeb7561af3c988a787dd2ad18b729412126c338f8835e41906f9e": [
+   {
+    "captured_at": "2026-07-31T20:55:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1ce0b04f92b311e89ba60b36e19eef91850a90990d42db82ce1a82893b63fe79": [
+   {
+    "captured_at": "2026-07-31T20:58:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a87ce3418ca8697090307739875cd643b0da193af7831cfc9fde91beeb004b74": [
+   {
+    "captured_at": "2026-07-31T21:01:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:675d833e6899fc1931b9d47311745008890ec86ddc090c08ebc9efcf11905717": [
+   {
+    "captured_at": "2026-07-31T21:04:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a4b9659a79f923ea13a4ceeb8676154e2f1a37a8c1e632801a5c04653c9e878c": [
+   {
+    "captured_at": "2026-07-31T21:07:38+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ac456b321ef9b7c36414121ef02d70b396aff8df10eaacd8f21eac8cafb05a60": [
+   {
+    "captured_at": "2026-07-31T21:10:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:edfd4e9d3eb09bc630b6cab2bc7823193e406d7faf1d18e5fbd790382f3673a8": [
+   {
+    "captured_at": "2026-07-31T21:13:31+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:d40fda1ffa983b35c6a0522445c4e6fe5bb65dc3a533f551760f9cce976aa99f": [
+   {
+    "captured_at": "2026-07-31T21:17:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b757f3f78cae15c1fb7b626289fffce876b3dda213dce5127541c4f9e9bd87f9": [
+   {
+    "captured_at": "2026-07-31T21:19:32+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a587a587202ce47f7d15e71d78b2391b347e6e8644221a1e11f108fec2e22147": [
+   {
+    "captured_at": "2026-07-31T21:21:55+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f18554e4c113826c46ad7adf611dd87ce83e20aac94c647f2db5324cce0d23c0": [
+   {
+    "captured_at": "2026-07-31T21:25:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6f966dd334443cec8212e1c5acb2575ea69ab308d303c99e77718b91946e9e74": [
+   {
+    "captured_at": "2026-07-31T21:28:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b1a5394c66e447415bdb7b304718fa0677a0c8ffa71c2a6dd50416472a1f80fb": [
+   {
+    "captured_at": "2026-07-31T21:31:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b648dc7c1f11a862ef209ab73ca8be9e7bfacb682526bf9f5c35a2a8989ddd42": [
+   {
+    "captured_at": "2026-07-31T21:34:27+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:0eb7e3020a1940da01e06ae25f218475e347594843fb574770fc0d5b08d3870e": [
+   {
+    "captured_at": "2026-07-31T21:38:10+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:1f056b2346cb3fa0d35709d0a85a7623c147c3497a568b23ecfe3f2a7e9a1d86": [
+   {
+    "captured_at": "2026-07-31T21:41:12+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c9dc2d66dd6908876f2f9e5fe9ba7fea8f1f17a3e60c57fb10932911423ca469": [
+   {
+    "captured_at": "2026-07-31T21:44:31+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:4632373da451ee0626f8ad6dd1d958ec3045189ff803370ff1b4fa1bf0f5feb9": [
+   {
+    "captured_at": "2026-07-31T21:48:17+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:5000f9b13d3d17e71eae651868f519d3316640a4c40e5cc1110982a46d293c08": [
+   {
+    "captured_at": "2026-07-31T21:51:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d5c4dd316e38eafa82df5ba53995a9ba21631724da9121096af012eac632f843": [
+   {
+    "captured_at": "2026-07-31T21:53:24+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ffcafba4a821f789e36c7ce029a0fa7ac243f74f6bbf7af80d29ceec11d2d4de": [
+   {
+    "captured_at": "2026-07-31T21:55:42+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7703826d559e827286191a5f0846d00eb72fa19dc867e3b2365e32bf0f5978ba": [
+   {
+    "captured_at": "2026-07-31T22:01:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c72e0b9abdad60b32bbca284090d2c9645488daba3e70d65bba05907cfe32ce8": [
+   {
+    "captured_at": "2026-07-31T22:05:41+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:940eac2bf98cae7c4918d0d484fa2b92a5051b5d72d8bab8047569737a10deeb": [
+   {
+    "captured_at": "2026-07-31T22:08:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ff03654584c4ad72dd57584c88415e3574f09684c642ea4f977efa8948f8ce39": [
+   {
+    "captured_at": "2026-07-31T22:11:02+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d209fe3c97ce18cb842e6142b9011cd19d670627823f2eb457403c1c1a5fdb09": [
+   {
+    "captured_at": "2026-07-31T22:14:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:4910f06115620b40ebcab44814a83e18b1f78d453c65aace45468a2f7535ba8f": [
+   {
+    "captured_at": "2026-07-31T22:17:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:75c9ddaa3c42dcb9bf0a3c92f47d042c4d1889df916cccc9dee8efb69b049721": [
+   {
+    "captured_at": "2026-07-31T22:20:09+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:6a0b1a25ca160b6dd5dfeeabfb09b445ea46f8f7bd508e8bd66d8f605304dc68": [
+   {
+    "captured_at": "2026-07-31T22:23:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:14397fcc7a4b792311444c835156d0c926d0a610a32a6c730a146182e591988e": [
+   {
+    "captured_at": "2026-07-31T22:25:35+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fcdf3d574cbbef5c242bd625458bd89ec6997c45141455ff5f161f7fa75073b2": [
+   {
+    "captured_at": "2026-07-31T22:29:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:78175ae679769aa14fc892053e52ffcb9d5a9bcd430da7c826f3e035061073c5": [
+   {
+    "captured_at": "2026-07-31T22:32:33+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c8195d9ba9dee5cdbd2871bbebb7827c51d37b1a6ab9e650c010cfda8a17635d": [
+   {
+    "captured_at": "2026-07-31T22:35:29+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e3b7f0f301a619f1918ab9e6e4242c8dca1f22387721a0e1a6eab740563392c6": [
+   {
+    "captured_at": "2026-07-31T22:38:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:39d6ffa758a9068f97cb5ab1308b6f0b58b81203250fc72a5beadb54dac46525": [
+   {
+    "captured_at": "2026-07-31T22:41:15+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:f112378ab0f62295d0c2ef48e9f3f53c9ca5be7fa65981a44cc217add87e25b5": [
+   {
+    "captured_at": "2026-07-31T22:43:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:abc9ba4ee3a4f4cf9fb5bb48e1fde8a3905e6c3df80ec91c0a5cac42eccc4e1a": [
+   {
+    "captured_at": "2026-07-31T22:46:08+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:e6512a563419ef8a3baf722c1380c56ad717b188e601845301b2c192aa4fcd0e": [
+   {
+    "captured_at": "2026-07-31T22:49:45+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c0a1f14565af3189eeb5d432516dcd13e27f856bce8efe5bace99dfc1cab33b4": [
+   {
+    "captured_at": "2026-07-31T22:53:11+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:da2969de4e0423c2d472024f5b23b517101f4d126a1e20f9af4f959e6b411001": [
+   {
+    "captured_at": "2026-07-31T22:56:30+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:33747135458320c136acbcc5f96c12e4c3cdb86f8da28b9ff844468a017d9314": [
+   {
+    "captured_at": "2026-07-31T22:59:01+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:45d0898ff512a66f9f8ed1f16c70c7c5ba32cf2ed33cae7d26e0ffcb7ea9c0d6": [
+   {
+    "captured_at": "2026-07-31T23:01:20+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1d6a4877d861e639d8a95cc228254d47aee64135a9fab1d462b043de44857eab": [
+   {
+    "captured_at": "2026-07-31T23:04:19+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a5183df1731423d15ec6c4d71566621c48769044adee8288735b0ef6245cbb82": [
+   {
+    "captured_at": "2026-07-31T23:06:28+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:76c04fd9ee4a42c5b77282f31676b3cecdf6a6d279f6515558b8d9004e6a9312": [
+   {
+    "captured_at": "2026-07-31T23:08:21+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:1f37e94102f824b2f2363913616e7f0cf3d6e9176c5634d89f03a6e2d5a012c0": [
+   {
+    "captured_at": "2026-07-31T23:10:52+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:fbb1af96ab82e626c73ad4a60ebbc5936d117e3e9e1901243199b67602511cca": [
+   {
+    "captured_at": "2026-07-31T23:13:57+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:dedba61f886ffffe25a5a179bc1fcb81f6c8be5810d45334a67d2c536f9d23c6": [
+   {
+    "captured_at": "2026-07-31T23:16:54+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:7d0ff4301642459e53639554f348fc34145b846e4e818a989d973871654973e8": [
+   {
+    "captured_at": "2026-07-31T23:19:48+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:9edd2376902442348b78091eae6bcc514d486a29c6fcab93c618e99924dc43fd": [
+   {
+    "captured_at": "2026-07-31T23:22:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3c527600fdd01e57e54acaf86452ca748b3be5399de5cac2e024f91d7f74ca52": [
+   {
+    "captured_at": "2026-07-31T23:25:41+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ae8f722b9bd5903df12d1500ba2c611baf0118a390b2be1beee268d4fa5172bb": [
+   {
+    "captured_at": "2026-07-31T23:28:36+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:b07537b73b9795ef0d183b62f1d03c7e436409800c92dbb115f420642e48ed3c": [
+   {
+    "captured_at": "2026-07-31T23:36:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:d4fdd127d74f4d0bb29f2b7d9a61664977480f3d9d51edef3b73621ee2277de3": [
+   {
+    "captured_at": "2026-07-31T23:39:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c291cc19728686cbe3eb7381f55d9f286b8d76a37a5f03f3c46cc88d0a61628f": [
+   {
+    "captured_at": "2026-07-31T23:42:16+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:3379c01ecbfbad8e35f4554e14822a194bee062336c150dc7d4969570e3328b6": [
+   {
+    "captured_at": "2026-07-31T23:44:20+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:10dbcaee11d6f877a482b8a8668b8f73c8491960119c7b7f826d03a9ace0f3c7": [
+   {
+    "captured_at": "2026-07-31T23:46:34+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c481ce2449e50ef586ae502de498eaf31af00e45ef3a9e23a4951f82b7ec886d": [
+   {
+    "captured_at": "2026-07-31T23:48:53+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:ccb7c9b3442d562b53ef6bd3c6b801e225ed10337b761c0ac85af516e9cb4dc1": [
+   {
+    "captured_at": "2026-07-31T23:51:23+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:db1d442c82452f194b637d1259c477aa9728e7a32e0af35f46b8c2ced2302da8": [
+   {
+    "captured_at": "2026-07-31T23:54:07+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:430a955f9f309193062a33b6af6a086c087a4a369b807799291dcf4145fb141d": [
+   {
+    "captured_at": "2026-07-31T23:56:51+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ef73e53529bf64a365c514c21460bf1e8a11d6ae1bbbcb34613540d77c08404e": [
+   {
+    "captured_at": "2026-07-31T23:58:43+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:d3102006132b4312e9f89473c68eda1052c4acd2dca00e1084595720c7a13ecc": [
+   {
+    "captured_at": "2026-08-01T00:01:25+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:c64a37fc488c8292ec46563e2e6e79c419785bc7bf96d29b8f8ecae04b2f7dd3": [
+   {
+    "captured_at": "2026-08-01T00:05:04+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:48c710d6bf0079d000d81b59d283002b0d06f435331c08d39e80f7457f81ca41": [
+   {
+    "captured_at": "2026-08-01T02:55:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:549fad752b43c5f63b2bb2b9f7bdcd1df4d362d5a577de67d62fd4efc2675236": [
+   {
+    "captured_at": "2026-08-01T02:57:37+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:ac3a24775a76295020baa1985ab167d9d8beea07287bbeced392243c5b2aedec": [
+   {
+    "captured_at": "2026-08-01T03:00:01+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:a773988872b18ac2286a07eec6350f0596ffb69a297c38d16f9a37c2b70628cd": [
+   {
+    "captured_at": "2026-08-01T03:02:13+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:54c7ee2ece7f2bf3dd2ed031d0d5b80489221c52aec4f52afb17650f1a56cc53": [
+   {
+    "captured_at": "2026-08-01T03:04:31+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:8ca55e4ecef48e34eaaf27123b61d7e592ed1238a92a4631d3e6baa88c996783": [
+   {
+    "captured_at": "2026-08-01T03:07:53+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:0d11d0fd9a4f3418257cf71827015a45c0e560f05a9523c7cfac47384a594125": [
+   {
+    "captured_at": "2026-08-01T03:10:07+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:03fb17586fcf87ea8f871d5bb90127c68102254b78eea853a95d44f6de12592a": [
+   {
+    "captured_at": "2026-08-01T03:12:47+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:664da05e0796862cbfaa56b330a9de21508e4a84b8f56c9fd7f4127b3a74412c": [
+   {
+    "captured_at": "2026-08-01T03:15:55+00:00",
+    "verdict": "mirrored"
+   }
+  ],
+  "sha256:72690a5b1022a5a9ee776adbcd6bf13856885e65846d600760b419c9d49c0fa1": [
+   {
+    "captured_at": "2026-08-01T03:19:00+00:00",
+    "verdict": "agree"
+   }
+  ],
+  "sha256:2c4e0a9c9b48f2016bd8b679a4a4861876e09f4908c8bb076f6752127bc6e0c0": [
+   {
+    "captured_at": "2026-08-01T03:21:34+00:00",
+    "verdict": "mirrored"
+   }
+  ]
+ }
+}

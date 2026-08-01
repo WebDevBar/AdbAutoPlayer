@@ -157,9 +157,32 @@ CREATE TABLE IF NOT EXISTS match(
   event_id       INTEGER REFERENCES event(id) ON DELETE SET NULL,
   theme_id       INTEGER REFERENCES theme(id) ON DELETE SET NULL,
   balance_epoch  TEXT,                   -- hash of roster adjustments at capture time
-  left_player    TEXT, left_rating INTEGER, left_rank INTEGER,
-  right_player   TEXT, right_rating INTEGER, right_rank INTEGER,
-  outcome        TEXT,                   -- 'left' | 'right' | 'draw' | NULL
+  -- Provenance ONLY, belonging to no trio. Names are OCR-fragile - the operator's
+  -- profile art reads as GAME on one side and GAMERETRO on the other - and
+  -- `matchkey.py` already excludes them from identity. Kept as a human-readable hint,
+  -- never used to decide a side.
+  left_player    TEXT,
+  right_player   TEXT,
+  -- WHICH trio won, and which one was ours. Not a side: a side is a label that can
+  -- contradict the heroes, and match 1476 is what that costs. A pointer into
+  -- match_hero cannot contradict it, because there is only one composition to
+  -- point at.
+  winning_trio   INTEGER CHECK(winning_trio IN (1,2)),
+  -- 1, 2, or NULL when we did not watch the draft (a pulled row). The NULL IS the
+  -- flag - no separate column is needed.
+  blue_trio      INTEGER CHECK(blue_trio IN (1,2)),
+  -- Measurements attached to a composition. Ratings and ranks come from the HEADER,
+  -- so they need an orientation verdict to be placed - unlike winning_trio, which
+  -- travels with the heroes.
+  trio_1_rating  INTEGER, trio_2_rating INTEGER,
+  trio_1_rank    INTEGER, trio_2_rank   INTEGER,
+  -- P(trio 1 wins). "P(blue wins)" is not expressible for a pulled row, which has
+  -- no blue.
+  predicted_trio_1 REAL,
+  -- 'canonical' | 'unrepresentable'. NULL means the reshape has not run, and that is
+  -- exactly what the migration predicate reads. A row that cannot form two complete
+  -- trios is terminal rather than perpetually pending.
+  canonical_state TEXT CHECK(canonical_state IN ('canonical','unrepresentable')),
   outcome_source TEXT,
   -- Provenance, for pooled sync. 'local' rows are THIS install's own
   -- observations; 'synced' rows came from the pool. Two rules depend on the
@@ -264,8 +287,9 @@ CREATE INDEX IF NOT EXISTS idx_theme_window  ON theme(starts_at, ends_at);
 CREATE TABLE IF NOT EXISTS match_hero(
   id            INTEGER PRIMARY KEY,
   match_id      INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
-  side          TEXT NOT NULL,           -- 'left' | 'right'
-  slot          INTEGER NOT NULL,
+  -- 1 or 2, assigned by the canonical sort. THE sole record of who played.
+  trio          INTEGER NOT NULL CHECK(trio IN (1,2)),
+  slot          INTEGER NOT NULL CHECK(slot IN (1,2,3)),
   hero_slug     TEXT REFERENCES hero(slug),
   art_ref       TEXT,
   status        TEXT NOT NULL,           -- 'identified' | 'unknown'
@@ -286,7 +310,11 @@ CREATE TABLE IF NOT EXISTS match_hero(
   stat_shield     INTEGER,               -- summary column 3, shield icon
   power           INTEGER,               -- from the long-press popup only
   identified_by   TEXT,                  -- 'image' | 'longpress_ocr'
-  UNIQUE(match_id, side, slot)
+  UNIQUE(match_id, trio, slot),
+  -- Match-WIDE, not per-trio. The per-trio form permits the same hero in both trios
+  -- and therefore two identical (A,B,C) trios, at which point the canonical sort
+  -- cannot tell trio 1 from trio 2 and both pointers stop naming a composition.
+  UNIQUE(match_id, hero_slug)
 );
 
 -- The 20 heroes on offer and which were banned. "Available but not picked" is a real
@@ -313,18 +341,20 @@ CREATE TABLE IF NOT EXISTS match_odds(
   id          INTEGER PRIMARY KEY,
   match_id    INTEGER NOT NULL REFERENCES match(id) ON DELETE CASCADE,
   sampled_at  TEXT NOT NULL,
-  left_pool   INTEGER, right_pool INTEGER,
-  left_odds   REAL,    right_odds REAL,
+  trio_1_pool INTEGER, trio_2_pool INTEGER,
+  trio_1_odds REAL,    trio_2_odds REAL,
   spectators  INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_match_hero_match ON match_hero(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_pool_match ON match_pool(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_odds_match ON match_odds(match_id);
-CREATE INDEX IF NOT EXISTS idx_match_outcome    ON match(outcome);
--- The hero_matchup view joins match_hero to itself per match and side; without this
--- each of the two joins is a scan of the whole table.
-CREATE INDEX IF NOT EXISTS idx_match_hero_side ON match_hero(match_id, side, hero_slug);
+
+-- idx_match_hero_trio and idx_match_winning_trio are created in migrate.py AFTER
+-- the reshape, NOT here: schema.sql runs before ADD_COLUMNS and before
+-- _reshape_to_trios, and CREATE TABLE IF NOT EXISTS does not add columns to an
+-- existing table - so an index on `trio` aborts the whole script on any database
+-- that still has `side`. Same reason as idx_match_pushable and idx_match_comps_key.
 
 -- ---------------------------------------------------------------------------
 -- Schema v3: screen registry, identification audit trail, learned transforms.
@@ -418,3 +448,23 @@ BEGIN
       AND a.ocr_slug = NEW.hero_slug AND a.screen_id = NEW.screen_id
   );
 END;
+
+
+-- ---------------------------------------------------------------------------
+-- Schema v6: what the reshape replaced.
+-- ---------------------------------------------------------------------------
+
+-- Append-only, written before the reshape drops anything and never read again by the
+-- app. It exists so a destructive migration is auditable after the fact, and so the
+-- ~157 rows with no orientation evidence can be resolved later if better evidence
+-- ever appears rather than being gone.
+CREATE TABLE IF NOT EXISTS legacy_side_snapshot(
+  match_id       INTEGER PRIMARY KEY,
+  sides_json     TEXT,      -- [{"side","slot","hero_slug"}, ...] as it stood
+  outcome        TEXT,
+  predicted_left REAL,
+  left_rating    INTEGER, right_rating INTEGER,
+  left_rank      INTEGER, right_rank   INTEGER,
+  odds_json      TEXT,      -- the side-relative match_odds rows, verbatim
+  captured_at    TEXT
+);

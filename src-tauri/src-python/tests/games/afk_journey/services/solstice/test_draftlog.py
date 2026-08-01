@@ -6,6 +6,7 @@ from adb_auto_player.games.afk_journey.services.solstice.draftlog import (
     format_final,
     format_merged,
     format_pick,
+    format_pick_audit,
     merge_screens,
     newly_locked,
     side_positions,
@@ -80,9 +81,17 @@ def test_better_handles_a_missing_geometry():
     assert better(None, None) is None
 
 
-def test_the_pick_line_carries_its_evidence():
+def test_the_live_pick_line_is_short_and_coloured():
+    """The live log gets the plate number and the name, in the side's colour."""
     line = format_pick(_read(2, "right", "lily-may", score=0.842, margin=0.213))
-    assert line.startswith("Red picked: Lily-May")
+    assert line == '<span class="sc-red">RED 2: Lily-May</span>'
+    # The evidence belongs in the debug log, not here.
+    assert "0.842" not in line
+
+
+def test_the_audit_pick_line_carries_its_evidence():
+    line = format_pick_audit(_read(2, "right", "lily-may", score=0.842, margin=0.213))
+    assert line.startswith("Red 2 picked: Lily-May")
     assert "0.842/0.213" in line
 
 

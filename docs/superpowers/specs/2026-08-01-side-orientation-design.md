@@ -188,7 +188,14 @@ that wants them as columns must be a materialised view or a denormalisation with
 constraint, never a second writable source.
 
 Which trio is 1 and which is 2 is decided by the same sort `comps_key` uses, so the
-assignment is a pure function of the heroes and cannot drift from it.
+assignment is a pure function of the heroes. **But round 7 caught that "pure function" was
+an intention, not an enforced property** - nothing in the constraint list below stopped a
+writer storing the lexicographically SECOND composition as `trio=1`. Every constraint
+would pass while `predicted_trio_1`, `blue_trio`, `winning_trio` and the pooled ratings all
+silently referred to the other trio. That is defect 1476 again, one level down.
+
+So canonical ordering is itself a constraint, listed with the others below and carrying its
+own violation test.
 
 ### Storing it once is necessary but not sufficient
 
@@ -200,6 +207,12 @@ reference valid.
 The shape therefore carries constraints, enforced in the schema where SQLite allows and in
 a single validated write boundary where it does not:
 
+- **Canonical ordering**: `sorted(trio 1 heroes) < sorted(trio 2 heroes)` lexicographically.
+  SQLite cannot express a cross-row comparison as a table `CHECK`, so this is enforced at
+  the validated write boundary and verified in bulk - the migration refuses to declare
+  itself done while any canonical row violates it, and the same query runs as an assertion
+  in the test suite over the real database. Its violation test writes a deliberately
+  inverted pair and asserts the boundary rejects it.
 - `match_hero.trio IN (1, 2)`.
 - **`UNIQUE(match_id, hero_slug)` for identified heroes** - a hero appears once in the
   whole MATCH, not merely once per trio. Round 4 caught the weaker per-trio form: it
@@ -314,11 +327,29 @@ exists and must be used.
 every column is present, which is exactly why the `comps_key` backfill silently never ran
 after its columns landed and 50 pulled rows stayed keyless across two upgrades.
 
-A shape change needs a "not done yet" predicate, and it must carry the SAME completeness
-requirements the backfill uses (`store.py:342`): decided outcome AND three identified
-heroes on each side. "Decided and `trio` unassigned" is not enough - row 625 is decided
-with five heroes, can never be assigned, and would send the migration round on every
-launch forever. Review caught exactly that loop.
+A shape change needs a "not done yet" predicate. Rounds 2 and 7 between them killed two
+attempts at one, and the reason both failed is worth stating because it constrains the
+answer: a predicate written in terms of the LEGACY columns cannot survive the migration
+that removes them. "Decided outcome AND three identified heroes per side" loops forever on
+row 625; "decided and `trio` unassigned" reads `outcome`, which no longer exists on the
+second launch, and fails with a missing-column error.
+
+**The predicate is therefore expressed purely in terms of what SURVIVES:**
+
+```sql
+SELECT EXISTS(SELECT 1 FROM match WHERE canonical_state IS NULL)
+```
+
+The migration's contract is that it classifies EVERY legacy match atomically - each one
+ends as `canonical_state='canonical'` or `canonical_state='unrepresentable'`, never NULL.
+Once it commits, the predicate is false forever, whatever the rows contain and whatever
+columns have been dropped. Nothing is skipped: row 625 is not passed over, it is
+classified `unrepresentable`, which is what makes it terminal rather than perpetually
+pending. (An earlier passage describing 625 as "skipped by both the migration and the
+predicate" was the contradiction round 7 flagged; skipping is exactly what caused the loop.)
+
+`canonical_state` is added by the same migration, before any classification, and is the one
+column the predicate depends on - so the check is `canonical_state` absent OR any row NULL.
 
 The predicate is therefore: a row with `outcome IN ('left','right')`, three identified
 heroes per side, and no `trio` assignment. Row 625 fails the hero count, is skipped by

@@ -1354,7 +1354,33 @@ In `migrate.py`:
   6. Rewrite `match_hero.side` into `trio` and `match_odds` into trio order via `op`-free SQLite table rebuild (`CREATE TABLE ..._new`, `INSERT SELECT`, `DROP`, `RENAME`) - SQLite cannot add constraints to an existing table.
   7. Assert no `match` row has `canonical_state IS NULL`, and assert canonical ordering in bulk. Raise and roll back on either.
   8. Drop the legacy `match` columns via the same rebuild.
-- In `store.py:311` `_schema_is_current`, add a final check: return `False` when `canonical_state` is absent from `match`, or when any row has it NULL. This is the predicate, and it is deliberately phrased only in terms of what survives the reshape - the two earlier attempts both read columns the migration removes and failed on the second launch.
+- In `store.py:311` `_schema_is_current`, **replace the existing `unkeyed` query at :345-352
+  before adding anything.** It reads `m.outcome` and `match_hero.side` - both dropped - so
+  after the reshape it raises `no such column`, the bare `except sqlite3.Error` swallows it,
+  and the function returns `False` on EVERY launch. The migration would then run forever and
+  the new predicate would never even be reached. Rewrite it as:
+
+  ```python
+  unkeyed = con.execute(
+      "SELECT 1 FROM match m WHERE m.comps_key IS NULL"
+      " AND m.winning_trio IS NOT NULL"
+      " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
+      "      AND trio=1 AND hero_slug IS NOT NULL) = 3"
+      " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
+      "      AND trio=2 AND hero_slug IS NOT NULL) = 3"
+      " LIMIT 1"
+  ).fetchone()
+  ```
+
+  Then add the reshape predicate: return `False` when `canonical_state` is absent from
+  `match`, or when any row has it NULL. That predicate is deliberately phrased only in terms
+  of what survives the reshape - both earlier attempts read columns the migration removes and
+  failed on the second launch.
+
+- **Add a test that the migration runs ONCE.** `test_the_migration_is_idempotent_and_terminates`
+  checks `migrate.apply` twice; add one that constructs a real `MatchStore` twice against a
+  migrated database and asserts `_schema_is_current` returns `True` the second time. A
+  swallowed `sqlite3.Error` is invisible to the apply-level test.
 
 - [ ] **Step 6: Run to verify it passes**
 
@@ -1485,7 +1511,50 @@ Expected: FAIL - `HeroSlot` has no field `trio`.
 
 - `HeroSlot.side: str` becomes `trio: int`. `_HERO_COLS[0]` becomes `"trio"`. The `ON CONFLICT(match_id,side,slot)` in `record_heroes` becomes `ON CONFLICT(match_id,trio,slot)`.
 - `record_heroes` calls `assert_canonical([...])` on the full incoming set BEFORE opening the connection. This is the validated write boundary; it is the only place the ordering rule is enforced, because SQLite cannot express it.
-- `MatchRecord.outcome` is removed. Add `set_winning_trio(match_id, trio, source)` replacing `set_outcome`, and `mark_unrepresentable(match_id)`.
+- **`MatchRecord` loses `outcome`, `left_rating`, `right_rating`, `left_rank` and
+  `right_rank`, and gains NOTHING in their place.** This is deliberate and it is forced by
+  the existing order: `_record_summary` inserts the match row BEFORE the heroes are read
+  (`solstice_clash.py:590-611`), so at insert time no trio exists to number, and any
+  trio-relative field on `MatchRecord` would have to be written blind. `left_player` and
+  `right_player` stay on it - they belong to no trio and need no ordering.
+
+- **One new call carries everything trio-relative, after the heroes are known:**
+
+  ```python
+  def finalise_summary(
+      self,
+      match_id: int,
+      *,
+      winning_trio: int | None,
+      blue_trio: int | None,
+      trio_1_rating: int | None = None,
+      trio_2_rating: int | None = None,
+      trio_1_rank: int | None = None,
+      trio_2_rank: int | None = None,
+      predicted_trio_1: float | None = None,
+      outcome_source: str | None = None,
+  ) -> None:
+      """Write every trio-relative value at once, and close the row.
+
+      One call rather than five setters, because these values are only jointly
+      meaningful: a winner without the trios it points at, or a rating attached to a
+      trio number that a later call disagrees with, is defect 1476 rebuilt from
+      correct-looking parts. It also sets canonical_state, so a row this method has
+      not touched is visibly unfinished rather than silently NULL.
+      """
+  ```
+
+  It asserts `match_hero` for this match already satisfies `assert_canonical`, that
+  `winning_trio` and `blue_trio` each name a trio that exists, and then sets
+  `canonical_state='canonical'` in the same statement. `set_outcome` (:602) is replaced by
+  it, not kept alongside. **Grep for every other caller of `set_outcome` and of the removed
+  `MatchRecord` fields before finishing this task** - a dangling caller fails at runtime, not
+  at import.
+
+- `mark_unrepresentable(match_id)` sets `canonical_state='unrepresentable'` for a read that
+  could not form two complete trios. **Every recording path must end in one of these two
+  calls**, or new rows land with `canonical_state IS NULL`, which the Task 7 predicate reads
+  as "the reshape has not run" - re-running the migration on every launch forever.
 - `record_prediction` takes `predicted_trio_1` instead of `predicted_left`.
 - `scored_predictions` becomes `SELECT predicted_trio_1, winning_trio, predicted_source, predicted_locked FROM match WHERE predicted_trio_1 IS NOT NULL AND winning_trio IS NOT NULL AND superseded_by IS NULL AND canonical_state='canonical'`. Note the deliberate behaviour change named in the spec: synced rows now score too, because a pooled prediction is another contributor's call and scoring it is meaningful.
 - `matches_for_fit` selects `m.id, m.winning_trio, m.theme_id, m.event_id, m.trio_1_rating, m.trio_2_rating, m.blue_trio, h.trio, h.hero_slug`, filtered on `m.winning_trio IS NOT NULL AND m.canonical_state='canonical' AND h.hero_slug IS NOT NULL AND m.superseded_by IS NULL`, ordered `m.id, h.trio, h.slot`. `blue_trio` is carried because Task 10 needs it and nothing else does.
@@ -1612,7 +1681,17 @@ Anchoring on the merged set rather than a re-read frame makes the scoring self-c
 
 - [ ] **Step 4: Implement Part 1 - resolve at record time**
 
-In `_record_summary`, before writing heroes: call `resolve(panel_top, panel_bottom, draft_blue, draft_red)`. On `DIRECT`/`SWAPPED`, compute `blue_trio` from which canonical trio the draft-blue set forms. On `UNRESOLVED`, set `blue_trio = NULL` and drop the carried prediction and ratings - but still record the trios and the winner, which need no orientation.
+In `_record_summary`, before writing heroes: call `resolve(panel_top, panel_bottom, draft_blue, draft_red)`. On `DIRECT`/`SWAPPED`, compute `blue_trio` from which canonical trio the draft-blue set forms. On `UNRESOLVED`, pass `blue_trio=None` and omit the carried prediction and ratings - but still pass `winning_trio`, which needs no orientation.
+
+Persist all of it through the single `finalise_summary(...)` call Task 8 defines, after
+`record_heroes`. There is no separate setter for `blue_trio`, deliberately: the winner, the
+pointer and the measurements are only jointly meaningful, and `finalise_summary` is also
+what sets `canonical_state`. A recording path that computes `blue_trio` without calling it
+leaves the row unfinished and re-triggers the migration on the next launch.
+
+A read that cannot form two complete trios calls `mark_unrepresentable(match_id)` instead.
+**Walk every exit path of `_record_summary`** - including the early returns - and confirm
+each ends in one of the two calls.
 
 When the panel tint is unreadable, do NOT fall through to `_winner_by_colour` or header OCR. Those read the banner, whose geometry is the thing on trial. Record unresolved instead.
 
@@ -2033,4 +2112,5 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
+10. **Every recording path must end in `finalise_summary` or `mark_unrepresentable`.** A row left with `canonical_state IS NULL` is read by the Task 7 predicate as "the reshape has not run", so the migration re-runs on every launch.
 9. **`views.sql` is part of the schema change, not an afterthought.** `hero_matchup` reads `outcome` and `side`, and `_apply` builds it before the reshape - so both a fresh install and the second launch of an upgraded one fail at `migrate.py:285` unless the view is rewritten and its execution moved after `_reshape_to_trios`.

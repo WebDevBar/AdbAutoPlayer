@@ -26,6 +26,21 @@ Two fixes to Prevent Friendly Fire, both found on its first live Arena run.
 
 ## [Unreleased]
 
+### Known issue
+
+- **"Minimize button should hide to the system tray" does nothing.** Added in
+  wdb-12.9.25-29 and confirmed non-functional on 2026-08-01: with it enabled, minimize
+  still goes to the taskbar. The handler watches `WindowEvent::Resized` and checks
+  `is_minimized()`, which does not fire as assumed in Tauri 2. Close-to-tray is
+  unaffected and works.
+
+  **Decision: remove the toggle rather than fix it.** The operator prefers minimize going
+  to the taskbar, so the setting has no user behind it - and a setting that claims to do
+  something and does not is worse than its absence. The close toggle should also be
+  reworded to say plainly that it is the CLOSE button, e.g. "Close button minimizes to
+  tray", since the current pair reads as though both do the same thing.
+
+
 ## [wdb-12.9.25-29] - 2026-08-01
 
 Two defects found while auditing the betting model, and the identity change that fixes

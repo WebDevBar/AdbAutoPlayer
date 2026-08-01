@@ -24,6 +24,46 @@ Two fixes to Prevent Friendly Fire, both found on its first live Arena run.
   on card 3 was flagged and then discarded. Harmless, but it put a detection in the log
   that could never be acted on, which reads like a card we chose to ignore.
 
+## [wdb-12.9.25-31] - 2026-08-01
+
+Live-log changes, from watching a real collection run, plus one data fix.
+
+### Fixed
+
+- **No match result ever reached the live log.** `[SC-75]` was on the hidden list under
+  the comment "the prediction, which the bubble is already showing" - written when it
+  carried only the prediction. It now also carries `BLUE WINS` / `RED WINS` and the
+  HIT/MISS line, and both inherited a hide rule meant for something else. By the time a
+  result is logged the game has already moved on, so it is on no screen at all.
+- **A pulled match had no `comps_key`.** The dedupe backstop asks by `comps_key`; it used
+  to ask by `natural_key`, which synced rows have. Every pulled row was invisible to it,
+  so a match another contributor had already pushed would be recorded a second time
+  locally. Found on the first live pull: 50 of 50 rows unkeyed. Rows already on disk are
+  picked up by the startup backfill.
+
+### Changed
+
+- **The sixth pick is announced.** It cannot be read from the draft screen - the game
+  leaves that screen the instant the pick is made - so the log showed five picks and then
+  jumped to the odds. It now reads `RED 6` exactly as the plate does, completing the
+  sequence: BLUE 1, RED 2, RED 3, BLUE 4, BLUE 5, RED 6.
+- **The live view drops what it does not need**: screen transitions, the locked-picks
+  summary (every hero in it was already announced individually), the `x/6 heroes
+  identified` count, and the one-off sync banner. The push/pull summary stays.
+- **`[SC-nn]` codes are stripped from live lines** and kept in the file. They exist for
+  grepping a log; on a narrow panel each one costs six characters of hero name.
+- The odds divider loses its double spaces.
+
+All of the above is the live/file split in `wdb_log.py`, not logging levels - level is the
+wrong axis, because the noise and the signal are both INFO.
+
+### Known issue
+
+- **Three local/synced row pairs share an identity and neither is marked superseded**, so
+  they are counted twice in the model fit. Three rows in 1,411, which is noise against a
+  Bradley-Terry fit. A client-side reconciliation pass is needed; the server already
+  merges these correctly.
+
 ## [Unreleased]
 
 ### Known issue

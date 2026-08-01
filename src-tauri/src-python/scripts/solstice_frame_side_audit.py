@@ -1,6 +1,6 @@
 """Does our stored side agree with what the draft frame shows?
 
-READ ONLY. It opens the database with `mode=ro` so a write raises rather
+READ ONLY by default. It opens the database with `mode=ro` so a write raises rather
 than being merely avoided, and its only outputs are a markdown report and a
 machine-readable sidecar.
 
@@ -702,6 +702,131 @@ def write_sidecar(rows: list[Row], path: Path) -> None:
     path.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
 
 
+_SENTINEL_SIDE = "__swap__"
+
+
+def swap_sides(con: sqlite3.Connection, match_id: int) -> None:
+    """Flip one match's hero sides and its outcome. Nothing else.
+
+    Two phases because `match_hero` carries UNIQUE(match_id, side, slot) and SQLite
+    checks constraints per ROW, not at statement end: a single CASE update collides with
+    the row it has not moved yet. A sentinel side empties one value first.
+
+    Deliberately untouched: `predicted_left` (draft-relative, so it already refers
+    to the correct side and the repair is what brings `outcome` onto the same
+    frame), player names (summary HEADER, read by x-position, side-correct), and
+    ratings and ranks (draft-derived). Swapping any of them would move correct data
+    onto the wrong side.
+
+    Args:
+        con: An open, writable connection.
+        match_id: The match to flip.
+    """
+    con.execute(
+        "UPDATE match_hero SET side=? WHERE match_id=? AND side='left'",
+        (_SENTINEL_SIDE, match_id),
+    )
+    con.execute(
+        "UPDATE match_hero SET side='left' WHERE match_id=? AND side='right'",
+        (match_id,),
+    )
+    con.execute(
+        "UPDATE match_hero SET side='right' WHERE match_id=? AND side=?",
+        (match_id, _SENTINEL_SIDE),
+    )
+    con.execute(
+        "UPDATE match SET outcome = CASE outcome WHEN 'left' THEN 'right'"
+        " WHEN 'right' THEN 'left' ELSE outcome END WHERE id=?",
+        (match_id,),
+    )
+    con.commit()
+
+
+def snapshot(db_path: Path) -> Path:
+    """Copy the database aside, and prove the copy is usable before returning.
+
+    `sqlite3.Connection.backup` rather than a file copy: it is consistent against a
+    database another process may be writing, which a `cp` is not. The copy is then
+    opened and its schema compared against the original, because a snapshot nobody
+    checked is not a snapshot - it is a file.
+
+    Args:
+        db_path: The database about to be modified.
+
+    Returns:
+        The snapshot path.
+
+    Raises:
+        RuntimeError: If the copy does not open or its schema differs.
+    """
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = db_path.with_name(f"{db_path.name}.bak-{stamp}")
+    source = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        destination = sqlite3.connect(target)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+        original = _schema(source)
+    finally:
+        source.close()
+
+    try:
+        copy = sqlite3.connect(f"file:{target}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        raise RuntimeError(f"snapshot at {target} will not open: {exc}") from exc
+    try:
+        if _schema(copy) != original:
+            raise RuntimeError(f"snapshot at {target} has a different schema")
+    finally:
+        copy.close()
+    return target
+
+
+def _schema(con: sqlite3.Connection) -> list[tuple]:
+    """Every object in the schema, for comparing a snapshot against its source."""
+    return sorted(
+        tuple(row) for row in con.execute("SELECT type, name, sql FROM sqlite_master")
+    )
+
+
+def repair(db_path: Path, rows: list[Row], log_path: Path) -> int:
+    """Snapshot, then flip every MIRRORED row. Nothing else is touched.
+
+    `PARTIAL`, `UNREADABLE` and `INCOMPLETE` are deliberately left alone: none of them
+    is evidence that the stored orientation is wrong, and repairing on a frame we could
+    not read would put the reader's failures into the data.
+
+    Args:
+        db_path: The live database.
+        rows: The audit's rows.
+        log_path: Where to write the before/after log.
+
+    Returns:
+        The number of matches repaired.
+    """
+    targets = [r for r in rows if r.verdict is Verdict.MIRRORED]
+    if not targets:
+        return 0
+    backup = snapshot(db_path)
+    log = [f"snapshot: {backup}", f"repairing {len(targets)} matches", ""]
+    con = sqlite3.connect(db_path)
+    try:
+        for row in targets:
+            log.append(
+                f"match {row.match_id}: outcome {row.outcome} ->"
+                f" {'right' if row.outcome == 'left' else 'left'};"
+                f" left [{', '.join(row.row_left)}] <-> right"
+                f" [{', '.join(row.row_right)}]"
+            )
+            swap_sides(con, row.match_id)
+    finally:
+        con.close()
+    log_path.write_text("\n".join(log) + "\n", encoding="utf-8")
+    return len(targets)
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Command line."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -719,6 +844,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2)
     )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Repair the MIRRORED rows. Off by default; the default run writes"
+        " nothing and exits non-zero when there is anything to repair.",
+    )
     return parser.parse_args(argv)
 
 
@@ -729,8 +860,8 @@ def main(argv: list[str] | None = None) -> int:
         argv: Command line arguments, or None for `sys.argv`.
 
     Returns:
-        Process exit code. Non-zero when mirrored rows were found, so a run that
-        found something cannot be mistaken for a clean bill of health.
+        Process exit code. Non-zero on a dry run that found repairable rows, so the
+        default invocation cannot be mistaken for a clean bill of health.
     """
     args = _parse_args(argv)
     if not args.db.is_file():
@@ -767,12 +898,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"report:   {report}")
     print(f"sidecar:  {args.out_dir / f'{stem}.json'}")
 
-    if mirrored:
+    if not mirrored:
+        return 0
+    if not args.apply:
         print(
-            f"\n{mirrored} rows are mirrored. This script does not repair anything.",
+            f"\nDRY RUN: {mirrored} rows would be repaired. Nothing was written to the"
+            " database. Re-run with --apply to repair them.",
             file=sys.stderr,
         )
         return 1
+    repaired = repair(args.db, rows, args.db.with_name(f"{stem}-repair.log"))
+    print(f"repaired {repaired} matches")
     return 0
 
 

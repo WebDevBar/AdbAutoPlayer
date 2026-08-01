@@ -320,6 +320,15 @@ Add:
     # was not: a pooled row has no blue.
     predicted_trio_1: Mapped[float | None] = mapped_column(Float)
 
+    # BACKWARD-COMPATIBILITY PROVENANCE ONLY. Which trio held side='left' in this row
+    # as it stood after 0006, so a version-4 client still in the rollout window receives
+    # exactly the orientation it would have received before the migration. Those clients
+    # train their intercept on every pulled row, and today a pooled row's left IS the
+    # pushing contributor's blue - a real first-pick signal that trio order would replace
+    # with alphabetical noise. Read by to_v4_wire and by nothing else; delete it when
+    # version 4 support is dropped.
+    wire_left_trio: Mapped[int | None] = mapped_column(Integer)
+
     trio_1_pool: Mapped[int | None] = mapped_column(Integer)
     trio_2_pool: Mapped[int | None] = mapped_column(Integer)
     trio_1_odds: Mapped[float | None] = mapped_column(Float)
@@ -714,10 +723,10 @@ Expected: 8 passed
 
 `migrations/versions/0007_canonical_trios.py`, `down_revision = "0006"`. Structure, in one transaction:
 
-1. `op.add_column` every new column from Task 2, all nullable.
+1. `op.add_column` every new column from Task 2, all nullable - including `wire_left_trio`.
 2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND its capture interval widened by 120 seconds - `captures_min_at`/`captures_max_at`, NOT `captured_at` - refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
-4. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
+4. Populate `wire_left_trio` from the current `side` values BEFORE they are touched: it is whichever canonical trio the `side='left'` heroes form. This is the only chance to capture it. Then `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
 6. Assert canonical ordering in bulk: no canonical match may have its `trio=1` heroes sorting after its `trio=2` heroes. Raise on any violation. **This must come after step 4**, not before - the column it reads does not exist until then. Both assertions stay inside the transaction and before any destructive drop.
 7. Drop `left_player`, `left_rating`, `left_rank`, `right_player`, `right_rating`, `right_rank`, `outcome`, `predicted_left`, `left_pool`, `right_pool`, `left_odds`, `right_odds`.
@@ -853,6 +862,30 @@ def test_pull_without_a_version_returns_the_v4_shape(client, auth):
         assert "outcome" in rows[0] and "winning_trio" not in rows[0]
 
 
+def test_the_v4_wire_preserves_the_original_orientation(client, auth, session, a_match):
+    """A v4 client in the rollout window still trains its intercept on every pulled
+    row, so the wire orientation must be the one it would have received before 0007 -
+    not trio order, which would replace a real first-pick signal with alphabetical noise.
+    """
+    a_match.wire_left_trio = 2          # trio 2 held side='left' before the migration
+    a_match.winning_trio = 2
+    a_match.trio_1_rating, a_match.trio_2_rating = 200, 100
+    session.flush()
+    row = client.get("/v1/matches?since=0&limit=10", headers=auth).json()["matches"][0]
+    assert row["outcome"] == "left"     # trio 2 won and trio 2 is on the left
+    assert row["left_rating"] == 100
+    assert {h["hero_slug"] for h in row["heroes"] if h["side"] == "left"} == {"m", "n", "o"}
+
+
+def test_the_v5_shape_never_exposes_wire_left_trio(client, auth):
+    """It is backward-compatibility provenance. A v5 consumer that read it would be
+    treating an arbitrary wire choice as if it meant something."""
+    rows = client.get("/v1/matches?since=0&limit=10&schema_version=5",
+                      headers=auth).json()["matches"]
+    if rows:
+        assert "wire_left_trio" not in rows[0]
+
+
 def test_pull_with_version_5_returns_trios(client, auth):
     r = client.get("/v1/matches?since=0&limit=10&schema_version=5", headers=auth)
     rows = r.json()["matches"]
@@ -880,15 +913,31 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
   - **Pull needs a real v4 ADAPTER, not just a different response model.** After `0007` the
     row has no `outcome`, no `side`, no `left_rating` and no player names, so there is
     nothing for the existing v4 schema to serialise. Write `to_v4_wire(match) -> dict` that
-    picks a DETERMINISTIC wire orientation - trio 1 is always `left` - and maps the winner,
-    the heroes, the prediction, the ratings, the ranks, the pools and the odds together in
-    one place, so the emitted row is internally consistent even though its orientation is
-    now arbitrary. Player names emit as `null`.
+    maps the winner, the heroes, the prediction, the ratings, the ranks, the pools and the
+    odds together in one place, so the emitted row is internally consistent. Player names
+    emit as `null`.
 
-    That arbitrary orientation is safe for exactly the reason Part 6 gives: a v4 client
-    stores a pulled row and its own fit is antisymmetric in everything but the intercept,
-    which pulled rows do not touch. It would NOT be safe for a row the client believed it
-    had watched, and nothing about a pulled row lets it believe that.
+  - **`to_v4_wire` must emit the row's ORIGINAL wire orientation, and an earlier draft of
+    this plan got that wrong.** It said trio 1 is always `left` and called the arbitrariness
+    safe "because pulled rows do not touch the intercept" - which is only true AFTER client
+    Task 10. The rollout deliberately puts the server first, so during the window there are
+    still v4 clients whose `matches_for_fit` does not filter `origin` and whose `odds.py`
+    gives every loaded match an intercept of `1.0`.
+
+    Those clients would then train the first-pick intercept on trio order. That is a real
+    regression rather than a continuation of today's behaviour: TODAY a pooled row's `left`
+    is the pushing contributor's own blue, so it carries a genuine first-pick signal, and
+    always-trio-1-left would replace that signal with alphabetical noise.
+
+    So `0007` also records **`wire_left_trio`** (1 or 2): which trio held `side='left'` in
+    the row as it stood after `0006`, captured before the columns are dropped. `to_v4_wire`
+    orients on it, so a v4 client receives byte-for-byte what it would have received before
+    the migration.
+
+    `wire_left_trio` is **backward-compatibility provenance, not truth**. Nothing else reads
+    it: not v5 pull, not ingest, not the fit, not `blue_trio` - which stays NULL on pulled
+    rows precisely because the server does not know whose blue it was. Delete the column when
+    version 4 support is dropped. Add a test asserting no v5 code path references it.
 
   - Pull reads `schema_version` from the query string, defaulting to 4, and serialises via
     `to_v4_wire` or the v5 model accordingly.
@@ -2220,5 +2269,6 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
+11. **`wire_left_trio` exists only so version-4 pull is byte-compatible.** It is captured in `0007` before the sides are dropped and read by `to_v4_wire` alone. Nothing in the v5 path, the ingest path or the fit may read it, and it is deleted when version 4 support is dropped.
 10. **Every recording path must end in `finalise_summary` or `mark_unrepresentable`.** A row left with `canonical_state IS NULL` is read by the Task 7 predicate as "the reshape has not run", so the migration re-runs on every launch.
 9. **`views.sql` is part of the schema change, not an afterthought.** `hero_matchup` reads `outcome` and `side`, and `_apply` builds it before the reshape - so both a fresh install and the second launch of an upgraded one fail at `migrate.py:285` unless the view is rewritten and its execution moved after `_reshape_to_trios`.

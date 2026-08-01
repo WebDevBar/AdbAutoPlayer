@@ -46,6 +46,26 @@ ADD_COLUMNS = [
     ("match", "predicted_source", "TEXT"),
     ("match", "predicted_locked", "INTEGER"),
     ("match", "predicted_at", "TEXT"),
+    # Canonical identity. `natural_key` still carries the OUTCOME, so the same fight
+    # seen from both sides keys differently and the pool stores it twice. `comps_key`
+    # is outcome-free, so the two spectators agree - but it is deliberately NOT
+    # UNIQUE: a mirrored local pair must be allowed to coexist until the server
+    # reconciles them, and a UNIQUE constraint here would make the client throw away
+    # the very row the reconciliation needs.
+    ("match", "comps_key", "TEXT"),
+    # Set when the server retires this row in favour of another. Non-NULL means
+    # "superseded" - the row is kept for provenance and excluded from analysis.
+    ("match", "superseded_by", "INTEGER"),
+    # Capture-time bounds of every occurrence merged into this row. A single capture
+    # keeps min == max; a merge widens them, and that widened window is what later
+    # occurrence matching reads.
+    ("match", "captures_min_at", "TEXT"),
+    ("match", "captures_max_at", "TEXT"),
+    # Supersession rides a SEPARATE server sequence from `pull_cursor`: retiring a row
+    # does not advance its seq, so one cursor cannot track both. Sharing them would
+    # either re-read page one forever or silently miss later retirements once
+    # tombstones paginate.
+    ("install", "supersession_cursor", "TEXT"),
     ("hero", "external_id", "INTEGER"),
     ("hero", "game_icon", "TEXT"),
     ("hero", "wiki_icon", "TEXT"),
@@ -295,6 +315,15 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_match_pushable ON match(pushed_at)"
             " WHERE origin='local' AND natural_key IS NOT NULL"
+        )
+
+    # Same reason as idx_match_pushable: comps_key is added by ADD_COLUMNS above, which
+    # runs AFTER schema.sql, so an index on it cannot live in schema.sql without
+    # aborting that script on every database that predates the column. NOT unique - see
+    # the column comment; the lookup is by value, so it only has to avoid a scan.
+    if "comps_key" in columns(con, "match"):
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_match_comps_key ON match(comps_key)"
         )
 
     # This install's identity - generated once, then never touched again.

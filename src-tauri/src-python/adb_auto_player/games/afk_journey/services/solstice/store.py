@@ -574,6 +574,27 @@ class MatchStore:
         with self._connect() as con:
             con.execute("UPDATE install SET pull_cursor=? WHERE id=1", (str(seq),))
 
+    def supersession_cursor(self) -> int:
+        """High-water mark for tombstones, SEPARATE from `pull_cursor`.
+
+        Marking a row superseded does not advance its `Match.seq`, so supersessions
+        ride their own server sequence. Reusing the match cursor would either ask
+        from zero every time - re-reading page one forever - or, once the match
+        cursor ran ahead, permanently miss retirements published behind it.
+        """
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT supersession_cursor FROM install WHERE id=1"
+            ).fetchone()
+        return int(row[0]) if row and row[0] else 0
+
+    def set_supersession_cursor(self, seq: int) -> None:
+        """Record how far tombstones have been read. Never touches `pull_cursor`."""
+        with self._connect() as con:
+            con.execute(
+                "UPDATE install SET supersession_cursor=? WHERE id=1", (str(seq),)
+            )
+
     def pushable_matches(self, limit: int = 500) -> list[dict]:
         """Rows this install may send.
 

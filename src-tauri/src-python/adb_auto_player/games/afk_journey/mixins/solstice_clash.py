@@ -1361,6 +1361,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
         )
         self._claim_draft_frame(match_id)
+        self._save_summary_frame(frame, match_id)
         # The last market reading before the picks locked, stored against the match.
         # `record_odds` and the table it writes to have existed since the schema was
         # written and were never used - the pools were visible on screen the whole time.
@@ -1863,6 +1864,46 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             logging.debug(f"[SC-83] draft frame saved to {path}")
         except Exception as exc:
             logging.debug(f"[SC-83] could not save the draft frame: {exc}")
+
+    def _save_summary_frame(self, frame, match_id) -> None:
+        """Keep the summary screenshot. PART 3.
+
+        We have never saved one. The vault holds `draft-N.png` and
+        `draft-pending-N-N.png` and nothing from the details screen - which is the
+        source of the winner tint, the six identifications, the six stat rows AND the
+        defect itself. When match 1476 turned out to be stored backwards there was no
+        frame from that window to look at, and the question of why it stored
+        `left_player = Rocky` while the header showed Guicts is permanently
+        unanswerable as a result.
+
+        EVERY summary frame, not only the unresolved ones. 1476 looked successfully
+        resolved to the code that recorded it; the failure was semantic, so we cannot
+        know in advance which frames will matter. Roughly 2.4 MB each, behind the same
+        setting the draft frames use - silently filling a collaborator's disk is not a
+        default anyone consented to.
+
+        Never fatal. A failed write costs a screenshot, not a match.
+
+        Args:
+            frame: The capture already confirmed to be the details screen.
+            match_id: The row it belongs to, for the filename.
+        """
+        try:
+            if frame is None:
+                return
+            wdb = getattr(self.settings, "wdb_modes", None)
+            if wdb is None or not wdb.save_draft_frames:
+                return
+            target = draft_frame_dir(wdb.draft_frame_dir)
+            if match_id:
+                path = target / f"summary-{match_id}.png"
+            else:
+                stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+                path = target / f"summary-pending-{stamp}.png"
+            cv2.imwrite(str(path), frame)
+            logging.debug(f"[SC-83] summary frame saved to {path}")
+        except Exception as exc:
+            logging.debug(f"[SC-83] could not save the summary frame: {exc}")
 
     def _sync_theme_windows(self) -> None:
         """Adopt the pool's theme boundaries, and re-file anything they now cover.

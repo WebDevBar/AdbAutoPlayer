@@ -836,6 +836,92 @@ def _drop_legacy_columns(con: sqlite3.Connection) -> None:
                 con.execute(f"ALTER TABLE {table} DROP COLUMN {name}")
 
 
+def _reconcile_local_synced_pairs(con: sqlite3.Connection) -> int:
+    """Retire synced copies of matches this install also watched itself.
+
+    Four local/synced pairs share a comps_key with neither marked superseded, so three
+    of them are counted TWICE in the fit. They arose from pulling a match another
+    contributor had pushed and then spectating it ourselves; the SC-41 backstop stops
+    new ones, but nothing reconciles those already on disk.
+
+    The +/-2 minute window is the test, NOT comps_key alone. Ids 1 and 45 share a key
+    and are 31.6 hours apart - a genuine rematch, correctly two rows - and a
+    reconciliation that ignored the window would destroy it.
+
+    The LOCAL row survives, because it is draft-anchored: it is the one that knows
+    which trio was ours.
+
+    Args:
+        con: Open connection, mid-migration.
+
+    Returns:
+        How many rows were retired.
+    """
+    if not table_exists(con, "match") or "comps_key" not in columns(con, "match"):
+        return 0
+    if "superseded_by" not in columns(con, "match"):
+        return 0
+
+    groups: dict[str, list[tuple]] = {}
+    for row in con.execute(
+        "SELECT id, comps_key, captured_at, origin FROM match"
+        " WHERE comps_key IS NOT NULL AND superseded_by IS NULL"
+    ):
+        groups.setdefault(row[1], []).append(row)
+
+    retired = 0
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        locals_ = [m for m in members if m[3] == "local"]
+        synced = [m for m in members if m[3] == "synced"]
+        if not locals_ or not synced:
+            continue
+        for keeper in locals_:
+            at = _parse_iso(keeper[2])
+            if at is None:
+                continue
+            for other in synced:
+                other_at = _parse_iso(other[2])
+                if other_at is None:
+                    continue
+                if abs((other_at - at).total_seconds()) > _PAIR_WINDOW_SECONDS:
+                    continue
+                cur = con.execute(
+                    "UPDATE match SET superseded_by=?"
+                    " WHERE id=? AND superseded_by IS NULL",
+                    (keeper[0], other[0]),
+                )
+                retired += cur.rowcount
+    return retired
+
+
+def _parse_iso(value):
+    """A stored timestamp, or None when it cannot be read.
+
+    Args:
+        value: The stored `captured_at`.
+
+    Returns:
+        An aware datetime, or None.
+    """
+    if not value:
+        return None
+    try:
+        text = str(value).replace("Z", "+00:00")
+        parsed = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.UTC)
+    return parsed
+
+
+# The same proximity rule the occurrence clustering uses. A duplicate capture of one
+# match lands inside it; a rematch does not.
+_PAIR_WINDOW_SECONDS = 120
+
+
 def _rebuild_match_hero(con: sqlite3.Connection) -> None:
     """Rewrite match_hero into the trio shape.
 
@@ -956,6 +1042,7 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
 
     _backfill_comps_key(con)
     _reshape_to_trios(con)
+    _reconcile_local_synced_pairs(con)
 
     # AFTER the reshape, for the same reason idx_match_pushable is created here: the
     # columns do not exist until it has run.

@@ -593,13 +593,14 @@ def _reshape_to_trios(con: sqlite3.Connection) -> int:
     ).fetchone()[0]
 
     if not legacy:
-        # Already the canonical shape. Classify anything still NULL so the predicate
-        # settles, and stop.
+        # Already the canonical shape, but a NULL here is NOT automatically fine.
+        # record_match, record_heroes and finalise_summary commit separately, so a
+        # crash between them leaves a row on the canonical schema with no heroes, no
+        # pointers, or both. Blessing those as 'canonical' would let a half-written
+        # match into the fit and the pool - so each one is CLASSIFIED on its merits,
+        # exactly as a legacy row is.
         if pending:
-            con.execute(
-                "UPDATE match SET canonical_state='canonical'"
-                " WHERE canonical_state IS NULL"
-            )
+            _classify_canonical_leftovers(con)
         return 0
 
     # The SHAPE change is NOT conditional on there being rows to convert. An empty or
@@ -929,6 +930,58 @@ def _parse_iso(value):
 # The same proximity rule the occurrence clustering uses. A duplicate capture of one
 # match lands inside it; a rematch does not.
 _PAIR_WINDOW_SECONDS = 120
+
+
+def _classify_canonical_leftovers(con: sqlite3.Connection) -> int:
+    """Settle rows left unclassified on a database that is already canonical.
+
+    These come from an INTERRUPTED recording: `record_match`, `record_heroes` and
+    `finalise_summary` commit separately, so a crash between them leaves a row with
+    `canonical_state IS NULL` and possibly no heroes and no pointers at all.
+
+    Each is judged on its merits rather than waved through: two complete trios, in
+    canonical order, with every non-NULL pointer naming a trio that exists. Anything
+    else is `unrepresentable` - terminal, excluded from the fit and from sync, and
+    honest about what it is.
+
+    Args:
+        con: Open connection, mid-migration.
+
+    Returns:
+        How many rows were classified.
+    """
+    rows = con.execute(
+        "SELECT id, winning_trio, blue_trio FROM match WHERE canonical_state IS NULL"
+    ).fetchall()
+    if not rows:
+        return 0
+
+    grouped: dict[int, dict[int, list[str]]] = {}
+    for match_id, trio, slug in con.execute(
+        "SELECT match_id, trio, hero_slug FROM match_hero WHERE hero_slug IS NOT NULL"
+    ):
+        grouped.setdefault(match_id, {1: [], 2: []}).setdefault(trio, []).append(slug)
+
+    for match_id, winning_trio, blue_trio in rows:
+        trios = grouped.get(match_id, {1: [], 2: []})
+        first, second = sorted(trios.get(1, [])), sorted(trios.get(2, []))
+        ok = (
+            len(first) == _TRIO_SIZE
+            and len(second) == _TRIO_SIZE
+            and not (set(first) & set(second))
+            and first < second
+        )
+        if ok:
+            for pointer in (winning_trio, blue_trio):
+                if pointer is not None and pointer not in (1, 2):
+                    ok = False
+        state = "canonical" if ok else "unrepresentable"
+        con.execute("UPDATE match SET canonical_state=? WHERE id=?", (state, match_id))
+    return len(rows)
+
+
+# Every Solstice Clash composition is exactly three heroes.
+_TRIO_SIZE = 3
 
 
 def _rebuild_match_hero(con: sqlite3.Connection) -> None:

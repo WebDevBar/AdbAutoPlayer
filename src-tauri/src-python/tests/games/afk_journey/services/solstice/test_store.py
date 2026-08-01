@@ -805,3 +805,58 @@ def test_a_pulled_row_gets_a_comps_key(tmp_db):
             "SELECT comps_key FROM match WHERE id=?", (match_id,)
         ).fetchone()[0]
     assert stored == comps_key(EVENT_SLUG, left, right)
+
+
+def test_a_keyless_row_forces_the_migration_to_run_again(tmp_db):
+    """Columns present is not the same as migration done.
+
+    migrate.py also BACKFILLS comps_key. A database can have every column while rows
+    still lack a key - a pulled row did, before upsert_synced set one - and the column
+    check then passes, so the backfill never runs and they stay keyless forever.
+    Observed on a real database: 50 rows survived two upgrades unkeyed.
+    """
+    store = MatchStore(tmp_db)
+    left = ["aliceth", "alna", "alsa"]
+    right = ["antandra", "arden", "atalanta"]
+    match_id = store.upsert_synced({
+        "natural_key": "sha256:keyless:0",
+        "source": "spectate_summary",
+        "captured_at": "2026-08-01T05:00:00Z",
+        "outcome": "left",
+        "theme_slug": None,
+        "heroes": (
+            [{"side": "left", "slot": i, "hero_slug": h} for i, h in enumerate(left)]
+            + [{"side": "right", "slot": i, "hero_slug": h} for i, h in enumerate(right)]
+        ),
+    })
+    with store._connect() as con:
+        # The backfill resolves the event slug through event_id, falling back to
+        # theme_id. A row with neither is deliberately left NULL rather than guessed,
+        # so give it one - otherwise this test proves the wrong thing.
+        con.execute(
+            "INSERT OR IGNORE INTO event(id, slug, name, game)"
+            " VALUES (1, 'solstice-clash', 'Solstice Clash', 'afk-journey')"
+        )
+        con.execute(
+            "UPDATE match SET comps_key=NULL, event_id=1 WHERE id=?", (match_id,)
+        )
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_m", Path(__file__).parents[7] / "data/solstice_clash/migrate.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert not store._schema_is_current(module), (
+        "a complete row with no comps_key must send the migration round again"
+    )
+
+    MatchStore._schema_ensured.discard(tmp_db)
+    MatchStore(tmp_db)
+    with store._connect() as con:
+        keyed = con.execute(
+            "SELECT comps_key FROM match WHERE id=?", (match_id,)
+        ).fetchone()[0]
+    assert keyed == comps_key(EVENT_SLUG, left, right)
+    assert store._schema_is_current(module), "and must then settle, not loop"

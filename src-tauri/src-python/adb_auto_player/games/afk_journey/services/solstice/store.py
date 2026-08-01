@@ -333,6 +333,26 @@ class MatchStore:
                 present = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
                 if column not in present:
                     return False
+            # Columns are not the only thing migrate.py brings. It also BACKFILLS
+            # comps_key, and a database can have every column while rows still lack a
+            # key - a pulled row did, before upsert_synced set one. Skipping the
+            # migration then leaves them keyless forever, because the column check
+            # passes. Observed: 50 rows stayed unkeyed across two upgrades.
+            #
+            # The predicate matches the backfill's own exactly - outcome decided AND
+            # three identified heroes a side - so a row it deliberately skips, like a
+            # five-hero read, cannot make this return False on every startup.
+            unkeyed = con.execute(
+                "SELECT 1 FROM match m WHERE m.comps_key IS NULL"
+                " AND m.outcome IN ('left','right')"
+                " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
+                "      AND side='left' AND hero_slug IS NOT NULL) = 3"
+                " AND (SELECT COUNT(*) FROM match_hero WHERE match_id=m.id"
+                "      AND side='right' AND hero_slug IS NOT NULL) = 3"
+                " LIMIT 1"
+            ).fetchone()
+            if unkeyed is not None:
+                return False
             return True
         except sqlite3.Error:
             return False

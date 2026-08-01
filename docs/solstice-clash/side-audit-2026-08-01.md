@@ -1,6 +1,6 @@
 # Side audit - 2026-08-01
 
-Cutoff `2026-08-01T00:00:00+00:00`. Frames audited: **916**.
+Cutoff `2026-08-01T04:00:00+00:00`. Frames audited: **929**.
 
 This compares **our summary-screen read** against **our draft-screen read**, on **one machine**. It cannot judge another contributor's rows, and a frame that could not be read is evidence about the frame reader, not about the summary reader - which is why `unreadable` is kept separate from `partial`.
 
@@ -8,14 +8,13 @@ This compares **our summary-screen read** against **our draft-screen read**, on 
 
 | verdict | n | share of audited |
 |---|---:|---:|
-| agree | 836 | 91.3% |
-| mirrored | 73 | 8.0% |
+| agree | 846 | 91.1% |
+| mirrored | 76 | 8.2% |
 | partial | 4 | 0.4% |
 | unreadable | 2 | 0.2% |
 | incomplete | 1 | 0.1% |
-| no_row | 0 | 0.0% |
 
-**Mirrored rate on the 909 adjudicated rows (agree + mirrored): 8.03% [6.44-9.98]**.
+**Mirrored rate on the 922 adjudicated rows (agree + mirrored): 8.24% [6.64-10.20]**.
 
 A rate near 50% would mean the frame reader is broken - not that half the corpus is mirrored - because a reader that assigns sides at random produces exactly that.
 
@@ -25,7 +24,7 @@ A rate near 50% would mean the frame reader is broken - not that half the corpus
 
 | blue read | red read | frames |
 |---:|---:|---:|
-| 3 | 2 | 914 |
+| 3 | 2 | 927 |
 | 2 | 2 | 1 |
 | 1 | 2 | 1 |
 
@@ -39,14 +38,13 @@ This is the weaker rule, kept separate on purpose. `classify` remains the rule o
 
 | one-sided verdict | n |
 |---|---:|
-| agree | 836 |
-| mirrored | 73 |
+| agree | 846 |
+| mirrored | 76 |
 | partial | 4 |
 | unreadable | 2 |
 | incomplete | 1 |
-| no_row | 0 |
 
-**One-sided mirrored rate on 909 rows: 8.03% [6.44-9.98]**.
+**One-sided mirrored rate on 922 rows: 8.24% [6.64-10.20]**.
 
 ## Is mirroring associated with anything?
 
@@ -56,37 +54,37 @@ Every 2x2 below is computed on the ONE-SIDED adjudicated rows, because the rule 
 
 | group | n | mirrored | rate | 95% Wilson |
 |---|---:|---:|---:|---|
-| outcome = left | 522 | 43 | 8.2% | 6.2-10.9% |
-| not outcome = left | 387 | 30 | 7.8% | 5.5-10.9% |
+| outcome = left | 529 | 45 | 8.5% | 6.4-11.2% |
+| not outcome = left | 393 | 31 | 7.9% | 5.6-11.0% |
 
-Two-proportion z = 0.266, p = 0.7899.
+Two-proportion z = 0.338, p = 0.7356.
 
 **Hour of day (UTC)**
 
 | group | n | mirrored | rate | 95% Wilson |
 |---|---:|---:|---:|---|
 | captured at or after 12:00 | 496 | 45 | 9.1% | 6.8-11.9% |
-| not captured at or after 12:00 | 413 | 28 | 6.8% | 4.7-9.6% |
+| not captured at or after 12:00 | 426 | 31 | 7.3% | 5.2-10.1% |
 
-Two-proportion z = 1.267, p = 0.2053.
+Two-proportion z = 0.988, p = 0.3230.
 
 **Rating order**
 
 | group | n | mirrored | rate | 95% Wilson |
 |---|---:|---:|---:|---|
-| left_rating > right_rating | 445 | 1 | 0.2% | 0.0-1.3% |
-| not left_rating > right_rating | 464 | 72 | 15.5% | 12.5-19.1% |
+| left_rating > right_rating | 449 | 1 | 0.2% | 0.0-1.3% |
+| not left_rating > right_rating | 473 | 75 | 15.9% | 12.8-19.4% |
 
-Two-proportion z = -8.481, p = 0.0000.
+Two-proportion z = -8.627, p = 0.0000.
 
 **Has a same-comps twin**
 
 | group | n | mirrored | rate | 95% Wilson |
 |---|---:|---:|---:|---|
-| has a twin | 10 | 9 | 90.0% | 59.6-98.2% |
-| not has a twin | 899 | 64 | 7.1% | 5.6-9.0% |
+| has a twin | 53 | 10 | 18.9% | 10.6-31.4% |
+| not has a twin | 869 | 66 | 7.6% | 6.0-9.5% |
 
-Two-proportion z = 9.591, p = 0.0000.
+Two-proportion z = 2.897, p = 0.0038.
 
 ## P1a: the accuracy correction
 
@@ -94,12 +92,12 @@ Two-proportion z = 9.591, p = 0.0000.
 
 | scoring | n | hits | accuracy |
 |---|---:|---:|---:|
-| as stored | 904 | 506 | 55.97% |
-| with mirrored outcomes flipped | 904 | 523 | 57.85% |
+| as stored | 917 | 513 | 55.94% |
+| with mirrored outcomes flipped | 917 | 531 | 57.91% |
 
 ## Every non-agreeing row (one-sided)
 
-80 rows.
+83 rows.
 
 | match | verdict | captured | outcome | row left | row right | frame blue | frame red |
 |---:|---|---|---|---|---|---|---|
@@ -177,6 +175,9 @@ Two-proportion z = 9.591, p = 0.0000.
 | 1406 | mirrored | 2026-07-31T23:44:20+00:00 | left | damian, talene, tasi | daimon, faramor, valka | daimon, faramor, valka | damian, talene |
 | 1408 | mirrored | 2026-07-31T23:48:53+00:00 | right | cyran, lucca, pippa | eironn, lily_may, ulmus | eironn, lily_may, ulmus | cyran, pippa |
 | 1412 | mirrored | 2026-07-31T23:58:43+00:00 | left | bryon, dionel, lorsan | harak, koko, thoran | harak, koko, thoran | dionel, lorsan |
+| 1472 | mirrored | 2026-08-01T03:10:07+00:00 | left | galahad, hepler, pippa | brutus, eironn, nazrik | brutus, eironn, nazrik | galahad, pippa |
+| 1474 | mirrored | 2026-08-01T03:15:55+00:00 | left | alsa, evie, kordan | hugin, phraesto, temesia | hugin, phraesto, temesia | alsa, evie |
+| 1476 | mirrored | 2026-08-01T03:21:34+00:00 | right | cyran, evie, lorsan | berial, callan, silven | berial, callan, silven | evie, lorsan |
 | 517 | partial | 2026-07-29T21:52:16Z | right | damian, kordan, pippa | galahad, ludovic, thador | dunlingr, rhys, solise | daimon, silven |
 | 519 | partial | 2026-07-29T21:54:26Z | left | aliceth, harak, igor | kafra, kruger, sonja | aliceth, hugin, kruger | antandra, dionel |
 | 522 | partial | 2026-07-29T21:58:02Z | right | aurora, scarlita, valka | parisa, reinier, ulmus | aliceth, callan, galahad | dionel, phraesto |

@@ -201,7 +201,16 @@ The shape therefore carries constraints, enforced in the schema where SQLite all
 a single validated write boundary where it does not:
 
 - `match_hero.trio IN (1, 2)`.
-- `UNIQUE(match_id, trio, hero_slug)` - a hero appears once per trio.
+- **`UNIQUE(match_id, hero_slug)` for identified heroes** - a hero appears once in the
+  whole MATCH, not merely once per trio. Round 4 caught the weaker per-trio form: it
+  permits the same hero in both trios and therefore two identical `(A,B,C)` trios, at which
+  point the canonical sort cannot tell trio 1 from trio 2 and both pointers stop naming a
+  composition. The game's shared exclusive pick pool makes this impossible on screen, which
+  is precisely why a misread must not be able to represent it.
+- **`UNIQUE(match_id, trio, slot)`** - the trio-space equivalent of today's
+  `UNIQUE(match_id, side, slot)`. Without it two heroes can share a slot while another is
+  absent, which passes the three-distinct-heroes check and silently breaks the plate
+  recovery this design promises.
 - **Exactly three distinct identified heroes per trio**, for any match with a decided
   outcome. This is the same completeness rule `is_complete` and the backfill already use,
   so a five-hero row like 625 is simply never assigned a trio rather than being a
@@ -316,8 +325,10 @@ the contributor has upgraded, which is a decision, not a timer.
 
 ## Part 6 - pulled rows have no sides
 
-A pulled row with no local counterpart is a match we never watched. Store its trios with
-`side` NULL on `match_hero`, and a row-level flag recording that it is not draft-anchored.
+A pulled row with no local counterpart is a match we never watched. Store its heroes with
+their canonical `match_hero.trio` membership and `blue_trio = NULL` - the NULL IS the flag,
+so no separate column is needed. (An earlier draft said "`side` NULL", written before 4b
+removed `side` entirely.)
 
 **Side is NOT load-bearing. The TRIO is.** The first draft said the model "never used
 side", which was wrong; the review then over-corrected and treated side as load-bearing,
@@ -377,11 +388,12 @@ A one-off pass, run at startup alongside the existing backfill:
 - Only `match_hero.side` and `match.outcome` are touched. `predicted_left` is draft-relative
   and already correct - flipping it would re-break the pairing.
 
-The 76 are already pushed, so the pool holds 76 wrong outcomes. After the local repair they
-must reach the server. Their `comps_key` does not change - identity is orientation-free - so
-a re-push is an update to an existing row, not a new one. The server needs an ingest path
-that accepts a corrected `winning_trio` for a known identity, from the contributor that
-originally supplied it.
+Their `comps_key` does not change - identity is orientation-free - so a correction is an
+update to an existing row, never a new one.
+
+**How many rows reach the server is answered below, not here.** An earlier draft said all
+76 must be pushed; that was written before we discovered `0006` had already corrected most
+of them, and following it would re-corrupt roughly 70 repaired rows.
 
 **This is the one step that mutates data the operator can see.** It runs only on an
 explicit go-ahead, after a `pg_dump` and a local snapshot.

@@ -597,24 +597,29 @@ otherwise. What Part 8 must therefore do:
    because server migrations are already manual and gated (`docs/DEPLOY.md`): `0007` IS the
    approved step, run after a verified `pg_dump`. It must not be made to run automatically.
 
-### There is no mechanism to send a correction, on either side
+### No correction is ever SENT, which is why this works
 
-The first draft called a re-push "an update to an existing row". It is not:
+An earlier draft tried to route the correction through the client: re-push the repaired
+rows and have the server update what it already holds. Round 13 caught that this is now
+both unnecessary and actively unsafe alongside `0007` doing the work directly - two
+mechanisms correcting the same six rows can apply the correction twice.
 
-- **Client**: `pushable_matches` requires `pushed_at IS NULL` (`store.py:892`) and all
-  76 are stamped. Nothing will ever re-send them.
+It could not have worked anyway, and the reasons are worth keeping because they are why
+`0007` owns this:
+
+- **Client**: `pushable_matches` requires `pushed_at IS NULL` (`store.py:892`) and all 76
+  are stamped. Nothing will ever re-send them.
 - **Server**: an unchanged `comps_key` at the same `captured_at` routes through
-  `assign` -> `_merge` -> `RowResult(status="duplicate")` (`matches.py:336-343`), and the
-  corrected outcome is silently discarded.
+  `assign` -> `_merge` -> `RowResult(status="duplicate")` (`matches.py:336-343`), so a
+  corrected value would be silently discarded.
+- "From the contributor that originally supplied it" is underdefined once a surviving
+  server row has absorbed another contributor's capture, which demonstrably happens -
+  locals 1108, 1313 and 1316 were each answered `duplicate` against rows we later pulled
+  back as synced 1109, 1314 and 1317.
 
-So Part 8 needs a real mechanism at both ends: a way to mark a repaired row for re-send
-that does not resurrect it as a new push, and a server path that accepts a corrected
-`winning_trio` for an identity it already holds. Neither exists.
-
-"From the contributor that originally supplied it" is also underdefined once a surviving
-server row has absorbed another contributor's capture, which demonstrably happens - locals
-1108, 1313 and 1316 were each answered `duplicate` against rows we later pulled back as
-synced 1109, 1314 and 1317.
+So there is **no re-send path and no correction endpoint**, and none is built. The pool is
+corrected in place by `0007`, once, under the existing manual migration gate. The client is
+not involved in it at all.
 
 ## Ordering
 
@@ -678,10 +683,11 @@ and 7 are one client release. The list below is the order of WORK, not of shippi
 
 6. **Ship the client** - steps 2, 3 and 4 as one binary. Nothing in them may reach a user
    alone, and none of them may reach a user before step 5 is live.
-7. **Part 8b - the pool correction** for the ~6 rows `0006` did not reach. Stays gated on
-   explicit approval: it writes to production and no automatic path should.
-
-Part 8a as a separate gated step no longer exists.
+**There is no step 7.** Round 13 caught the pool correction listed here as a separate
+later step while `0007` already performs it - which would apply it twice, and would deploy
+the schema migration before its own gated data-correction half. The correction lives inside
+`0007` at step 5 and happens exactly once, after a verified `pg_dump` and an explicit
+go-ahead. Neither Part 8a nor Part 8b exists as a separate gated step any more.
 
 ## Risks
 

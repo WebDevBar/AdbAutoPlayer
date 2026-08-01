@@ -286,8 +286,43 @@ no sidecar at all. Only the blue-relative values need a verdict:
   to local self-accuracy is lost. **We do not guess.** 8% of audited rows were mirrored, so
   a guess would be wrong roughly one row in twelve, silently.
 
+### Every side-relative local column is mapped, not just the prediction
+
+Round 10 caught "nothing local is lost" resting on a mapping given for `predicted_left`
+alone. Three more local columns are side-relative and become uninterpretable the moment the
+side labels go:
+
+| column | becomes | orientation needed? |
+|---|---|---|
+| `predicted_left` | `predicted_trio_1` | yes |
+| `left_rating` / `right_rating` | `trio_1_rating` / `trio_2_rating` | yes |
+| `left_rank` / `right_rank` | `trio_1_rank` / `trio_2_rank` | yes |
+| `match_odds` (side-relative) | trio-relative | yes |
+
+All four need a verdict for the same reason, and it is the reason 1476 was found at all:
+**ratings and ranks come from the HEADER, the odds from the DRAFT, and the heroes from the
+PANELS.** Header and draft are one frame of reference, the panels another, and mirroring is
+exactly the two disagreeing. So none of these can be attached to a trio without knowing
+which frame maps to which - unlike `winning_trio`, where winner and heroes come from the
+same panel pass and travel together.
+
+The rule is therefore uniform across all of them, and identical to the prediction's:
+
+- **`agree`** - the left-hand value belongs to the trio the legacy `side='left'` heroes form.
+- **`mirrored`** - it belongs to the other one.
+- **no verdict** - the trio-relative columns are NULL. Not guessed.
+
+`match_odds` is local market data and gets the same treatment: rows that can be oriented are
+rewritten trio-relative, rows that cannot keep their raw form in the snapshot and are
+excluded from anything that reads odds by trio.
+
+`left_player` / `right_player` are NOT mapped. Names are unreliable by 1476's own evidence
+and carry no weight in the fit, so they stay as free-text provenance on the row exactly as
+they are, belonging to no trio and claimed for none.
+
 **Nothing is destroyed.** Before the columns are dropped, the migration copies
-`(match_id, legacy_side_of_each_hero, outcome, predicted_left)` verbatim into
+`(match_id, legacy_side_of_each_hero, outcome, predicted_left, left_rating, right_rating,
+left_rank, right_rank, and the side-relative `match_odds` rows)` verbatim into
 `legacy_side_snapshot`, an append-only table it never reads again. If better orientation
 evidence ever appears - retained frames, a re-push, a contributor's copy - those 150 rows
 can be resolved later from the snapshot rather than being gone. It also makes the

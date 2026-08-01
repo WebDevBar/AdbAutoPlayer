@@ -8,14 +8,14 @@ This compares **our summary-screen read** against **our draft-screen read**, on 
 
 | verdict | n | share of audited |
 |---|---:|---:|
-| agree | 0 | 0.0% |
-| mirrored | 0 | 0.0% |
-| partial | 0 | 0.0% |
-| unreadable | 916 | 100.0% |
-| incomplete | 0 | 0.0% |
+| agree | 836 | 91.3% |
+| mirrored | 73 | 8.0% |
+| partial | 4 | 0.4% |
+| unreadable | 2 | 0.2% |
+| incomplete | 1 | 0.1% |
 | no_row | 0 | 0.0% |
 
-**Mirrored rate on the 0 adjudicated rows (agree + mirrored): 0.00% [0.00-0.00]**.
+**Mirrored rate on the 909 adjudicated rows (agree + mirrored): 8.03% [6.44-9.98]**.
 
 A rate near 50% would mean the frame reader is broken - not that half the corpus is mirrored - because a reader that assigns sides at random produces exactly that.
 

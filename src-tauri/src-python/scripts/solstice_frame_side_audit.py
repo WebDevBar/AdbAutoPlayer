@@ -839,7 +839,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--frames", type=Path, default=DEFAULT_FRAMES)
     parser.add_argument(
-        "--out-dir", type=Path, default=Path("docs/solstice-clash"), dest="out_dir"
+        # Anchored to the REPO, not the working directory. A cwd-relative default
+        # silently wrote a second copy under src-tauri/src-python/docs when the script
+        # was run from there, and the stale copy at the real path looked current.
+        "--out-dir", type=Path, default=_repo_root() / "docs" / "solstice-clash",
+        dest="out_dir"
     )
     parser.add_argument(
         "--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2)
@@ -851,6 +855,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         " nothing and exits non-zero when there is anything to repair.",
     )
     return parser.parse_args(argv)
+
+
+def _repo_root() -> Path:
+    """The repository root, from this file's location.
+
+    scripts/ sits at src-tauri/src-python/scripts, so the root is three levels up.
+
+    Returns:
+        Absolute path to the repository root.
+    """
+    return Path(__file__).resolve().parents[3]
 
 
 def main(argv: list[str] | None = None) -> int:

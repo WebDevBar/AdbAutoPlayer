@@ -207,32 +207,35 @@ the contributor has upgraded, which is a decision, not a timer.
 A pulled row with no local counterpart is a match we never watched. Store its trios with
 `side` NULL on `match_hero`, and a row-level flag recording that it is not draft-anchored.
 
-**"The model never used side" was wrong, and this is the part that needs a decision.**
-Both reviewers caught it. `odds.py:250-253` encodes heroes as `+1` for left and `-1` for
-right; `y = left_won` (`odds.py:262`); the rating term is a SIGNED left-minus-right gap
-(`odds.py:260-261`); and the fitted intercept therefore learns a real draft-blue advantage
-- local decisive matches split 662 left / 521 right, 56.0%.
+**Side is NOT load-bearing. The TRIO is.** The first draft said the model "never used
+side", which was wrong; the review then over-corrected and treated side as load-bearing,
+which is also wrong. The operator settled it: historically we do not care whether blue or
+red won, only which trio beat which trio.
 
-A side-less row cannot fill `y`, cannot sign the rating gap, and cannot orient the hero
-encoding. `winning_trio` says which comp won, not which was blue.
+That is provable from the encoding, which is ANTISYMMETRIC. `odds.py:250-253` gives heroes
+`+1` on left and `-1` on right, `odds.py:260-261` is a signed left-minus-right rating gap,
+and `y = left_won` (`odds.py:262`). Flip a row's sides and every one of those terms negates
+while `y` becomes `1 - y`. Since `sigma(-x.b) = 1 - sigma(x.b)`, the likelihood contribution
+is IDENTICAL. Orientation is a free choice for the hero strengths and the rating gap.
 
-**And this reaches realtime.** `matches_for_fit` (`store.py:787`) feeds `load_matches`
-(`odds.py:818`) feeds `fit`, whose output is the odds shown DURING the draft
-(`solstice_clash.py:1901`). Changing what it returns changes live predictions.
+**The intercept is the sole exception.** Its column is `1.0` regardless of orientation
+(`odds.py:249`), so it does not negate - which is exactly why it can learn a blue-side
+advantage, measured at 56.0% (662 left / 521 right on local decisive matches). It is the
+one term a pooled row with an arbitrary orientation would corrupt.
 
-Three options, none yet chosen - this is the open decision in this spec:
+So:
 
-1. **Orient pulled rows arbitrarily but consistently** (trio_1 as left) and add a column
-   marking them non-draft-anchored, then EXCLUDE them from the intercept while still using
-   them for the hero terms. The comp evidence is kept, the side evidence is not claimed.
-2. **Exclude pulled rows from the fit entirely.** Safest and smallest, but it discards the
-   pooled comps that are the reason for pooling.
-3. **Keep pulled rows out of the fit until a second local contributor exists**, then
-   revisit. Defers rather than decides.
+- Store pulled rows with `trio_1` as left, arbitrarily, and `y = trio_1 won`.
+- Hero terms and the rating gap are correct as they stand - no special handling.
+- **Exclude pooled rows from the INTERCEPT only.**
 
-Option 1 is the only one that keeps the pooled data and tells the truth about it, but it
-changes the fit's input and therefore the live odds. That trade has to be made explicitly,
-not slipped in.
+Every pooled comp stays in the fit, which is the point of pooling, and the only thing we
+decline to claim is the one thing we genuinely do not know.
+
+This does change `matches_for_fit`, which feeds the draft-time fit (`store.py:787` ->
+`odds.py:818` -> `solstice_clash.py:1901`). The change is confined to how pooled rows
+contribute to a single column; local rows are untouched, so a fit with no pooled data is
+bit-identical to today's.
 
 ## Part 7 - reconciling the pairs already on disk
 

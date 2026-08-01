@@ -1274,7 +1274,46 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"stopping: {max_restarts} consecutive cycles recorded no match"
         )
 
-    def _resolve_orientation(self, read):
+    def _draft_trios_or_reread(self, draft_frame):
+        """The carried draft trios, re-reading the saved frame if none were carried.
+
+        `_pending_draft_trios` is set only when the locked read CONFIRMED. When it was
+        abandoned (`[SC-68]`) nothing is carried - and without this fallback an
+        otherwise resolvable match is classified unoriented and loses its prediction,
+        its ratings and its market for no better reason than that one screen did not
+        settle.
+
+        Five heroes still resolve: the draft screen never shows pick 6, so a
+        draft-frame red side is only ever two heroes anyway, and 5-vs-0 is well clear
+        of the margin.
+
+        Args:
+            draft_frame: The saved draft capture, or None.
+
+        Returns:
+            (blue, red) as frozensets, or None when there is nothing to read.
+        """
+        carried = getattr(self, "_pending_draft_trios", None)
+        if carried is not None:
+            return carried
+        if draft_frame is None:
+            return None
+        try:
+            reads = self._read_draft_picks(draft_frame, None)
+        except Exception as exc:
+            logging.debug(f"[SC-75] could not re-read the draft frame: {exc}")
+            return None
+        blue = frozenset(r.slug for r in reads if r.identified and r.side == "left")
+        red = frozenset(r.slug for r in reads if r.identified and r.side == "right")
+        if not blue or not red:
+            return None
+        logging.debug(
+            f"[SC-75] locked read was abandoned; re-read the draft frame for the "
+            f"anchor ({len(blue)} + {len(red)} heroes)"
+        )
+        return blue, red
+
+    def _resolve_orientation(self, read, draft_frame=None):
         """Which trio was OURS, resolved from the trios themselves.
 
         Called BEFORE anything is announced or recorded, because every blue-relative
@@ -1288,6 +1327,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
         Args:
             read: The summary read.
+            draft_frame: The saved draft capture, for the fallback anchor.
 
         Returns:
             (trios, blue_trio, margin). `trios` is (trio_1, trio_2), or None when the
@@ -1303,7 +1343,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         except ValueError:
             return None, None, None
 
-        carried = getattr(self, "_pending_draft_trios", None)
+        carried = self._draft_trios_or_reread(draft_frame)
         if carried is None:
             return trios, None, None
 
@@ -1445,7 +1485,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # the stored row - is stated relative to OUR blue, and resolving it afterwards
         # is how match 1476 came to announce the wrong verdict while storing the right
         # heroes. `trios` is None when the read cannot form two complete trios.
-        trios, blue_trio, resolve_margin = self._resolve_orientation(read)
+        trios, blue_trio, resolve_margin = self._resolve_orientation(read, draft_frame)
         # The last market reading before the picks locked, stored against the match.
         # `record_odds` and the table it writes to have existed since the schema was
         # written and were never used - the pools were visible on screen the whole time.

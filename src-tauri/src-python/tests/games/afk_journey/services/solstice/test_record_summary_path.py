@@ -191,6 +191,51 @@ def test_the_call_result_is_stated_in_our_frame_not_the_panels(
     assert "MISS" not in text
 
 
+def test_an_abandoned_locked_read_falls_back_to_the_draft_frame(
+    bot, store, monkeypatch
+):
+    """[SC-68]: the locked screen did not settle, so nothing was carried.
+
+    Without the fallback an otherwise resolvable match is classified unoriented and
+    loses its prediction, its ratings and its market for no better reason than that
+    one screen did not settle. Five heroes still resolve at 5-vs-0 - the draft screen
+    never shows pick 6, so a draft-frame red side is only ever two heroes anyway.
+    """
+    from adb_auto_player.games.afk_journey.mixins import solstice_clash as mod
+
+    bot._pending_draft_trios = None
+    # The draft frame yields five heroes: three blue, two red.
+    reads = [
+        types.SimpleNamespace(identified=True, side="left", slug=s_) for s_ in TRIO_A
+    ] + [
+        types.SimpleNamespace(identified=True, side="right", slug=s_)
+        for s_ in TRIO_B[:2]
+    ]
+    monkeypatch.setattr(
+        mod.SolsticeClashMixin, "_read_draft_picks", lambda *_a, **_k: reads
+    )
+    # This is the first test to supply a draft_frame, and _record_summary also feeds
+    # it to the transform learner further down - which is not what is under test here.
+    monkeypatch.setattr(
+        mod,
+        "train_from_frame",
+        lambda **_kw: types.SimpleNamespace(written=0, deduced=0, set_consistent=0),
+    )
+    monkeypatch.setattr(
+        mod, "read_summary", lambda *_a, **_k: _read(TRIO_A, TRIO_B, "left")
+    )
+    bot._record_summary(
+        draft_frame=np.zeros((4, 4, 3), dtype=np.uint8),
+        prematch_frame=None,
+        theme=None,
+        frame=np.zeros((4, 4, 3), dtype=np.uint8),
+    )
+
+    row = _last(store)
+    assert row["blue_trio"] == 1, "the re-read anchor should have resolved this"
+    assert row["winning_trio"] == 1
+
+
 def test_an_unresolvable_orientation_withholds_the_verdict(
     bot, store, monkeypatch, caplog
 ):

@@ -10,7 +10,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from adb_auto_player.games.afk_journey.services.solstice.matchkey import comps_key
 from adb_auto_player.games.afk_journey.services.solstice.store import (
+    EVENT_SLUG,
     HeroSlot,
     MatchRecord,
     MatchStore,
@@ -773,3 +775,33 @@ def test_migration_preserves_the_matches_already_collected(tmp_db):
         ).fetchone()[0]
     assert row == ("right",), "the match survived the migration"
     assert heroes == 1, "its heroes survived too"
+
+def test_a_pulled_row_gets_a_comps_key(tmp_db):
+    """The SC-41 backstop asks by comps_key, so a synced row without one is invisible.
+
+    Found live on 2026-08-01: the first real pull brought 50 matches and every one of
+    them had a NULL comps_key, so a match another contributor had already pushed would
+    have been recorded a second time locally. The backstop used to ask by natural_key,
+    which synced rows DO have - moving it to comps_key regressed this.
+    """
+    store = MatchStore(tmp_db)
+    MatchStore._schema_ensured.discard(tmp_db)
+    left = ["aliceth", "alna", "alsa"]
+    right = ["antandra", "arden", "atalanta"]
+    match_id = store.upsert_synced({
+        "natural_key": "sha256:deadbeef:0",
+        "source": "spectate_summary",
+        "captured_at": "2026-08-01T04:51:37Z",
+        "outcome": "left",
+        "theme_slug": None,
+        "heroes": (
+            [{"side": "left", "slot": i, "hero_slug": h} for i, h in enumerate(left)]
+            + [{"side": "right", "slot": i, "hero_slug": h} for i, h in enumerate(right)]
+        ),
+    })
+    assert match_id is not None
+    with store._connect() as con:
+        stored = con.execute(
+            "SELECT comps_key FROM match WHERE id=?", (match_id,)
+        ).fetchone()[0]
+    assert stored == comps_key(EVENT_SLUG, left, right)

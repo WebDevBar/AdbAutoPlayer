@@ -1102,7 +1102,8 @@ class MatchStore:
                 ),
             )
             match_id = int(cur.lastrowid)
-            for h in row.get("heroes", []):
+            heroes = row.get("heroes", [])
+            for h in heroes:
                 con.execute(
                     "INSERT INTO match_hero(match_id, side, slot, hero_slug, status,"
                     " stat_sword, stat_heart, stat_shield)"
@@ -1113,6 +1114,19 @@ class MatchStore:
                     " VALUES(?,?,?,?, 'identified', ?,?,?)",
                     (match_id, h["side"], h["slot"], h["hero_slug"],
                      h.get("stat_sword"), h.get("stat_heart"), h.get("stat_shield")),
+                )
+            # A pulled row needs comps_key too. The SC-41 backstop asks
+            # `match_by_comps_key` whether a match is already recorded, and it used to
+            # ask by natural_key - which synced rows have. Without this, a match another
+            # contributor already pushed is invisible to the backstop and gets recorded
+            # a second time locally. Found on the first live pull: 50 of 50 pulled rows
+            # had no key.
+            left = sorted(h["hero_slug"] for h in heroes if h["side"] == "left")
+            right = sorted(h["hero_slug"] for h in heroes if h["side"] == "right")
+            if len(left) == _SIDE_SIZE and len(right) == _SIDE_SIZE:
+                con.execute(
+                    "UPDATE match SET comps_key=? WHERE id=?",
+                    (comps_key(EVENT_SLUG, left, right), match_id),
                 )
         return match_id
 

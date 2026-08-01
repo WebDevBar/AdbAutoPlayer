@@ -1846,7 +1846,7 @@ Follow the stub pattern the existing mixin tests use (`test_auto_bet.py`,
 `test_guild_member_scan.py`): a minimal subclass exercising pure logic, with `pytauri` and
 `adb_auto_player.ext_mod` mocked per the repo's CLAUDE.md.
 
-Add `tests/games/afk_journey/mixins/conftest.py` providing:
+Add `tests/games/afk_journey/mixins/conftest.py` providing these FIXTURES:
 
 - `store` - a real `MatchStore` on a `tmp_path` database, so the assertions read what was
   actually written rather than what a mock recorded.
@@ -1854,15 +1854,23 @@ Add `tests/games/afk_journey/mixins/conftest.py` providing:
   methods stubbed out. It must be a real instance, because the carryover attributes are the
   thing under test.
 - `frame_capture_on` - flips the existing frame-capture setting and yields the directory.
-- `_summary(top, bottom, winner)` - builds the summary read object `_record_summary` consumes.
-  Take its exact shape from the real call site at `solstice_clash.py:1187-1196` rather than
-  inventing one.
+- `draw_screen` - stubs `bot`'s match-end detection so `_run_one_match` takes the `SC-10`
+  branch at `:1007` (`found is None`).
+- `timeout_screen` - stubs it so `_execute_or_timeout` raises `GameTimeoutError`, driving the
+  `SC-03` path at `:1002`.
 
-**There is no `_abandon_match` method.** The draw exits at `solstice_clash.py:1007` by
+And put `_summary(top, bottom, winner)` in a **helpers module** the tests IMPORT -
+`tests/games/afk_journey/mixins/_solstice_helpers.py` - not in `conftest.py`. A plain
+function defined in `conftest.py` is not injected as a module global, so calling it bare
+raises `NameError`. Build its shape from the real call site at `solstice_clash.py:1187-1196`
+rather than inventing one.
+
+**There is no `_abandon_match` and no `_await_match_end`.** The enclosing method is
+**`_run_one_match()` at `solstice_clash.py:711`**. Within it the draw exits at `:1007` by
 setting `_draw_this_cycle = True` and returning, and the `SC-03` timeout re-raises
-`GameTimeoutError` from `:1002` after `_report_match_end_failure()`. The carryover tests must
-drive those real paths - which is the point, since Part 4's whole complaint is that neither
-of them clears the carried state.
+`GameTimeoutError` from `:1002` after `_report_match_end_failure()`. The carryover tests
+drive `_run_one_match` directly - which is the point, since Part 4's complaint is that
+neither of those exits clears the carried state.
 
 ```python
 # tests/games/afk_journey/mixins/test_solstice_orientation.py
@@ -1871,6 +1879,8 @@ a tint, a name or a panel position."""
 import pytest
 
 from adb_auto_player.games.afk_journey.services.solstice.orient import Orientation, resolve
+
+from ._solstice_helpers import _summary
 
 
 def test_direct_orientation_scores_five_of_five():
@@ -1915,7 +1925,7 @@ def test_a_draw_clears_the_carried_state(bot, draw_screen):
     bot._pending_prediction = 0.8
     bot._draft_ratings = (100, 200)
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
-    bot._await_match_end()          # returns True on the SC-10 path
+    bot._run_one_match()            # returns True on the SC-10 path
     assert bot._draw_this_cycle is True
     assert bot._pending_prediction is None
     assert bot._draft_ratings is None
@@ -1929,7 +1939,7 @@ def test_a_timeout_clears_the_carried_state(bot, timeout_screen):
     bot._pending_prediction = 0.8
     bot._pending_draft_trios = ({"a", "b", "c"}, {"m", "n"})
     with pytest.raises(GameTimeoutError):
-        bot._await_match_end()
+        bot._run_one_match()
     assert bot._pending_prediction is None
     assert bot._pending_draft_trios is None
 
@@ -1994,7 +2004,7 @@ Log the raw read at `[SC-75]`: both trios, the winner, the resolution and its ma
 
 - [ ] **Step 6: Implement Part 4 - the stale-carryover fix**
 
-`_pending_prediction` and `_draft_ratings` are cleared only inside `_record_summary` at :1275-1276, so after a draw (`SC-10`, `:1007`) or an `SC-03` timeout (`:1002`, which re-raises) they survive and a following mid-match join records the PREVIOUS match's prediction against a new match. Clear `_pending_prediction`, `_draft_ratings` and `_pending_draft_trios` on EVERY exit path from a match. **The `SC-03` path leaves by exception**, so a line placed before the `raise` does not run on it - use a `finally` around the match cycle rather than adding a clear to each branch and hoping none is missed. The trio anchor doubles as the guard: when the panels match neither carried trio, refuse the carried prediction and ratings as well as the orientation.
+`_pending_prediction` and `_draft_ratings` are cleared only inside `_record_summary` at :1275-1276, so after a draw (`SC-10`, `:1007`) or an `SC-03` timeout (`:1002`, which re-raises) they survive and a following mid-match join records the PREVIOUS match's prediction against a new match. Clear `_pending_prediction`, `_draft_ratings` and `_pending_draft_trios` on EVERY exit path from a match. **The `SC-03` path leaves by exception**, so a line placed before the `raise` does not run on it. Wrap the body of **`_run_one_match()` (`solstice_clash.py:711`)** in a `try/finally` and release the carried state in the `finally` - that single seam covers the draw, the timeout, the successful recording and every other exit, where a clear added per branch relies on nobody adding a branch later. The trio anchor doubles as the guard: when the panels match neither carried trio, refuse the carried prediction and ratings as well as the orientation.
 
 - [ ] **Step 7: Run the full AFK Journey suite**
 

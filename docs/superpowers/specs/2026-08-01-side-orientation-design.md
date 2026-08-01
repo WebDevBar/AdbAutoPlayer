@@ -564,6 +564,26 @@ otherwise. What Part 8 must therefore do:
    the failure mode a stale target set would trigger.
 3. Both properties together make the operation idempotent - it can be run twice safely,
    which matters because the first run is against production.
+4. **Correct these rows INSIDE `0007`, before it canonicalizes them, and set every
+   trio-relative value - not the winner alone.** Round 11 caught the ordering fault.
+   `0006` deliberately swapped only heroes and outcome
+   (`0006_backfill_identity.py:318, 326`), leaving predictions, ratings, ranks, pools and
+   odds untouched because they are draft-relative. For the ~6 rows it never reached, the
+   heroes were therefore NOT swapped either - so if `0007` canonicalizes first, it attaches
+   every draft-relative value to the summary-panel trio, which for a mirrored row is the
+   wrong one. Setting `winning_trio` afterwards cannot undo that: the winner would then be
+   right while the prediction, ratings, ranks and odds all pointed at the other trio, which
+   is defect 1476 rebuilt out of correct-looking parts.
+
+   So `0007` consumes the sidecar verdicts itself, in one transaction: for each row it
+   confirms mirrored, it inverts the whole draft-relative group together with the winner,
+   and only then canonicalizes. Rows with no verdict are canonicalized on their outcome and
+   heroes alone and get NULL for the draft-relative group - the same honest rule the local
+   migration follows, for the same reason.
+
+   This puts an operator-visible mutation inside a migration, which is acceptable here only
+   because server migrations are already manual and gated (`docs/DEPLOY.md`): `0007` IS the
+   approved step, run after a verified `pg_dump`. It must not be made to run automatically.
 
 ### There is no mechanism to send a correction, on either side
 

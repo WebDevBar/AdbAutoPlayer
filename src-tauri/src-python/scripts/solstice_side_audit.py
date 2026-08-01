@@ -1,6 +1,7 @@
 """Audit the LEFT-side (first-pick) bias and what it does to the betting rule.
 
-Reads only the locked live predictions (`match.predicted_left`), so every number
+Reads only the locked live predictions (`match.predicted_trio_1`, re-expressed
+relative to `blue_trio`), so every number
 here is out-of-sample by construction: the value stored was the call the model
 made before the outcome existed.
 
@@ -48,8 +49,7 @@ def line(label: str, hits: int, n: int, extra: str = "") -> None:
         return
     lo, hi = wilson(hits, n)
     print(
-        f"{label:<44} n={n:<5} {100 * hits / n:5.1f}%  "
-        f"[{lo:4.1f}-{hi:4.1f}]  {extra}"
+        f"{label:<44} n={n:<5} {100 * hits / n:5.1f}%  [{lo:4.1f}-{hi:4.1f}]  {extra}"
     )
 
 
@@ -62,11 +62,20 @@ def main() -> int:
 
     rows = con.execute(
         """
-        SELECT m.predicted_left AS p, m.outcome AS o, m.captured_at AS t,
+        -- `left` is now `blue_trio`: the trio WE saw on the left, which is the frame
+        -- the prediction was made in. Both the probability and the outcome are
+        -- re-expressed relative to it, so every number below means what it always did.
+        -- Rows with no blue_trio are pooled or unaudited and have no left to speak of.
+        SELECT CASE WHEN m.blue_trio = 1 THEN m.predicted_trio_1
+                    ELSE 1.0 - m.predicted_trio_1 END          AS p,
+               CASE WHEN m.winning_trio = m.blue_trio THEN 'left'
+                    ELSE 'right' END                           AS o,
+               m.captured_at AS t,
                COALESCE(t2.name, m.theme, '?') AS theme
         FROM match m LEFT JOIN theme t2 ON t2.id = m.theme_id
-        WHERE m.predicted_left IS NOT NULL AND m.outcome IN ('left', 'right')
-          AND m.superseded_by IS NULL
+        WHERE m.predicted_trio_1 IS NOT NULL AND m.winning_trio IS NOT NULL
+          AND m.blue_trio IS NOT NULL
+          AND m.superseded_by IS NULL AND m.canonical_state = 'canonical' 
         """
     ).fetchall()
 
@@ -80,14 +89,15 @@ def main() -> int:
         line(f"{theme}: model", hits, len(sub))
         line(f"{theme}: always-LEFT on the same rows", leftw, len(sub))
         z, pv = two_prop_z(hits, len(sub), leftw, len(sub))
-        print(f"{'':44} model minus always-left: "
-              f"{100 * (hits - leftw) / len(sub):+.1f} pts\n")
+        print(
+            f"{'':44} model minus always-left: "
+            f"{100 * (hits - leftw) / len(sub):+.1f} pts\n"
+        )
 
     print("=== by which side the model favours (all confidences) ===")
     for theme in themes:
         for side, keep in (("LEFT", True), ("RIGHT", False)):
-            sub = [r for r in rows
-                   if r["theme"] == theme and (r["p"] >= 0.5) == keep]
+            sub = [r for r in rows if r["theme"] == theme and (r["p"] >= 0.5) == keep]
             if not sub:
                 continue
             line(f"{theme} favours {side}", sum(_hit(r) for r in sub), len(sub))
@@ -104,7 +114,9 @@ def main() -> int:
     # against the INPUT columns first, and `match` has its own `theme` column that is
     # empty on every synced row. Our own uuid is excluded because the pool echoes our
     # pushed rows back to us as `synced`. Both caught by review, 2026-07-31.
-    print("\n=== the confound check: side bias per EXTERNAL contributor, same theme ===")
+    print(
+        "\n=== the confound check: side bias per EXTERNAL contributor, same theme ==="
+    )
     for r in con.execute(
         """
         SELECT COALESCE(t.name, '?') theme, m.origin,
@@ -151,8 +163,11 @@ def _rules(rows: list) -> None:
         both = [r for r in rows if max(r["p"], 1 - r["p"]) >= thr]
         leftonly = [r for r in both if r["p"] >= 0.5]
         line(f"  bet either side  >= {thr:.2f}", sum(_hit(r) for r in both), len(both))
-        line(f"  bet LEFT only    >= {thr:.2f}",
-             sum(_hit(r) for r in leftonly), len(leftonly))
+        line(
+            f"  bet LEFT only    >= {thr:.2f}",
+            sum(_hit(r) for r in leftonly),
+            len(leftonly),
+        )
 
 
 if __name__ == "__main__":

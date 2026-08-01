@@ -18,7 +18,13 @@ sys.path.insert(
 
 from adb_auto_player.games.afk_journey.services.solstice import odds
 
-DB = os.path.expanduser("~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite")
+# SOLSTICE_DB overrides, as in the other analysis scripts. Without it this read the
+# INSTALLED database no matter what was passed, so a verification run against a
+# migrated copy silently measured the live one instead.
+DB = os.environ.get(
+    "SOLSTICE_DB",
+    os.path.expanduser("~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite"),
+)
 
 # A comp is three a side. A match missing a hero is dropped rather than padded, the same
 # rule `load_matches` applies - a 2v3 would teach the model that two heroes beat three.
@@ -30,13 +36,13 @@ def load():
     """Matches in capture order, per theme, with the columns matches_for_fit uses."""
     con = sqlite3.connect("file:" + DB + "?mode=ro", uri=True)
     rows = con.execute(
-        "SELECT m.id, m.outcome, m.theme_id, m.event_id,"
-        "       m.left_player, m.right_player,"
-        "       m.left_rating, m.right_rating,"
-        "       h.side, h.hero_slug"
+        "SELECT m.id, m.winning_trio, m.theme_id, m.event_id,"
+        "       m.trio_1_rating, m.trio_2_rating, m.blue_trio,"
+        "       h.trio, h.hero_slug"
         "  FROM match m JOIN match_hero h ON h.match_id = m.id"
-        " WHERE m.outcome IN ('left','right') AND h.hero_slug IS NOT NULL"
-        " ORDER BY m.id, h.side, h.slot"
+        " WHERE m.winning_trio IS NOT NULL AND h.hero_slug IS NOT NULL"
+        "   AND m.canonical_state = 'canonical'"
+        " ORDER BY m.id, h.trio, h.slot"
     ).fetchall()
     order = {
         mid: (ts, name)
@@ -48,25 +54,24 @@ def load():
     # Rebuild with match ids attached: load_matches drops the id, the walk needs it.
     grouped = defaultdict(lambda: {"left": [], "right": []})
     meta = {}
-    for mid, outcome, theme_id, event_id, lp, rp, lr, rr, side, slug in rows:
-        meta[mid] = (outcome, theme_id, event_id, lp, rp, lr, rr)
-        if side in ("left", "right"):
-            grouped[mid][side].append(slug)
+    for mid, winning_trio, theme_id, event_id, r1, r2, blue, trio, slug in rows:
+        meta[mid] = (winning_trio, theme_id, event_id, r1, r2, blue)
+        if trio in (1, 2):
+            grouped[mid]["left" if trio == 1 else "right"].append(slug)
     out = []
     for mid, sides in grouped.items():
         if len(sides["left"]) != TEAM_SIZE or len(sides["right"]) != TEAM_SIZE:
             continue
-        outcome, theme_id, event_id, lp, rp, lr, rr = meta[mid]
+        winning_trio, theme_id, event_id, r1, r2, blue = meta[mid]
         m = odds.Match(
             left=tuple(sides["left"]),
             right=tuple(sides["right"]),
-            left_won=outcome == "left",
+            left_won=winning_trio == 1,
             theme_id=theme_id,
-            left_player=lp,
-            right_player=rp,
-            left_rating=lr,
-            right_rating=rr,
+            left_rating=r1,
+            right_rating=r2,
             event_id=event_id,
+            blue_trio=blue,
         )
         ts, theme_name = order[mid]
         out.append((ts, theme_name, mid, m))

@@ -47,7 +47,7 @@ def wilson(hits: int, n: int) -> tuple[float, float]:
 class Row:
     """One match: our call, the crowd's call, the crowd's size, the result."""
 
-    __slots__ = ("conf", "our_left", "crowd_left", "spectators", "left_won")
+    __slots__ = ("conf", "crowd_left", "left_won", "our_left", "spectators")
 
     def __init__(self, p: float, crowd_left: bool, spectators: int, left_won: bool):
         self.conf = max(p, 1 - p)
@@ -71,14 +71,18 @@ def load(con: sqlite3.Connection, theme_id: int) -> list[Row]:
     Ties in the pool are dropped: the crowd has expressed no side there.
     """
     sql = """
-        SELECT m.predicted_left p, m.outcome o,
-               d.left_pool lp, d.right_pool rp, d.spectators s
+        -- Everything is stated relative to trio 1 now: the prediction, the outcome
+        -- and the pools all share that frame, so "agreement" means the same thing it
+        -- always did without needing a side.
+        SELECT m.predicted_trio_1 p,
+               CASE WHEN m.winning_trio = 1 THEN 'left' ELSE 'right' END o,
+               d.trio_1_pool lp, d.trio_2_pool rp, d.spectators s
         FROM match m JOIN match_odds d ON d.match_id = m.id
-        WHERE m.theme_id = ? AND m.predicted_left IS NOT NULL
-          AND m.outcome IN ('left','right')
-          AND m.superseded_by IS NULL
-          AND d.left_pool IS NOT NULL AND d.right_pool IS NOT NULL
-          AND d.left_pool <> d.right_pool AND d.spectators IS NOT NULL
+        WHERE m.theme_id = ? AND m.predicted_trio_1 IS NOT NULL
+          AND m.winning_trio IS NOT NULL
+          AND m.superseded_by IS NULL AND m.canonical_state = 'canonical'
+          AND d.trio_1_pool IS NOT NULL AND d.trio_2_pool IS NOT NULL
+          AND d.trio_1_pool <> d.trio_2_pool AND d.spectators IS NOT NULL
     """
     return [
         Row(r["p"], r["lp"] > r["rp"], r["s"], r["o"] == "left")
@@ -86,8 +90,9 @@ def load(con: sqlite3.Connection, theme_id: int) -> list[Row]:
     ]
 
 
-def cell(rows: list[Row], thr: float, floor: int, mode: str,
-         crowd: list[bool] | None = None) -> tuple[int, int]:
+def cell(
+    rows: list[Row], thr: float, floor: int, mode: str, crowd: list[bool] | None = None
+) -> tuple[int, int]:
     """Hits and n for one grid cell. `crowd` overrides the crowd side (permutation)."""
     hits = n = 0
     for i, r in enumerate(rows):
@@ -113,15 +118,19 @@ def grid(rows: list[Row], label: str) -> None:
                 h, n = cell(rows, thr, floor, mode)
                 parts.append(
                     f"{n:>4} {100 * h / n:5.1f}%" + ("*" if n < MIN_CELL else " ")
-                    if n else f"{'-':>11}"
+                    if n
+                    else f"{'-':>11}"
                 )
-            print(f"{thr:>5.2f} {floor:>5} | {parts[0]:>17} | "
-                  f"{parts[1]:>17} | {parts[2]:>17}")
+            print(
+                f"{thr:>5.2f} {floor:>5} | {parts[0]:>17} | "
+                f"{parts[1]:>17} | {parts[2]:>17}"
+            )
     print(f"  (* cell smaller than {MIN_CELL} - not evidence)")
 
 
-def best_agreement_gain(rows: list[Row],
-                        crowd: list[bool] | None = None) -> tuple[float, str]:
+def best_agreement_gain(
+    rows: list[Row], crowd: list[bool] | None = None
+) -> tuple[float, str]:
     """Largest accuracy gain from adding the agree filter, over the whole grid.
 
     The comparison is like-for-like: the same threshold and spectator floor, with
@@ -182,8 +191,10 @@ def choose_test(a: list[Row], a_name: str, b: list[Row], b_name: str) -> None:
         return
     thr, floor, ah, an, bh, bn = chosen
     print(f"\nCHOOSE on {a_name}: agree, conf>={thr:.2f}, spec>={floor}")
-    print(f"  agree {ah}/{an} = {100 * ah / an:.1f}%   "
-          f"all {bh}/{bn} = {100 * bh / bn:.1f}%   gain {100 * best:+.1f} pts")
+    print(
+        f"  agree {ah}/{an} = {100 * ah / an:.1f}%   "
+        f"all {bh}/{bn} = {100 * bh / bn:.1f}%   gain {100 * best:+.1f} pts"
+    )
     tah, tan = cell(b, thr, floor, "agree")
     tbh, tbn = cell(b, thr, floor, "all")
     if tan == 0 or tbn == 0:
@@ -191,9 +202,11 @@ def choose_test(a: list[Row], a_name: str, b: list[Row], b_name: str) -> None:
         return
     tgain = tah / tan - tbh / tbn
     lo, hi = wilson(tah, tan)
-    print(f"  TEST on {b_name}: agree {tah}/{tan} = {100 * tah / tan:.1f}% "
-          f"[{lo:.1f}-{hi:.1f}]   all {tbh}/{tbn} = {100 * tbh / tbn:.1f}%   "
-          f"gain {100 * tgain:+.1f} pts")
+    print(
+        f"  TEST on {b_name}: agree {tah}/{tan} = {100 * tah / tan:.1f}% "
+        f"[{lo:.1f}-{hi:.1f}]   all {tbh}/{tbn} = {100 * tbh / tbn:.1f}%   "
+        f"gain {100 * tgain:+.1f} pts"
+    )
 
 
 def main() -> int:
@@ -211,8 +224,10 @@ def main() -> int:
             continue
         h = sum(r.crowd_left == r.left_won for r in rows)
         lo, hi = wilson(h, len(rows))
-        print(f"  {name:<20} {h}/{len(rows)} = {100 * h / len(rows):.1f}%  "
-              f"[{lo:.1f}-{hi:.1f}]")
+        print(
+            f"  {name:<20} {h}/{len(rows)} = {100 * h / len(rows):.1f}%  "
+            f"[{lo:.1f}-{hi:.1f}]"
+        )
         for floor in SPECTATOR_FLOORS[1:]:
             sub = [r for r in rows if r.spectators >= floor]
             if len(sub) < MIN_CELL:

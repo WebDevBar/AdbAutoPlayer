@@ -1,5 +1,89 @@
 # Changelog
 
+## [wdb-12.9.25-32] - 2026-08-01
+
+The side-orientation rework. Match 1476 was recorded backwards - it stored a winner
+that contradicted its own heroes - and this makes that defect unrepresentable rather
+than fixed.
+
+### Changed
+
+- **A match is now two canonically-sorted TRIOS plus pointers, in both databases.**
+  1476 happened because there were two independent side labels: `match.outcome` said
+  left/right and `match_hero.side` said left/right, and nothing forced them to agree.
+  There is now one composition, in `match_hero.trio`, with `winning_trio` and
+  `blue_trio` pointing into it. Which trio is "1" is a pure function of the heroes -
+  the same sort `comps_key` already used - so two spectators who watched the same
+  match with the panels the other way round store it under the same numbers.
+
+- **Orientation is resolved from the trios at record time**, never from a banner, a
+  tint, a player name or a panel position. The resolver scores BOTH panels jointly
+  against the merged draft trios: the draft screen never shows pick 6, so matching the
+  winning panel alone gives 1-vs-1 on a single misread, which is a tie. Joint scoring
+  gives 5-vs-0 clean and 4-vs-1 with one misread.
+
+  On refusal the trios and the winner are still recorded - those need no orientation,
+  because the winner and the heroes come off the same panel pair in the same pass.
+  Only `blue_trio` and the draft-relative values are declined, and declined rather
+  than guessed.
+
+- **Pooled rows train the hero strengths but not the first-pick intercept.** The
+  encoding is antisymmetric, so a pooled row's arbitrary orientation is free for every
+  term except the intercept, whose column is 1.0 whichever way round the row is stored.
+  `blue_trio IS NOT NULL` is the entire condition. A golden-coefficient test proves a
+  fit with no pooled rows is unchanged: 1256 matches, 101 coefficients, captured with
+  the pre-rework code before any of this landed.
+
+- **The server serves schema versions 4 and 5 from one release**, so the contributor's
+  current build is not stranded mid-rollout. A version-4 push is canonicalised on the
+  way in; a version-4 pull is served in its ORIGINAL orientation, because a v4 client
+  still trains its intercept on every pulled row and trio order would replace a real
+  first-pick signal with alphabetical noise.
+
+### Fixed
+
+- **The stale carryover.** `_pending_prediction` and `_draft_ratings` were cleared only
+  inside a successful summary read, so after a draw or an `SC-03` timeout they survived
+  and the next mid-match join recorded the PREVIOUS match's prediction against a new
+  match. The clear is now a `finally` around the whole match cycle - `SC-03` leaves by
+  raising, so a line placed before the raise never ran.
+
+- **53 duplicate rows were counted twice in the model fit.** Local/synced pairs of the
+  same match, from pulling a match we then also watched. The reconciliation retires the
+  synced copy and keeps the local one, which is the draft-anchored row. Every retirement
+  is within 7 seconds; the +/-2 minute window is what distinguishes a duplicate from a
+  rematch, and ids 1 and 45 - same composition, 31.6 hours apart - both stay active.
+  1547 decisive rows become 1494. This supersedes the known issue recorded under
+  wdb-12.9.25-31, which counted only the three pairs that already had a `comps_key`.
+
+### Added
+
+- **Every summary frame is saved**, behind the existing frame-capture setting. We had
+  never kept one - the vault holds draft captures only - which is why what 1476
+  actually showed is permanently unanswerable. Not only unresolved frames: 1476 looked
+  successfully resolved to the code that recorded it.
+
+- **`legacy_side_snapshot`**, written before the reshape drops anything and never read
+  again by the app. It makes a destructive migration auditable after the fact, and lets
+  the rows with no orientation evidence be resolved later if better evidence appears.
+
+### Migration
+
+- **The local reshape runs automatically on launch**, and does the repair and the shape
+  change in ONE step. They cannot be sequenced by asking: the database is reshaped the
+  moment the new build starts, and a reshape that ran first would derive `blue_trio`
+  from a legacy `left` that is wrong for exactly the audited rows.
+
+  Verified against a copy of the operator's database: 1547 canonical, 3
+  unrepresentable, 0 unclassified, a snapshot row for every match, and a second run
+  byte-identical to the first. 342 local rows keep `blue_trio` NULL because the audit
+  never covered them - 8% of audited rows were mirrored, so guessing would be wrong
+  about one row in twelve, silently.
+
+- **Server migration `0007` is irreversible by design** and must be run manually with
+  the API route removed, because the schema and the application have to change together.
+  A side cannot be reconstructed from a trio - that is precisely what it removes.
+
 ## [wdb-12.9.25-30] - 2026-08-01
 
 Two fixes to Prevent Friendly Fire, both found on its first live Arena run.

@@ -54,21 +54,25 @@ def _record(
     Returns:
         The new local match id.
     """
+    # `mirrored` now means what it always meant PHYSICALLY - the operator saw the
+    # trios the other way round - but it no longer changes what is STORED. Trio
+    # numbers are a pure function of the heroes, so both observations of one match
+    # land on the same numbers. That is the whole point of the shape.
     left, right = (_RIGHT, _LEFT) if mirrored else (_LEFT, _RIGHT)
     with store._connect() as con:
         cur = con.execute(
-            "INSERT INTO match(source, captured_at, origin, outcome,"
-            " event_id, theme_id)"
-            " VALUES ('spectate_summary', ?, ?, 'left', ?, ?)",
+            "INSERT INTO match(source, captured_at, origin, winning_trio,"
+            " canonical_state, event_id, theme_id)"
+            " VALUES ('spectate_summary', ?, ?, 1, 'canonical', ?, ?)",
             (at, origin, event_id, theme_id),
         )
         match_id = int(cur.lastrowid)
-        for side, slugs in (("left", left), ("right", right)):
+        for trio, slugs in ((1, sorted(_LEFT)), (2, sorted(_RIGHT))):
             for slot, slug in enumerate(slugs, start=1):
                 con.execute(
-                    "INSERT INTO match_hero(match_id, side, slot, hero_slug, status)"
+                    "INSERT INTO match_hero(match_id, trio, slot, hero_slug, status)"
                     " VALUES (?, ?, ?, ?, 'identified')",
-                    (match_id, side, slot, slug),
+                    (match_id, trio, slot, slug),
                 )
     return match_id
 

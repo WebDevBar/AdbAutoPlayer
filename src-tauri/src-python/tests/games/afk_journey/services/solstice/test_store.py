@@ -43,8 +43,8 @@ def test_records_a_match_and_its_heroes(tmp_db):
     store.record_heroes(
         mid,
         [
-            HeroSlot("left", 1, "dionel", "spui_herohead_48", "identified", 0.97, 0.34),
-            HeroSlot("right", 6, None, None, "unknown", 0.41, 0.02),
+            HeroSlot(1, 1, "dionel", "spui_herohead_48", "identified", 0.97, 0.34),
+            HeroSlot(2, 3, None, None, "unknown", 0.41, 0.02),
         ],
     )
     rows = store.heroes_for(mid)
@@ -92,7 +92,7 @@ def test_unknown_heroes_are_stored_not_dropped(tmp_db):
     )
     store.record_heroes(
         mid,
-        [HeroSlot("left", i, None, None, "unknown", 0.5, 0.0) for i in (1, 2, 3)],
+        [HeroSlot(1, i, None, None, "unknown", 0.5, 0.0) for i in (1, 2, 3)],
     )
     assert len(store.heroes_for(mid)) == 3
 
@@ -130,7 +130,7 @@ def test_pool_fallback_provenance_is_recorded(tmp_db):
         mid,
         [
             HeroSlot(
-                "left",
+                1,
                 1,
                 "sonja",
                 "x",
@@ -143,7 +143,7 @@ def test_pool_fallback_provenance_is_recorded(tmp_db):
                 pool_miss=0,
             ),
             HeroSlot(
-                "left",
+                1,
                 2,
                 "zorya",
                 "y",
@@ -185,7 +185,7 @@ def test_deleting_a_match_cascades(tmp_db):
     mid = store.record_match(
         MatchRecord(source="compete", captured_at="2026-07-26T10:00:00")
     )
-    store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "identified")])
+    store.record_heroes(mid, [HeroSlot(1, 1, "sonja", "x", "identified")])
     store.record_pool(mid, [PoolSlot(1, "sonja", "x", "identified")])
     store.record_odds(mid, OddsSample("2026-07-26T10:00:01"))
     con = sqlite3.connect(tmp_db)
@@ -213,7 +213,7 @@ def test_build_hero_db_does_not_touch_match_data(tmp_db):
         )
     )
     store.record_heroes(
-        mid, [HeroSlot("left", 1, "sonja", "x", "identified", 0.9, 0.3)]
+        mid, [HeroSlot(1, 1, "sonja", "x", "identified", 0.9, 0.3)]
     )
     store.record_pool(mid, [PoolSlot(1, "sonja", "x", "identified")])
     store.record_odds(mid, OddsSample("2026-07-26T10:00:01", 100, 200, 2.9, 1.4, 5))
@@ -240,15 +240,14 @@ def test_rejects_invalid_enum_values(tmp_db):
     store = MatchStore(tmp_db)
     with pytest.raises(ValueError, match="invalid source"):
         store.record_match(MatchRecord(source="comptee", captured_at="x"))
-    with pytest.raises(ValueError, match="invalid outcome"):
-        store.record_match(
-            MatchRecord(source="compete", captured_at="x", outcome="purple")
-        )
     mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
-    with pytest.raises(ValueError, match="invalid side"):
+    # There is no `outcome` to validate any more: a winner is a POINTER into
+    # match_hero, set by finalise_summary, and it is rejected there if it names no
+    # composition. The trio domain replaces the side enum.
+    with pytest.raises(ValueError, match="trio must be 1 or 2"):
         store.record_heroes(mid, [HeroSlot("blu", 1, "sonja", "x", "identified")])
     with pytest.raises(ValueError, match="invalid status"):
-        store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "maybe")])
+        store.record_heroes(mid, [HeroSlot(1, 1, "sonja", "x", "maybe")])
 
 
 def test_rejects_status_that_disagrees_with_the_data(tmp_db):
@@ -256,9 +255,9 @@ def test_rejects_status_that_disagrees_with_the_data(tmp_db):
     store = MatchStore(tmp_db)
     mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
     with pytest.raises(ValueError, match="disagrees"):
-        store.record_heroes(mid, [HeroSlot("left", 1, "sonja", "x", "unknown")])
+        store.record_heroes(mid, [HeroSlot(1, 1, "sonja", "x", "unknown")])
     with pytest.raises(ValueError, match="disagrees"):
-        store.record_heroes(mid, [HeroSlot("left", 2, None, None, "identified")])
+        store.record_heroes(mid, [HeroSlot(1, 2, None, None, "identified")])
     with pytest.raises(ValueError, match="disagrees"):
         store.record_pool(mid, [PoolSlot(1, None, None, "banned", 0)])
 
@@ -301,7 +300,7 @@ def test_hero_stats_round_trip(tmp_db):
         match_id,
         [
             HeroSlot(
-                side="left",
+                trio=1,
                 slot=1,
                 hero_slug="atalanta",
                 art_ref="Atalanta",
@@ -578,17 +577,26 @@ def _record_3v3(store, key, left, right, winner, theme_id=None):
             captured_at="2026-07-29T10:00:00",
             natural_key=key,
             theme_id=theme_id,
-            outcome=winner,
         )
     )
+    # Trio numbers are a pure function of the heroes, so the caller's "left" and
+    # "right" are just two groups - which one becomes trio 1 is decided by the sort,
+    # not by the argument order.
+    first, second = (sorted(left), sorted(right))
+    if first > second:
+        first, second = second, first
     store.record_heroes(
         mid,
-        [HeroSlot("left", i + 1, h, None, "identified") for i, h in enumerate(left)]
-        + [
-            HeroSlot("right", i + 4, h, None, "identified")
-            for i, h in enumerate(right)
-        ],
+        [HeroSlot(1, i + 1, h, None, "identified") for i, h in enumerate(first)]
+        + [HeroSlot(2, i + 1, h, None, "identified") for i, h in enumerate(second)],
     )
+    # A draw has NO winning trio - the pointer is NULL, which is exactly how the view
+    # tells a draw from a decided match without a separate column.
+    if winner == "draw":
+        winning_trio = None
+    else:
+        winning_trio = 1 if sorted(left if winner == "left" else right) == first else 2
+    store.finalise_summary(mid, winning_trio=winning_trio, blue_trio=1)
     return mid
 
 
@@ -644,20 +652,24 @@ def test_hero_matchup_ignores_incomplete_and_mirror_pairs(tmp_db):
     # A 2v3: only two identified heroes on the left.
     mid = store.record_match(
         MatchRecord(source="compete", captured_at="2026-07-29T10:00:00",
-                    natural_key="partial", outcome="left")
+                    natural_key="partial")
     )
     store.record_heroes(
         mid,
-        [HeroSlot("left", 1, "alsa", None, "identified"),
-         HeroSlot("left", 2, "cecia", None, "identified"),
-         HeroSlot("left", 3, None, None, "unknown"),
-         HeroSlot("right", 4, "bryon", None, "identified"),
-         HeroSlot("right", 5, "eironn", None, "identified"),
-         HeroSlot("right", 6, "antandra", None, "identified")],
+        [HeroSlot(1, 1, "alsa", None, "identified"),
+         HeroSlot(1, 2, "cecia", None, "identified"),
+         HeroSlot(1, 3, None, None, "unknown"),
+         HeroSlot(2, 1, "bryon", None, "identified"),
+         HeroSlot(2, 2, "eironn", None, "identified"),
+         HeroSlot(2, 3, "antandra", None, "identified")],
     )
-    # A complete match where 'cecia' is picked by BOTH sides.
-    _record_3v3(store, "mirror", ["cecia", "alsa", "dionel"],
-                ["cecia", "eironn", "antandra"], "left")
+    # A mirror pick - the same hero in both trios - is now REJECTED at the write
+    # boundary rather than merely ignored by the view. The game's shared exclusive
+    # pick pool makes it impossible on screen, and two identical trios would leave
+    # winning_trio and blue_trio naming nothing.
+    with pytest.raises(ValueError, match="both trios"):
+        _record_3v3(store, "mirror", ["cecia", "alsa", "dionel"],
+                    ["cecia", "eironn", "antandra"], "left")
 
     with sqlite3.connect(tmp_db) as con:
         assert con.execute(
@@ -704,9 +716,15 @@ def _strip_predicted_columns(db):
         # The view reads `match`; dropping columns underneath it breaks every later
         # statement that revalidates the schema. A database this old had no view anyway.
         con.execute("DROP VIEW IF EXISTS hero_matchup")
-        for column in ("predicted_left", "predicted_source", "predicted_locked",
-                       "predicted_at"):
-            con.execute(f"ALTER TABLE match DROP COLUMN {column}")
+        # Whichever name this fixture happens to carry: the committed seed predates the
+        # trio rework and still has `predicted_left`, while a database the store has
+        # already opened has `predicted_trio_1`. The test is about the column being
+        # ABSENT, not about which one it was.
+        present = {r[1] for r in con.execute("PRAGMA table_info(match)")}
+        for column in ("predicted_left", "predicted_trio_1", "predicted_source",
+                       "predicted_locked", "predicted_at"):
+            if column in present:
+                con.execute(f"ALTER TABLE match DROP COLUMN {column}")
         con.commit()
     finally:
         # close(), not just `with` - a context manager COMMITS a sqlite connection but
@@ -730,7 +748,7 @@ def test_opening_an_old_database_adds_the_missing_columns(tmp_db):
 
     with sqlite3.connect(tmp_db) as con:
         after = {r[1] for r in con.execute("PRAGMA table_info(match)")}
-    assert {"predicted_left", "predicted_source", "predicted_locked",
+    assert {"predicted_trio_1", "predicted_source", "predicted_locked",
             "predicted_at"} <= after
 
 
@@ -743,9 +761,9 @@ def test_the_repaired_database_accepts_the_write_that_used_to_fail(tmp_db):
     )
     assert mid
     with sqlite3.connect(tmp_db) as con:
-        con.execute("UPDATE match SET predicted_left=0.62 WHERE id=?", (mid,))
+        con.execute("UPDATE match SET predicted_trio_1=0.62 WHERE id=?", (mid,))
         assert con.execute(
-            "SELECT predicted_left FROM match WHERE id=?", (mid,)
+            "SELECT predicted_trio_1 FROM match WHERE id=?", (mid,)
         ).fetchone()[0] == 0.62
 
 
@@ -758,9 +776,10 @@ def test_migration_preserves_the_matches_already_collected(tmp_db):
     store = MatchStore(tmp_db)
     mid = store.record_match(
         MatchRecord(source="compete", captured_at="2026-07-29T09:00:00",
-                    natural_key="collected-before-the-upgrade", outcome="right")
+                    natural_key="collected-before-the-upgrade")
     )
-    store.record_heroes(mid, [HeroSlot("left", 1, "alsa", None, "identified")])
+    store.record_heroes(mid, [HeroSlot(1, 1, "alsa", None, "identified")])
+    store.finalise_summary(mid, winning_trio=1, blue_trio=1)
     _strip_predicted_columns(tmp_db)
     MatchStore._schema_ensured.discard(tmp_db)  # force a real re-run in-process
 
@@ -768,12 +787,13 @@ def test_migration_preserves_the_matches_already_collected(tmp_db):
 
     with sqlite3.connect(tmp_db) as con:
         row = con.execute(
-            "SELECT outcome FROM match WHERE natural_key='collected-before-the-upgrade'"
+            "SELECT winning_trio FROM match"
+            " WHERE natural_key='collected-before-the-upgrade'"
         ).fetchone()
         heroes = con.execute(
             "SELECT COUNT(*) FROM match_hero WHERE match_id=?", (mid,)
         ).fetchone()[0]
-    assert row == ("right",), "the match survived the migration"
+    assert row == (1,), "the match survived the migration"
     assert heroes == 1, "its heroes survived too"
 
 def test_a_pulled_row_gets_a_comps_key(tmp_db):
@@ -792,11 +812,11 @@ def test_a_pulled_row_gets_a_comps_key(tmp_db):
         "natural_key": "sha256:deadbeef:0",
         "source": "spectate_summary",
         "captured_at": "2026-08-01T04:51:37Z",
-        "outcome": "left",
+        "winning_trio": 1,
         "theme_slug": None,
         "heroes": (
-            [{"side": "left", "slot": i, "hero_slug": h} for i, h in enumerate(left)]
-            + [{"side": "right", "slot": i, "hero_slug": h} for i, h in enumerate(right)]
+            [{"trio": 1, "slot": i, "hero_slug": h} for i, h in enumerate(left, 1)]
+            + [{"trio": 2, "slot": i, "hero_slug": h} for i, h in enumerate(right, 1)]
         ),
     })
     assert match_id is not None
@@ -822,11 +842,11 @@ def test_a_keyless_row_forces_the_migration_to_run_again(tmp_db):
         "natural_key": "sha256:keyless:0",
         "source": "spectate_summary",
         "captured_at": "2026-08-01T05:00:00Z",
-        "outcome": "left",
+        "winning_trio": 1,
         "theme_slug": None,
         "heroes": (
-            [{"side": "left", "slot": i, "hero_slug": h} for i, h in enumerate(left)]
-            + [{"side": "right", "slot": i, "hero_slug": h} for i, h in enumerate(right)]
+            [{"trio": 1, "slot": i, "hero_slug": h} for i, h in enumerate(left, 1)]
+            + [{"trio": 2, "slot": i, "hero_slug": h} for i, h in enumerate(right, 1)]
         ),
     })
     with store._connect() as con:

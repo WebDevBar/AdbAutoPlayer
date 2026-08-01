@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
+from .canon import assert_canonical
 from .matchkey import comps_key
 from .odds import themes_sharing_modifiers
 from .paths import resource_file
@@ -33,24 +34,26 @@ class MatchRecord:
     source: str  # 'compete' | 'spectate'
     captured_at: str
     natural_key: str | None = None  # NULL until the match has enough stable facts
-    theme: str | None = None       # RAW OCR read, provenance only
-    event_id: int | None = None    # resolved - see MatchStore.resolve_theme
-    theme_id: int | None = None    # resolved - the source of truth, not `theme`
+    theme: str | None = None  # RAW OCR read, provenance only
+    event_id: int | None = None  # resolved - see MatchStore.resolve_theme
+    theme_id: int | None = None  # resolved - the source of truth, not `theme`
     theme_resolved_by: str | None = None  # 'window' | 'ocr' | 'default'
     balance_epoch: str | None = None
     left_player: str | None = None
-    left_rating: int | None = None
-    left_rank: int | None = None
+    # NO trio-relative field here, deliberately. The match row is inserted BEFORE
+    # the heroes are read, so at insert time no trio exists to number and any such
+    # field would have to be written blind. `finalise_summary` supplies them all once
+    # the composition is known. `left_player`/`right_player` stay: they are provenance
+    # belonging to no trio, so they need no ordering.
     right_player: str | None = None
-    right_rating: int | None = None
-    right_rank: int | None = None
+
     outcome: str | None = None  # 'left' | 'right' | 'draw' | None
     outcome_source: str | None = None
 
 
 @dataclass(frozen=True)
 class HeroSlot:
-    side: str  # 'left' | 'right'
+    trio: int  # 1 or 2, by the canonical sort - never a screen position
     slot: int
     hero_slug: str | None  # None when status == 'unknown'
     art_ref: str | None
@@ -72,7 +75,7 @@ class HeroSlot:
     stat_sword: int | None = None
     stat_heart: int | None = None
     stat_shield: int | None = None
-    power: int | None = None        # long-press popup only
+    power: int | None = None  # long-press popup only
     identified_by: str | None = None  # 'image' | 'longpress_ocr'
 
 
@@ -94,10 +97,13 @@ class PoolSlot:
 @dataclass(frozen=True)
 class OddsSample:
     sampled_at: str
-    left_pool: int | None = None
-    right_pool: int | None = None
-    left_odds: float | None = None
-    right_odds: float | None = None
+    # Trio-relative, like everything else that is a MEASUREMENT rather than a
+    # composition. The betting pools are read during the draft, so which trio they
+    # attach to is a draft-frame fact.
+    trio_1_pool: int | None = None
+    trio_2_pool: int | None = None
+    trio_1_odds: float | None = None
+    trio_2_odds: float | None = None
     spectators: int | None = None
 
 
@@ -194,7 +200,7 @@ def _as_stamp(value) -> str | None:
 
 class MatchStore:
     _HERO_COLS = (
-        "side",
+        "trio",
         "slot",
         "hero_slug",
         "art_ref",
@@ -238,12 +244,7 @@ class MatchStore:
         "theme",
         "balance_epoch",
         "left_player",
-        "left_rating",
-        "left_rank",
         "right_player",
-        "right_rating",
-        "right_rank",
-        "outcome",
         "outcome_source",
     )
 
@@ -395,8 +396,8 @@ class MatchStore:
         """
         self._check(rec.source in _SOURCES, f"invalid source: {rec.source!r}")
         self._check(
-            rec.outcome is None or rec.outcome in _OUTCOMES,
-            f"invalid outcome: {rec.outcome!r}",
+            True,
+            "",
         )
         cols = ",".join(self._MATCH_COLS)
         placeholders = ",".join("?" * len(self._MATCH_COLS))
@@ -543,12 +544,15 @@ class MatchStore:
                 return
             sides: dict[str, list[str]] = {"left": [], "right": []}
             for side, slug in con.execute(
-                "SELECT side, hero_slug FROM match_hero"
+                "SELECT trio, hero_slug FROM match_hero"
                 " WHERE match_id=? AND hero_slug IS NOT NULL",
                 (match_id,),
             ):
-                if side in sides:
-                    sides[side].append(str(slug))
+                # `comps_key` sorts the two lists against each other, so which is
+                # which does not affect the key - that is what makes identity
+                # orientation-free. Trio 1 and 2 map onto its two arguments directly.
+                key_name = "left" if side == 1 else "right"
+                sides[key_name].append(str(slug))
             if len(sides["left"]) != _SIDE_SIZE or len(sides["right"]) != _SIDE_SIZE:
                 return
 
@@ -614,7 +618,92 @@ class MatchStore:
             (min(lows)[1], max(highs)[1], target),
         )
 
-    def set_outcome(self, match_id: int, outcome: str, source: str) -> None:
+    def finalise_summary(
+        self,
+        match_id: int,
+        *,
+        winning_trio: int | None,
+        blue_trio: int | None,
+        trio_1_rating: int | None = None,
+        trio_2_rating: int | None = None,
+        trio_1_rank: int | None = None,
+        trio_2_rank: int | None = None,
+        predicted_trio_1: float | None = None,
+        outcome_source: str | None = None,
+    ) -> None:
+        """Write every trio-relative value at once, and close the row.
+
+        ONE call rather than five setters, because these values are only jointly
+        meaningful: a winner without the trios it points at, or a rating attached to a
+        trio number a later call disagrees with, is defect 1476 rebuilt out of
+        correct-looking parts. It also sets `canonical_state`, so a row this method has
+        not touched is visibly unfinished rather than silently NULL - and a NULL there
+        is what the migration predicate reads as "the reshape has not run".
+
+        Args:
+            match_id: The row to close.
+            winning_trio: 1, 2, or None for a draw.
+            blue_trio: Which trio was ours, or None when we did not watch the draft.
+            trio_1_rating: Header rating for trio 1.
+            trio_2_rating: Header rating for trio 2.
+            trio_1_rank: Header rank for trio 1.
+            trio_2_rank: Header rank for trio 2.
+            predicted_trio_1: P(trio 1 wins), from the draft.
+            outcome_source: How the winner was determined.
+
+        Raises:
+            ValueError: A pointer names a trio that does not exist for this match.
+        """
+        with self._connect() as con:
+            present = {
+                row[0]
+                for row in con.execute(
+                    "SELECT DISTINCT trio FROM match_hero"
+                    " WHERE match_id=? AND hero_slug IS NOT NULL",
+                    (match_id,),
+                )
+            }
+            for name, value in (
+                ("winning_trio", winning_trio),
+                ("blue_trio", blue_trio),
+            ):
+                if value is not None and value not in present:
+                    raise ValueError(
+                        f"{name}={value} names no composition for match {match_id}"
+                    )
+            con.execute(
+                "UPDATE match SET winning_trio=?, blue_trio=?, trio_1_rating=?,"
+                " trio_2_rating=?, trio_1_rank=?, trio_2_rank=?, predicted_trio_1=?,"
+                " outcome_source=?, canonical_state='canonical' WHERE id=?",
+                (
+                    winning_trio,
+                    blue_trio,
+                    trio_1_rating,
+                    trio_2_rating,
+                    trio_1_rank,
+                    trio_2_rank,
+                    predicted_trio_1,
+                    outcome_source,
+                    match_id,
+                ),
+            )
+
+    def mark_unrepresentable(self, match_id: int) -> None:
+        """A read that could not form two complete trios.
+
+        Terminal rather than pending: a row left with `canonical_state IS NULL` is read
+        by the migration predicate as "the reshape has not run" and re-runs it forever.
+
+        Args:
+            match_id: The row to close.
+        """
+        with self._connect() as con:
+            con.execute(
+                "UPDATE match SET canonical_state='unrepresentable' WHERE id=?",
+                (match_id,),
+            )
+
+    def _unused_set_outcome(self, match_id: int, outcome: str, source: str) -> None:
         with self._connect() as con:
             con.execute(
                 "UPDATE match SET outcome=?, outcome_source=? WHERE id=?",
@@ -622,14 +711,20 @@ class MatchStore:
             )
 
     def record_heroes(self, match_id: int, slots: list[HeroSlot]) -> None:
+        # THE validated write boundary. Canonical ordering is enforced here because
+        # SQLite cannot express a cross-row comparison as a CHECK, and without it a
+        # writer can store the lexicographically larger trio as trio 1 while every
+        # other constraint passes.
+        assert_canonical(
+            [{"trio": s.trio, "slot": s.slot, "hero_slug": s.hero_slug} for s in slots]
+        )
         for slot in slots:
-            self._check(slot.side in _SIDES, f"invalid side: {slot.side!r}")
             self._check(
                 slot.status in _HERO_STATUSES, f"invalid status: {slot.status!r}"
             )
             self._check(
                 (slot.hero_slug is None) == (slot.status == "unknown"),
-                f"slot {slot.side}{slot.slot}: status {slot.status!r} disagrees with "
+                f"slot {slot.trio}/{slot.slot}: status {slot.status!r} disagrees with "
                 f"hero_slug {slot.hero_slug!r}",
             )
         cols = ",".join(self._HERO_COLS)
@@ -638,7 +733,7 @@ class MatchStore:
         with self._connect() as con:
             con.executemany(
                 f"INSERT INTO match_hero(match_id,{cols}) VALUES({placeholders}) "
-                f"ON CONFLICT(match_id,side,slot) DO UPDATE SET {updates}",
+                f"ON CONFLICT(match_id,trio,slot) DO UPDATE SET {updates}",
                 [(match_id, *(getattr(s, c) for c in self._HERO_COLS)) for s in slots],
             )
 
@@ -646,7 +741,7 @@ class MatchStore:
         cols = ",".join(self._HERO_COLS)
         with self._connect() as con:
             rows = con.execute(
-                f"SELECT {cols} FROM match_hero WHERE match_id=? ORDER BY side, slot",
+                f"SELECT {cols} FROM match_hero WHERE match_id=? ORDER BY trio, slot",
                 (match_id,),
             ).fetchall()
         return [HeroSlot(*r) for r in rows]
@@ -705,15 +800,16 @@ class MatchStore:
     def record_odds(self, match_id: int, sample: OddsSample) -> None:
         with self._connect() as con:
             con.execute(
-                "INSERT INTO match_odds(match_id,sampled_at,left_pool,right_pool,"
-                "left_odds,right_odds,spectators) VALUES(?,?,?,?,?,?,?)",
+                "INSERT INTO match_odds(match_id,sampled_at,trio_1_pool,"
+                "trio_2_pool,trio_1_odds,trio_2_odds,spectators)"
+                " VALUES(?,?,?,?,?,?,?)",
                 (
                     match_id,
                     sample.sampled_at,
-                    sample.left_pool,
-                    sample.right_pool,
-                    sample.left_odds,
-                    sample.right_odds,
+                    sample.trio_1_pool,
+                    sample.trio_2_pool,
+                    sample.trio_1_odds,
+                    sample.trio_2_odds,
                     sample.spectators,
                 ),
             )
@@ -721,7 +817,8 @@ class MatchStore:
     def odds_for(self, match_id: int) -> list[OddsSample]:
         with self._connect() as con:
             rows = con.execute(
-                "SELECT sampled_at,left_pool,right_pool,left_odds,right_odds,spectators "
+                "SELECT sampled_at,trio_1_pool,trio_2_pool,trio_1_odds,"
+                "trio_2_odds,spectators "
                 "FROM match_odds WHERE match_id=? ORDER BY sampled_at",
                 (match_id,),
             ).fetchall()
@@ -755,9 +852,7 @@ class MatchStore:
                     datetime.now(UTC).isoformat(timespec="seconds"),
                 ),
             )
-            row = con.execute(
-                "SELECT instance_uuid FROM install WHERE id=1"
-            ).fetchone()
+            row = con.execute("SELECT instance_uuid FROM install WHERE id=1").fetchone()
         return str(row[0])
 
     def record_prediction(
@@ -776,13 +871,13 @@ class MatchStore:
         """
         with self._connect() as con:
             con.execute(
-                "UPDATE match SET predicted_left=?, predicted_source=?,"
+                "UPDATE match SET predicted_trio_1=?, predicted_source=?,"
                 " predicted_locked=?, predicted_at=? WHERE id=?",
                 (p_left, source, locked, predicted_at, match_id),
             )
 
     def scored_predictions(self) -> list[tuple]:
-        """(predicted_left, outcome, predicted_source, predicted_locked) for review.
+        """(predicted_trio_1, winning_trio, predicted_source, predicted_locked).
 
         The rows that answer "where was the logic confidently wrong".
 
@@ -793,10 +888,11 @@ class MatchStore:
         """
         with self._connect() as con:
             return con.execute(
-                "SELECT predicted_left, outcome, predicted_source, predicted_locked"
+                "SELECT predicted_trio_1, winning_trio, predicted_source,"
+                "       predicted_locked"
                 "  FROM match"
-                " WHERE predicted_left IS NOT NULL AND outcome IN ('left','right')"
-                "   AND superseded_by IS NULL"
+                " WHERE predicted_trio_1 IS NOT NULL AND winning_trio IS NOT NULL"
+                "   AND superseded_by IS NULL AND canonical_state='canonical'"
             ).fetchall()
 
     def matches_for_fit(self) -> list[tuple]:
@@ -817,21 +913,27 @@ class MatchStore:
         seen twice must weigh once in the fit, or every duplicate silently doubles
         one comp's contribution to the model.
 
-        Returns (match_id, outcome, theme_id, event_id, left_player, right_player,
-        left_rating, right_rating, side, slug) joined, because a three-a-side check needs
-        the heroes anyway. `load_matches` unpacks these positionally, so a new column
-        goes on the END or it silently shifts every field after it.
+        Returns (match_id, winning_trio, theme_id, event_id, trio_1_rating,
+        trio_2_rating, blue_trio, hero_trio, slug) joined, because a three-a-side check
+        needs the heroes anyway. `load_matches` unpacks these positionally, so a new
+        column goes on the END or it silently shifts every field after it.
+
+        `blue_trio` is carried for ONE consumer: the intercept exclusion. It is the
+        single condition that decides whether a row contributes to the first-pick term,
+        expressed as data rather than as a branch on origin.
+
+        Player names are gone from this query. They were never read by the fit -
+        `USE_PLAYER_TERMS` is False - and they belong to no trio.
         """
         with self._connect() as con:
             return con.execute(
-                "SELECT m.id, m.outcome, m.theme_id, m.event_id,"
-                "       m.left_player, m.right_player,"
-                "       m.left_rating, m.right_rating,"
-                "       h.side, h.hero_slug"
+                "SELECT m.id, m.winning_trio, m.theme_id, m.event_id,"
+                "       m.trio_1_rating, m.trio_2_rating, m.blue_trio,"
+                "       h.trio, h.hero_slug"
                 "  FROM match m JOIN match_hero h ON h.match_id = m.id"
-                " WHERE m.outcome IN ('left','right') AND h.hero_slug IS NOT NULL"
-                "   AND m.superseded_by IS NULL"
-                " ORDER BY m.id, h.side, h.slot"
+                " WHERE m.winning_trio IS NOT NULL AND h.hero_slug IS NOT NULL"
+                "   AND m.superseded_by IS NULL AND m.canonical_state='canonical'"
+                " ORDER BY m.id, h.trio, h.slot"
             ).fetchall()
 
     def pull_cursor(self) -> int:
@@ -890,30 +992,33 @@ class MatchStore:
                 # Every match column is qualified: joining match_odds made a bare `id`
                 # ambiguous, and SQLite reports that as a failed sync rather than a
                 # crash - so it retried and lost every push until someone read the log.
-                "SELECT match.id, natural_key, source, captured_at, theme, outcome,"
-                " left_player, left_rating, left_rank,"
-                " right_player, right_rating, right_rank,"
+                "SELECT match.id, natural_key, source, captured_at, theme,"
+                " winning_trio, trio_1_rating, trio_2_rating,"
+                " trio_1_rank, trio_2_rank,"
                 # Pushed so calibration can be scored across contributors rather than
                 # one machine at a time. The server pairs it with client_version,
                 # without which an older build's number means something different.
-                " predicted_left, predicted_source, predicted_locked,"
+                " predicted_trio_1, predicted_source, predicted_locked,"
                 # The crowd's money, from the newest sample. LEFT JOIN because most
                 # matches have none - joined mid-draft, or an older client.
-                " o.left_pool, o.right_pool, o.left_odds, o.right_odds, o.spectators"
+                " o.trio_1_pool, o.trio_2_pool, o.trio_1_odds, o.trio_2_odds,"
+                " o.spectators"
                 " FROM match"
                 " LEFT JOIN match_odds o ON o.id = ("
                 "   SELECT id FROM match_odds WHERE match_id = match.id"
                 "   ORDER BY sampled_at DESC, id DESC LIMIT 1)"
                 " WHERE origin='local' AND comps_key IS NOT NULL"
                 "   AND pushed_at IS NULL AND push_rejected_reason IS NULL"
+                "   AND canonical_state='canonical' AND winning_trio IS NOT NULL"
                 " ORDER BY match.id LIMIT ?",
                 (limit,),
             ).fetchall()
             out = []
             for r in rows:
                 heroes = con.execute(
-                    "SELECT side, slot, hero_slug, stat_sword, stat_heart, stat_shield"
-                    " FROM match_hero WHERE match_id=? ORDER BY side, slot",
+                    "SELECT trio, slot, hero_slug, stat_sword, stat_heart,"
+                    " stat_shield"
+                    " FROM match_hero WHERE match_id=? ORDER BY trio, slot",
                     (r[0],),
                 ).fetchall()
                 out.append(
@@ -925,24 +1030,31 @@ class MatchStore:
                         # The raw screen read, never a slug: identity is the
                         # server's to decide.
                         "theme_ocr": r[4],
-                        "outcome": r[5],
-                        "left_player": r[6], "left_rating": r[7], "left_rank": r[8],
-                        "right_player": r[9], "right_rating": r[10], "right_rank": r[11],
+                        # Version 5: trios, no sides, no player names. A side is a
+                        # viewing accident and the server has no use for one.
+                        "winning_trio": r[5],
+                        "trio_1_rating": r[6],
+                        "trio_2_rating": r[7],
+                        "trio_1_rank": r[8],
+                        "trio_2_rank": r[9],
                         # Our pre-fight prediction, scored server-side against the
                         # result and paired with client_version.
-                        "predicted_left": r[12],
-                        "predicted_source": r[13],
-                        "predicted_locked": r[14],
+                        "predicted_trio_1": r[10],
+                        "predicted_source": r[11],
+                        "predicted_locked": r[12],
                         # The GAME's betting market, from the newest sample.
-                        "left_pool": r[15],
-                        "right_pool": r[16],
-                        "left_odds": r[17],
-                        "right_odds": r[18],
-                        "spectators": r[19],
+                        "trio_1_pool": r[13],
+                        "trio_2_pool": r[14],
+                        "trio_1_odds": r[15],
+                        "trio_2_odds": r[16],
+                        "spectators": r[17],
                         "heroes": [
                             {
-                                "side": h[0], "slot": h[1], "hero_slug": h[2],
-                                "stat_sword": h[3], "stat_heart": h[4],
+                                "trio": h[0],
+                                "slot": h[1],
+                                "hero_slug": h[2],
+                                "stat_sword": h[3],
+                                "stat_heart": h[4],
                                 "stat_shield": h[5],
                             }
                             for h in heroes
@@ -1120,35 +1232,53 @@ class MatchStore:
                 ).fetchone()
                 theme_id = t[0] if t else None
             cur = con.execute(
+                # blue_trio is NOT set, and that is the point: we never watched this
+                # draft, so there is no blue. The NULL IS the flag - it is what
+                # excludes the row from the first-pick intercept in the fit.
                 "INSERT INTO match(natural_key, source, captured_at, theme,"
-                " theme_id, theme_resolved_by, outcome, outcome_source,"
-                " left_player, left_rating, left_rank,"
-                " right_player, right_rating, right_rank,"
+                " theme_id, theme_resolved_by, winning_trio, outcome_source,"
+                " trio_1_rating, trio_2_rating, trio_1_rank, trio_2_rank,"
+                " predicted_trio_1, canonical_state,"
                 " origin, contributor_uuid, remote_received_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'synced', ?, ?)",
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'canonical', 'synced', ?, ?)",
                 (
-                    row["natural_key"], row["source"], row["captured_at"],
-                    None, theme_id, row.get("theme_resolved_by"),
-                    row["outcome"], "synced",
-                    row.get("left_player"), row.get("left_rating"), row.get("left_rank"),
-                    row.get("right_player"), row.get("right_rating"),
-                    row.get("right_rank"),
-                    row.get("contributor_uuid"), row.get("remote_received_at"),
+                    row["natural_key"],
+                    row["source"],
+                    row["captured_at"],
+                    None,
+                    theme_id,
+                    row.get("theme_resolved_by"),
+                    row["winning_trio"],
+                    "synced",
+                    row.get("trio_1_rating"),
+                    row.get("trio_2_rating"),
+                    row.get("trio_1_rank"),
+                    row.get("trio_2_rank"),
+                    row.get("predicted_trio_1"),
+                    row.get("contributor_uuid"),
+                    row.get("remote_received_at"),
                 ),
             )
             match_id = int(cur.lastrowid)
             heroes = row.get("heroes", [])
             for h in heroes:
                 con.execute(
-                    "INSERT INTO match_hero(match_id, side, slot, hero_slug, status,"
+                    "INSERT INTO match_hero(match_id, trio, slot, hero_slug, status,"
                     " stat_sword, stat_heart, stat_shield)"
                     # status is NOT NULL locally but the server carries no scores
                     # or geometry - that is THIS machine's evidence. A pulled hero
                     # is identified by definition: the server only accepts
                     # complete matches.
                     " VALUES(?,?,?,?, 'identified', ?,?,?)",
-                    (match_id, h["side"], h["slot"], h["hero_slug"],
-                     h.get("stat_sword"), h.get("stat_heart"), h.get("stat_shield")),
+                    (
+                        match_id,
+                        h["trio"],
+                        h["slot"],
+                        h["hero_slug"],
+                        h.get("stat_sword"),
+                        h.get("stat_heart"),
+                        h.get("stat_shield"),
+                    ),
                 )
             # A pulled row needs comps_key too. The SC-41 backstop asks
             # `match_by_comps_key` whether a match is already recorded, and it used to
@@ -1156,8 +1286,8 @@ class MatchStore:
             # contributor already pushed is invisible to the backstop and gets recorded
             # a second time locally. Found on the first live pull: 50 of 50 pulled rows
             # had no key.
-            left = sorted(h["hero_slug"] for h in heroes if h["side"] == "left")
-            right = sorted(h["hero_slug"] for h in heroes if h["side"] == "right")
+            left = sorted(h["hero_slug"] for h in heroes if h["trio"] == 1)
+            right = sorted(h["hero_slug"] for h in heroes if h["trio"] == 2)
             if len(left) == _SIDE_SIZE and len(right) == _SIDE_SIZE:
                 con.execute(
                     "UPDATE match SET comps_key=? WHERE id=?",
@@ -1339,9 +1469,17 @@ class MatchStore:
                 " image_margin,ocr_slug,agreed,frame_path,created_at)"
                 " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    row.match_id, self._screen_id(con, row.screen_slug), row.side,
-                    row.slot, row.image_slug, row.image_art_ref, row.image_score,
-                    row.image_margin, row.ocr_slug, agreed, row.frame_path,
+                    row.match_id,
+                    self._screen_id(con, row.screen_slug),
+                    row.side,
+                    row.slot,
+                    row.image_slug,
+                    row.image_art_ref,
+                    row.image_score,
+                    row.image_margin,
+                    row.ocr_slug,
+                    agreed,
+                    row.frame_path,
                     datetime.now(UTC).isoformat(timespec="seconds"),
                 ),
             )
@@ -1377,8 +1515,16 @@ class MatchStore:
                     "  score=excluded.score, margin=excluded.margin,"
                     "  audit_id=excluded.audit_id, verified_at=excluded.verified_at",
                     (
-                        self._screen_id(con, screen_slug), hero_slug, art_ref, scale,
-                        half_w, top, bottom, score, margin, audit_id,
+                        self._screen_id(con, screen_slug),
+                        hero_slug,
+                        art_ref,
+                        scale,
+                        half_w,
+                        top,
+                        bottom,
+                        score,
+                        margin,
+                        audit_id,
                         datetime.now(UTC).isoformat(timespec="seconds"),
                     ),
                 )

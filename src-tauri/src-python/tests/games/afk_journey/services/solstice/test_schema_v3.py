@@ -70,6 +70,8 @@ def _audit(con: sqlite3.Connection, **kw) -> int:
     row = {
         "match_id": None,
         "screen_id": screen_id(con, "solstice_summary"),
+        # identification_audit keeps `side`: it records WHERE ON SCREEN a cell was
+        # read, which is a fact about geometry, not about a composition.
         "side": "left",
         "slot": 1,
         "image_slug": "atalanta",

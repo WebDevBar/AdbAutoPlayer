@@ -142,20 +142,22 @@ def _seed_pushable(store, n=1):
         mid = store.record_match(
             MatchRecord(source="spectate_summary",
                         captured_at=captured_at,
-                        theme="Converging Paths", outcome="left",
+                        theme="Converging Paths",
                         outcome_source="observed",
                         event_id=event_id, theme_id=theme_id,
                         theme_resolved_by=resolved_by)
         )
         store.record_heroes(mid, [
-            HeroSlot(side="left", slot=j, hero_slug=s, art_ref=None,
+            HeroSlot(trio=1, slot=j, hero_slug=s, art_ref=None,
                      status="identified")
-            for j, s in enumerate(("aliceth", "alna", "alsa"))
+            for j, s in enumerate(("aliceth", "alna", "alsa"), 1)
         ] + [
-            HeroSlot(side="right", slot=j, hero_slug=s, art_ref=None,
+            HeroSlot(trio=2, slot=j, hero_slug=s, art_ref=None,
                      status="identified")
-            for j, s in enumerate(("antandra", "arden", "atalanta"))
+            for j, s in enumerate(("antandra", "arden", "atalanta"), 1)
         ])
+        store.finalise_summary(mid, winning_trio=1, blue_trio=1,
+                               outcome_source="observed")
         store.finalise_identity(mid)
         ids.append(mid)
     return ids
@@ -231,10 +233,10 @@ def test_a_failed_pull_does_not_advance_the_cursor(store, client):
 def test_pull_inserts_with_origin_synced(store, client):
     client._server.rows = [{
         "seq": 5, "natural_key": "sha256:remote1", "source": "spectate_summary",
-        "captured_at": "2026-07-25T05:00:00+00:00", "outcome": "left",
+        "captured_at": "2026-07-25T05:00:00+00:00", "winning_trio": 1,
         "theme_slug": "converging-paths", "theme_resolved_by": "window",
         "contributor_uuid": "other-install", "remote_received_at": "2026-07-25T06:00:00Z",
-        "heroes": [{"side": "left", "slot": 0, "hero_slug": "aliceth"}],
+        "heroes": [{"trio": 1, "slot": 1, "hero_slug": "aliceth"}],
     }]
     client.pull()
     assert _row_by_key(store, "sha256:remote1")["origin"] == "synced"
@@ -243,7 +245,7 @@ def test_pull_inserts_with_origin_synced(store, client):
 def test_pull_of_an_already_known_match_is_a_no_op(store, client):
     client._server.rows = [{
         "seq": 5, "natural_key": "sha256:remote2", "source": "spectate_summary",
-        "captured_at": "2026-07-25T05:00:00+00:00", "outcome": "left",
+        "captured_at": "2026-07-25T05:00:00+00:00", "winning_trio": 1,
         "theme_slug": "converging-paths", "theme_resolved_by": "window",
         "heroes": [],
     }]
@@ -256,7 +258,7 @@ def test_synced_rows_are_never_pushed_back(store, client):
     data forever."""
     client._server.rows = [{
         "seq": 9, "natural_key": "sha256:remote3", "source": "spectate_summary",
-        "captured_at": "2026-07-25T05:00:00+00:00", "outcome": "left",
+        "captured_at": "2026-07-25T05:00:00+00:00", "winning_trio": 1,
         "theme_slug": "converging-paths", "theme_resolved_by": "window",
         "heroes": [],
     }]

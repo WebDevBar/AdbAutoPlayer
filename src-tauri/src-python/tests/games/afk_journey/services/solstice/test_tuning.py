@@ -333,11 +333,11 @@ def test_only_ocr_confirmed_slots_seed_the_confirmation_set():
     from adb_auto_player.games.afk_journey.services.solstice.tuning import confirmed_sides
 
     confirmed = confirmed_sides([
-        HeroSlot(side="left", slot=1, hero_slug="atalanta", art_ref="Atalanta",
+        HeroSlot(trio=1, slot=1, hero_slug="atalanta", art_ref="Atalanta",
                  status="identified", identified_by="longpress_ocr"),
-        HeroSlot(side="left", slot=2, hero_slug="igor", art_ref="Igor",
+        HeroSlot(trio=1, slot=2, hero_slug="igor", art_ref="Igor",
                  status="identified", identified_by="image"),
-        HeroSlot(side="right", slot=1, hero_slug=None, art_ref=None,
+        HeroSlot(trio=2, slot=1, hero_slug=None, art_ref=None,
                  status="unknown", identified_by=None),
     ])
 

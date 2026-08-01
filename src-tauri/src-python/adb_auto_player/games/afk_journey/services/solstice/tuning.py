@@ -31,9 +31,7 @@ DEFAULT_CROPS: tuple[tuple[int, int, int], ...] = tuple(
     for top in (14, 16, 18, 20)
     for bottom in (26, 28, 30, 32)
 )
-DEFAULT_SCALES: tuple[float, ...] = tuple(
-    round(0.30 + 0.01 * i, 3) for i in range(56)
-)
+DEFAULT_SCALES: tuple[float, ...] = tuple(round(0.30 + 0.01 * i, 3) for i in range(56))
 
 
 @dataclass(frozen=True)
@@ -146,8 +144,13 @@ def learn_if_improved(
         return False
 
     store.learn_transform(
-        audit_id, screen_slug, confirmed_slug, art_ref,
-        tuned.scale, tuned.score, tuned.margin,
+        audit_id,
+        screen_slug,
+        confirmed_slug,
+        art_ref,
+        tuned.scale,
+        tuned.score,
+        tuned.margin,
         crop=(tuned.crop_half_w, tuned.crop_top, tuned.crop_bottom),
     )
     return True
@@ -160,8 +163,6 @@ def _best_scale_for(
 
     Storing it collapses the scale chain from ~56 steps to 1 on later sightings.
     """
-    import cv2
-
     best_score, best_scale = -1.0, scales[0]
     cell_h, cell_w = cell.shape
     for scale in scales:
@@ -184,10 +185,15 @@ def confirmed_sides(slots) -> dict[str, set[str]]:
     truth and let it authorise learning on the draft and prematch screens - the exact
     self-confirmation this design exists to prevent.
     """
+    # Keyed "left"/"right" because that is what the CELL GEOMETRY calls its two
+    # halves - this is about where on the summary screen a card sat, not about which
+    # composition it belonged to. `HeroSlot.trio` is the composition; trio 1 occupies
+    # the cells this code has always called "left".
     confirmed: dict[str, set[str]] = {"left": set(), "right": set()}
     for slot in slots:
         if slot.hero_slug and slot.identified_by == "longpress_ocr":
-            confirmed.setdefault(slot.side, set()).add(slot.hero_slug)
+            half = "left" if slot.trio == 1 else "right"
+            confirmed.setdefault(half, set()).add(slot.hero_slug)
     return confirmed
 
 
@@ -272,14 +278,20 @@ def train_from_frame(
     for side in sides_present:
         confirmed = confirmed_by_side.get(side, set())
         side_reads = [
-            (i, result) for i, (cell, result) in enumerate(reads) if (cell.side or "") == side
+            (i, result)
+            for i, (cell, result) in enumerate(reads)
+            if (cell.side or "") == side
         ]
-        odd_out = [(i, result) for i, result in side_reads if result.slug not in confirmed]
+        odd_out = [
+            (i, result) for i, result in side_reads if result.slug not in confirmed
+        ]
         if len(odd_out) != 1:
             continue  # zero or multiple reads outside the set: nothing is pinned
         odd_i, _odd_result = odd_out[0]
         accounted = {
-            result.slug for i, result in side_reads if i != odd_i and result.slug is not None
+            result.slug
+            for i, result in side_reads
+            if i != odd_i and result.slug is not None
         }
         unaccounted = confirmed - accounted
         if len(unaccounted) == 1:
@@ -325,4 +337,6 @@ def train_from_frame(
         )
         written += 1
 
-    return TrainResult(written=written, deduced=deduced_count, set_consistent=set_consistent)
+    return TrainResult(
+        written=written, deduced=deduced_count, set_consistent=set_consistent
+    )

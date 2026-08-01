@@ -67,9 +67,11 @@ SELECT
       AND (c.winning_trio = 1) =  (l.hero_slug < r.hero_slug))              AS a_wins,
   SUM(c.winning_trio IS NOT NULL
       AND (c.winning_trio = 1) <> (l.hero_slug < r.hero_slug))              AS b_wins,
+  -- `tally` is a_wins - b_wins, computed rather than stored, so it can never
+  -- disagree with the counts that produced it.
   SUM(CASE WHEN c.winning_trio IS NULL THEN 0
            WHEN (c.winning_trio = 1) = (l.hero_slug < r.hero_slug) THEN 1
-           ELSE -1 END)                                                     AS margin,
+           ELSE -1 END)                                                      AS tally,
   SUM(c.winning_trio IS NULL)                                              AS draws,
   SUM(c.winning_trio IS NOT NULL)                                          AS observations
 FROM complete c

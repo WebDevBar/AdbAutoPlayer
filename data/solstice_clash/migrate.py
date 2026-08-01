@@ -478,30 +478,35 @@ def _backfill_comps_key(con: sqlite3.Connection) -> int:
     """
     if not table_exists(con, "match") or "comps_key" not in columns(con, "match"):
         return 0
-    # SHAPE-AWARE. The query below reads `match_hero.side` and `m.outcome`, and a
-    # database created fresh from schema.sql v6 has neither - it starts canonical and
-    # has no rows to backfill. Without this check `_apply` raises before the reshape
-    # is even reached, so a brand-new install breaks.
-    if "side" not in columns(con, "match_hero"):
-        return 0
+    # SHAPE-AWARE, and it must WORK on both shapes rather than skipping one. Skipping
+    # the canonical shape would leave every pulled row keyless forever - which is
+    # precisely the regression this backfill exists to prevent, reintroduced one
+    # schema later.
+    legacy = "side" in columns(con, "match_hero")
+    if legacy:
+        group_a, group_b = "side = 'left'", "side = 'right'"
+        decided = "m.outcome IN ('left','right')"
+    else:
+        group_a, group_b = "trio = 1", "trio = 2"
+        decided = "m.winning_trio IS NOT NULL"
 
     rows = con.execute(
-        """
+        f"""
         SELECT m.id,
                COALESCE(e1.slug, e2.slug) AS event_slug,
                (SELECT group_concat(hero_slug) FROM (
                     SELECT hero_slug FROM match_hero
-                    WHERE match_id = m.id AND side = 'left' AND hero_slug IS NOT NULL
+                    WHERE match_id = m.id AND {group_a} AND hero_slug IS NOT NULL
                     ORDER BY hero_slug)) AS left_slugs,
                (SELECT group_concat(hero_slug) FROM (
                     SELECT hero_slug FROM match_hero
-                    WHERE match_id = m.id AND side = 'right' AND hero_slug IS NOT NULL
+                    WHERE match_id = m.id AND {group_b} AND hero_slug IS NOT NULL
                     ORDER BY hero_slug)) AS right_slugs
         FROM match m
         LEFT JOIN event e1 ON e1.id = m.event_id
         LEFT JOIN theme t  ON t.id  = m.theme_id
         LEFT JOIN event e2 ON e2.id = t.event_id
-        WHERE m.comps_key IS NULL AND m.outcome IN ('left', 'right')
+        WHERE m.comps_key IS NULL AND {decided}
         """
     ).fetchall()
 
@@ -573,23 +578,27 @@ def _reshape_to_trios(con: sqlite3.Connection) -> int:
     """
     if not table_exists(con, "match") or "canonical_state" not in columns(con, "match"):
         return 0
-    # THE PREDICATE, expressed purely in terms of what SURVIVES the reshape. Both
-    # earlier attempts read columns the migration removes: one looped forever on the
-    # five-hero row, the other failed on the second launch with a missing column.
+    legacy = "side" in columns(con, "match_hero")
     pending = con.execute(
         "SELECT COUNT(*) FROM match WHERE canonical_state IS NULL"
     ).fetchone()[0]
-    if not pending:
+
+    if not legacy:
+        # Already the canonical shape. Classify anything still NULL so the predicate
+        # settles, and stop.
+        if pending:
+            con.execute(
+                "UPDATE match SET canonical_state='canonical'"
+                " WHERE canonical_state IS NULL"
+            )
         return 0
 
-    legacy = "side" in columns(con, "match_hero")
-    if not legacy:
-        # A fresh database is already canonical and has no legacy rows. Classify
-        # whatever is there so the predicate settles, and stop.
-        con.execute(
-            "UPDATE match SET canonical_state='canonical' WHERE canonical_state IS NULL"
-        )
-        return 0
+    # The SHAPE change is NOT conditional on there being rows to convert. An empty or
+    # already-classified legacy database has nothing pending, and an early return here
+    # would leave it on `side` and UNIQUE(match_id, side, slot) forever - which is
+    # exactly what the committed seed database did, and every ON CONFLICT against the
+    # new target then failed. Row conversion is skipped when there is none; the rebuild
+    # and the drops always run.
 
     verdicts = _load_orientation_sidecar()
 

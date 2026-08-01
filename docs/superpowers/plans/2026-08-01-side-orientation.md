@@ -585,6 +585,26 @@ def test_row_with_no_verdict_keeps_outcome_and_nulls_the_draft_group():
     assert out["predicted_trio_1"] is None
 
 
+def test_wire_left_trio_is_the_draft_left_trio_not_the_stored_one():
+    """The ~6 rows 0006 never reached still hold summary-left in `side`, while 0007
+    binds their ratings and prediction to the OTHER trio. Orienting the v4 wire on the
+    stored side would emit a row whose heroes and ratings disagree - 1476 on the wire.
+
+    A test that only sets wire_left_trio by hand passes with that bug present, which is
+    exactly what round 8 caught, so this asserts on what the migration DERIVES.
+    """
+    by_side = {"left": ["m", "n", "o"], "right": ["a", "b", "c"]}   # left sorts as trio 2
+    naive = h.canonicalise_row(by_side=by_side, outcome="left", left_rating=100,
+                               right_rating=200, predicted_left=0.8, mirrored=False)
+    assert naive["wire_left_trio"] == 2          # stored-left is the draft-left
+
+    inverted = h.canonicalise_row(by_side=by_side, outcome="left", left_rating=100,
+                                  right_rating=200, predicted_left=0.8, mirrored=True)
+    assert inverted["wire_left_trio"] == 1       # draft-left is the OTHER trio
+    # and it agrees with where the draft-relative group actually went
+    assert inverted["trio_1_rating"] == 100
+
+
 def test_a_shared_comps_key_outside_the_window_gets_no_verdict():
     """Ids 1 and 45 share a comps_key and are 31.6 hours apart. Applying one
     occurrence's verdict to the other would bind its ratings to the wrong trio."""
@@ -680,6 +700,11 @@ def canonicalise_row(
 
     out = {"canonical_state": "canonical", "winning_trio": winning_trio}
 
+    # The orientation the v4 wire must use. Same decision as the draft-relative group
+    # below, written down rather than re-derived: for an uncorrected mirrored row the
+    # draft-left trio is NOT the trio whose heroes were stored on the left.
+    out["wire_left_trio"] = left_is if not mirrored else right_is
+
     if mirrored is None:
         # No orientation evidence. We do not guess: 8% of audited rows were mirrored.
         for key in ("trio_1_rating", "trio_2_rating", "trio_1_rank", "trio_2_rank",
@@ -717,7 +742,7 @@ to `captured_at` for both when they are NULL.
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_migration_0007.py -v`
-Expected: 8 passed
+Expected: 9 passed
 
 - [ ] **Step 6: Write the Alembic migration**
 
@@ -726,7 +751,7 @@ Expected: 8 passed
 1. `op.add_column` every new column from Task 2, all nullable - including `wire_left_trio`.
 2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND its capture interval widened by 120 seconds - `captures_min_at`/`captures_max_at`, NOT `captured_at` - refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
-4. Populate `wire_left_trio` from the current `side` values BEFORE they are touched: it is whichever canonical trio the `side='left'` heroes form. This is the only chance to capture it. Then `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
+4. Populate `wire_left_trio`. It is **NOT** simply the trio the `side='left'` heroes form - see the rule below, which round 8 corrected. It is the same `draft_left_is` value `canonicalise_row` already computes, so return it from there rather than deriving it twice. Then `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.
 6. Assert canonical ordering in bulk: no canonical match may have its `trio=1` heroes sorting after its `trio=2` heroes. Raise on any violation. **This must come after step 4**, not before - the column it reads does not exist until then. Both assertions stay inside the transaction and before any destructive drop.
 7. Drop `left_player`, `left_rating`, `left_rank`, `right_player`, `right_rating`, `right_rank`, `outcome`, `predicted_left`, `left_pool`, `right_pool`, `left_odds`, `right_odds`.
@@ -867,7 +892,7 @@ def test_the_v4_wire_preserves_the_original_orientation(client, auth, session, a
     row, so the wire orientation must be the one it would have received before 0007 -
     not trio order, which would replace a real first-pick signal with alphabetical noise.
     """
-    a_match.wire_left_trio = 2          # trio 2 held side='left' before the migration
+    a_match.wire_left_trio = 2          # trio 2 was the draft-left trio
     a_match.winning_trio = 2
     a_match.trio_1_rating, a_match.trio_2_rating = 200, 100
     session.flush()
@@ -929,10 +954,27 @@ Expected: FAIL - version 5 rejected, no `schema_version` query parameter.
     is the pushing contributor's own blue, so it carries a genuine first-pick signal, and
     always-trio-1-left would replace that signal with alphabetical noise.
 
-    So `0007` also records **`wire_left_trio`** (1 or 2): which trio held `side='left'` in
-    the row as it stood after `0006`, captured before the columns are dropped. `to_v4_wire`
-    orients on it, so a v4 client receives byte-for-byte what it would have received before
-    the migration.
+    So `0007` also records **`wire_left_trio`** (1 or 2), captured before the columns are
+    dropped, and `to_v4_wire` orients on it.
+
+    **It is the DRAFT-left trio, not the stored-left trio**, and round 8 caught the plan
+    conflating them. For an ordinary or `CORRECTED` row those are the same thing. For the ~6
+    mirrored rows `0006` never reached they are opposite: their stored `side='left'` is
+    summary-left, while `0007` deliberately binds the ratings, prediction, pools and odds to
+    the other trio. Orienting the v4 response on stored-left would hand a v4 client a row
+    whose heroes and whose ratings disagree - defect 1476, re-emitted on the wire.
+
+    ```
+    wire_left_trio = the trio the DRAFT-relative group is bound to
+                   = draft_left_is in canonicalise_row
+                   = stored-left trio            for agree / CORRECTED / no verdict
+                   = the other trio              for an uncorrected mirrored row
+    ```
+
+    So it is not a separate decision at all - it is the orientation decision the migration
+    has already made, written down. A v4 client therefore receives what it would have
+    received before the migration for every row that was already right, and the CORRECTED
+    version for the six that were not, which is the point of the exercise.
 
     `wire_left_trio` is **backward-compatibility provenance, not truth**. Nothing else reads
     it: not v5 pull, not ingest, not the fit, not `blue_trio` - which stays NULL on pulled
@@ -2269,6 +2311,6 @@ Follow the existing release procedure. `gh` in this repo targets the FORK only b
 6. **A `mirrored` verdict does not by itself mean invert.** `0006` already swapped the rows it reached, and those now map naively. Invert only where the verdict is `mirrored` AND `match_merge_log.orientation_verdict` is not `'CORRECTED'`. This is what makes the target set six rows rather than seventy-six, and getting it wrong re-corrupts about seventy repaired rows.
 7. **Task 5 Step 3 disables the ROUTE, not the container.** Schema and application must change together, and Dokploy cannot create a container without starting it - so stopping the container still leaves a window. Removing the domain closes it completely. Capture the exact domain settings before removing them; both certificate toggles stay OFF.
 8. **The operator's database is `~/.local/share/AdbAutoPlayer/solstice_clash/heroes.sqlite`** - used on a copy, in Tasks 3, 7, 11 and 13. The checked-in `data/solstice_clash/heroes.sqlite` is a seed with zero matches and no `comps_key` column.
-11. **`wire_left_trio` exists only so version-4 pull is byte-compatible.** It is captured in `0007` before the sides are dropped and read by `to_v4_wire` alone. Nothing in the v5 path, the ingest path or the fit may read it, and it is deleted when version 4 support is dropped.
+11. **`wire_left_trio` exists only so version-4 pull is byte-compatible, and it is the DRAFT-left trio.** For an uncorrected mirrored row that is the opposite of the trio whose heroes were stored on the left - orienting on the stored side would emit a row whose heroes and ratings disagree. It is the same value `canonicalise_row` computes for the draft-relative group, returned rather than re-derived. Read by `to_v4_wire` alone; nothing in the v5, ingest or fit paths may touch it, and it is deleted when version 4 support is dropped.
 10. **Every recording path must end in `finalise_summary` or `mark_unrepresentable`.** A row left with `canonical_state IS NULL` is read by the Task 7 predicate as "the reshape has not run", so the migration re-runs on every launch.
 9. **`views.sql` is part of the schema change, not an afterthought.** `hero_matchup` reads `outcome` and `side`, and `_apply` builds it before the reshape - so both a fresh install and the second launch of an upgraded one fail at `migrate.py:285` unless the view is rewritten and its execution moved after `_reshape_to_trios`.

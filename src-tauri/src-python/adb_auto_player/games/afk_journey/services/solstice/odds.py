@@ -147,6 +147,9 @@ class Match:
     left_rating: int | None = None
     right_rating: int | None = None
     event_id: int | None = None
+    # Which trio was OURS, or None for a pooled row we never watched. The single
+    # condition that decides whether this row trains the first-pick intercept.
+    blue_trio: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +158,8 @@ class Fit:
 
     `matches` counts rows that CONTRIBUTED - not rows loaded. A cross-theme match at
     weight 0 is loaded and ignored, and counting it would tell `gate_reason` the model
-    has evidence it does not have."""
+    has evidence it does not have.
+    """
 
     heroes: tuple[str, ...]
     players: tuple[str, ...]
@@ -246,7 +250,16 @@ def design(
     w = np.ones(len(matches))
 
     for row, match in enumerate(matches):
-        x[row, 0] = 1.0
+        # THE INTERCEPT, and the one term orientation is not free for. Its column is
+        # 1.0 regardless of which way round a match is stored, which is exactly why it
+        # can learn the first-pick advantage (56.0% on local decisive matches) - and
+        # exactly why a pooled row, whose orientation is an arbitrary consequence of
+        # who pushed it first, must not touch it. Every other term negates under a
+        # flip while y becomes 1-y, so the likelihood is identical.
+        #
+        # blue_trio IS NOT NULL is the whole condition: the distinction expressed as
+        # data rather than as a branch on origin.
+        x[row, 0] = 1.0 if match.blue_trio is not None else 0.0
         for hero in match.left:
             x[row, hero_at[hero]] += 1.0
         for hero in match.right:
@@ -753,7 +766,7 @@ _COLOUR_OF_SIDE = {"left": "blue", "right": "red"}
 
 
 def announce_winner(winner: str | None) -> str:
-    """"BLUE WINS" / "RED WINS", in the winner's own colour.
+    """ "BLUE WINS" / "RED WINS", in the winner's own colour.
 
     Its own line rather than a clause inside the verdict: after a match the first
     question is who won, and that should not need reading a sentence to answer.
@@ -824,32 +837,34 @@ def load_matches(rows: list[tuple]) -> list[Match]:
     grouped: dict[int, dict] = {}
     for (
         match_id,
-        outcome,
+        winning_trio,
         theme_id,
         event_id,
-        left_player,
-        right_player,
-        left_rating,
-        right_rating,
-        side,
+        trio_1_rating,
+        trio_2_rating,
+        blue_trio,
+        trio,
         slug,
     ) in rows:
         entry = grouped.setdefault(
             match_id,
             {
-                "outcome": outcome,
+                "winning_trio": winning_trio,
                 "theme_id": theme_id,
                 "event_id": event_id,
-                "left_player": left_player,
-                "right_player": right_player,
-                "left_rating": left_rating,
-                "right_rating": right_rating,
+                "trio_1_rating": trio_1_rating,
+                "trio_2_rating": trio_2_rating,
+                "blue_trio": blue_trio,
                 "left": [],
                 "right": [],
             },
         )
-        if side in ("left", "right"):
-            entry[side].append(slug)
+        # Trio 1 fills the model's "left" slot and trio 2 its "right". That is a
+        # NAMING carry-over, not a claim about the screen: the encoding is
+        # antisymmetric, so which group occupies which slot is free for every term
+        # except the intercept - and the intercept is what blue_trio governs.
+        if trio in (1, 2):
+            entry["left" if trio == 1 else "right"].append(slug)
 
     out: list[Match] = []
     for entry in grouped.values():
@@ -859,13 +874,12 @@ def load_matches(rows: list[tuple]) -> list[Match]:
             Match(
                 left=tuple(entry["left"]),
                 right=tuple(entry["right"]),
-                left_won=entry["outcome"] == "left",
+                left_won=entry["winning_trio"] == 1,
                 theme_id=entry["theme_id"],
-                left_player=entry["left_player"],
-                right_player=entry["right_player"],
-                left_rating=entry["left_rating"],
-                right_rating=entry["right_rating"],
+                left_rating=entry["trio_1_rating"],
+                right_rating=entry["trio_2_rating"],
                 event_id=entry["event_id"],
+                blue_trio=entry["blue_trio"],
             )
         )
     return out

@@ -470,10 +470,23 @@ provenance the re-keyed file was derived from.
 The migration reads `["verdicts"]`, not the top level. **Each value is a LIST**, because a
 `comps_key` can legitimately cover several occurrences.
 
-**Matching a server row to a verdict needs the time as well as the key.** Take the entries
-under the row's `comps_key` and keep those whose `captured_at` is within **120 seconds** of
-the server row's - the same window Part 7 uses to tell a duplicate capture from a rematch.
-Then:
+**Matching a server row to a verdict needs the time as well as the key - and the time to
+test is the row's CAPTURE INTERVAL, not its `captured_at`.** `0006` leaves the survivor's own
+`captured_at` untouched while pooling occurrences into it and widening
+`captures_min_at`/`captures_max_at` around them, and its clustering is transitive: a bridging
+capture can merge occurrences whose endpoints are minutes apart. So an audited member can
+legitimately belong to the survivor's occurrence while sitting well outside 120 seconds of
+the survivor's own timestamp, and testing `captured_at` would throw that evidence away and
+null the row's draft-relative values.
+
+Take the entries under the row's `comps_key` and keep those whose `captured_at` falls within
+
+```
+[captures_min_at - 120s, captures_max_at + 120s]
+```
+
+falling back to `captured_at` for both bounds when the row has none. That is the same
+proximity semantics Part 7 uses, applied to the interval the pool actually recorded. Then:
 
 - **exactly one match** - use its verdict.
 - **zero, or more than one** - NO verdict. Ambiguity is not a tie to break; it is exactly
@@ -492,7 +505,21 @@ instead of silently nulling the pool.
 reached, and a swapped row's heroes now match the draft orientation, so it maps NAIVELY.
 Only a row that is mirrored AND was never corrected needs the inversion. `0006` recorded
 exactly this: `match_merge_log.orientation_verdict` is `'CORRECTED'` for every survivor it
-swapped (`0006_backfill_identity.py:413-414, 449`). So:
+swapped. **Both cases are covered, and review round 6 wrongly flagged this as a gap** - so
+the second branch is worth naming explicitly:
+
+- a group with superseded members logs one row per member, inside the loop, carrying the
+  group's verdict (`0006_backfill_identity.py:441-449`);
+- a **singleton** correction - nothing to supersede - logs its own row at
+  `0006_backfill_identity.py:453-464`, whose comment says exactly why: *"A correction with
+  nothing to supersede still has to leave a record, or the only rows this migration silently
+  rewrote would be the ones with no log line at all."*
+
+So there is no corrected survivor without a log line, and the lookup below is sound. Confirm
+it on the restored dump anyway - count `orientation_verdict = 'CORRECTED'` rows and check it
+against the number of swaps `0006` should have made.
+
+So:
 
 ```
 invert = (verdict == "mirrored") and survivor was NOT 'CORRECTED' in match_merge_log
@@ -553,18 +580,30 @@ def test_a_shared_comps_key_outside_the_window_gets_no_verdict():
     """Ids 1 and 45 share a comps_key and are 31.6 hours apart. Applying one
     occurrence's verdict to the other would bind its ratings to the wrong trio."""
     entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"}]
-    assert h.verdict_for(entries, "2026-08-02T17:36:00Z") is None
+    assert h.verdict_for(entries, min_at="2026-08-02T17:36:00Z",
+                         max_at="2026-08-02T17:36:00Z") is None
 
 
 def test_a_shared_comps_key_inside_the_window_resolves():
     entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"}]
-    assert h.verdict_for(entries, "2026-08-01T10:01:00Z") == "mirrored"
+    assert h.verdict_for(entries, min_at="2026-08-01T10:01:00Z",
+                         max_at="2026-08-01T10:01:00Z") == "mirrored"
+
+
+def test_a_widened_capture_interval_still_matches_its_own_member():
+    """0006 pooled occurrences into the survivor and widened its bounds without
+    touching captured_at, and its clustering is transitive - so a member can sit
+    minutes from the survivor's own timestamp and still belong to it."""
+    entries = [{"captured_at": "2026-08-01T10:05:00Z", "verdict": "mirrored"}]
+    assert h.verdict_for(entries, min_at="2026-08-01T10:00:00Z",
+                         max_at="2026-08-01T10:09:00Z") == "mirrored"
 
 
 def test_two_entries_inside_the_window_refuse_rather_than_pick():
     entries = [{"captured_at": "2026-08-01T10:00:00Z", "verdict": "mirrored"},
                {"captured_at": "2026-08-01T10:00:30Z", "verdict": "agree"}]
-    assert h.verdict_for(entries, "2026-08-01T10:00:10Z") is None
+    assert h.verdict_for(entries, min_at="2026-08-01T10:00:10Z",
+                         max_at="2026-08-01T10:00:10Z") is None
 
 
 def test_incomplete_row_is_unrepresentable():
@@ -662,19 +701,21 @@ def canonicalise_row(
     return out
 ```
 
-`verdict_for(entries, captured_at)` lives in `_0007_helpers.py` beside `canonicalise_row`.
+`verdict_for(entries, *, min_at, max_at)` lives in `_0007_helpers.py` beside
+`canonicalise_row`. Callers pass the row's `captures_min_at`/`captures_max_at`, falling back
+to `captured_at` for both when they are NULL.
 
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_migration_0007.py -v`
-Expected: 7 passed
+Expected: 8 passed
 
 - [ ] **Step 6: Write the Alembic migration**
 
 `migrations/versions/0007_canonical_trios.py`, `down_revision = "0006"`. Structure, in one transaction:
 
 1. `op.add_column` every new column from Task 2, all nullable.
-2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND a ±120 second `captured_at` window, refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
+2. Load `migrations/data/side-audit-by-comps-key.json` and read its `["verdicts"]` map. Assert it is non-empty. Resolve each server row to at most one entry by `comps_key` AND its capture interval widened by 120 seconds - `captures_min_at`/`captures_max_at`, NOT `captured_at` - refusing on zero or multiple matches as described in Step 1. Treat only `"mirrored"` as a mirror verdict, only `"agree"` as confirmed, and everything else (`partial`, `unreadable`, `incomplete`, unmatched) as no verdict. Then apply the `CORRECTED` rule from Step 1: `invert` is true only when the verdict is `mirrored` AND `match_merge_log.orientation_verdict` for that survivor is not `'CORRECTED'`.
 3. Stream `match` rows joined to `match_hero`, group heroes by `side`, call `canonicalise_row`, and `UPDATE` each row with the result.
 4. `ALTER TABLE match_hero RENAME COLUMN side TO trio` is NOT usable - the values change from text to int. Add `trio`, populate it from the canonicalisation, drop `side`, then add the new uniques and checks.
 5. Assert no row has `canonical_state IS NULL`. Raise and roll back if any does - a partially classified pool is worse than an unmigrated one.

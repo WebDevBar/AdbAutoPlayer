@@ -362,8 +362,13 @@ def test_it_does_not_write_identification_audit_rows(mode, db):
 
 
 def test_it_logs_sc40_once_per_recorded_match(mode, caplog):
-    """Live verification checks this line by eye, so it has to be emitted - and
-    once per match, not once per poll."""
+    """Live verification checks these lines by eye, so they have to be emitted - and
+    once per MATCH, not once per poll.
+
+    Each recorded match emits TWO [SC-40] lines: the detail line, and the coloured
+    winner announcement added alongside it. So four polls covering two distinct
+    matches, one of them seen twice, must produce four records - not eight.
+    """
     mode.feed(
         details_frame(match=1),
         details_frame(match=1),
@@ -372,7 +377,9 @@ def test_it_logs_sc40_once_per_recorded_match(mode, caplog):
     )
     with caplog.at_level("INFO"):
         mode.collect_while_playing(max_polls=4)
-    assert sum("[SC-40]" in r.message for r in caplog.records) == 2
+    lines = [r.message for r in caplog.records if "[SC-40]" in r.message]
+    assert len(lines) == 4, lines
+    assert sum("recorded match" in line for line in lines) == 2, lines
 
 
 # --- resilience ------------------------------------------------------------

@@ -1244,25 +1244,88 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             f"stopping: {max_restarts} consecutive cycles recorded no match"
         )
 
-    def _finalise_orientation(self, match_id, read, trio_1, trio_2) -> None:
-        """Resolve which trio was OURS, and close the row.
+    def _resolve_orientation(self, read):
+        """Which trio was OURS, resolved from the trios themselves.
 
-        PART 1. The resolver scores BOTH panels jointly against the merged draft
-        trios: the draft screen never shows pick 6, so a draft-frame red side is only
-        ever two heroes, and matching the winning panel alone gives 1-vs-1 on a single
-        misread - a tie. Joint scoring gives 5-vs-0 clean and 4-vs-1 with one misread.
+        Called BEFORE anything is announced or recorded, because every blue-relative
+        statement below depends on it - the odds sample, the HIT/MISS line and the
+        stored row alike.
+
+        The resolver scores BOTH panels jointly against the merged draft trios: the
+        draft screen never shows pick 6, so a draft-frame red side is only ever two
+        heroes, and matching the winning panel alone gives 1-vs-1 on a single misread,
+        which is a tie. Joint scoring gives 5-vs-0 clean and 4-vs-1 with one misread.
+
+        Args:
+            read: The summary read.
+
+        Returns:
+            (trios, blue_trio, margin). `trios` is (trio_1, trio_2), or None when the
+            read cannot form two complete trios. `blue_trio` is 1, 2, or None when the
+            evidence contradicts itself - refused rather than guessed.
+        """
+        panel_left = sorted(h.slug for h in read.heroes if h.side == "left" and h.slug)
+        panel_right = sorted(
+            h.slug for h in read.heroes if h.side == "right" and h.slug
+        )
+        try:
+            trios = canonical_trios({"left": panel_left, "right": panel_right})
+        except ValueError:
+            return None, None, None
+
+        carried = getattr(self, "_pending_draft_trios", None)
+        if carried is None:
+            return trios, None, None
+
+        draft_blue, draft_red = carried
+        resolution = resolve(set(panel_left), set(panel_right), draft_blue, draft_red)
+        if resolution.orientation is Orientation.DIRECT:
+            blue = 1 if panel_left == trios[0] else 2
+        elif resolution.orientation is Orientation.SWAPPED:
+            blue = 1 if panel_right == trios[0] else 2
+        else:
+            blue = None
+        return trios, blue, resolution.margin
+
+    @staticmethod
+    def _winner_in_blue_terms(read, trios, blue_trio):
+        """`read.winner` restated as "left"/"right" in OUR draft frame.
+
+        Args:
+            read: The summary read.
+            trios: (trio_1, trio_2), or None.
+            blue_trio: Which trio was ours, or None.
+
+        Returns:
+            "left" when blue won, "right" when red won, or None when we cannot say.
+        """
+        if trios is None or blue_trio is None or read.winner not in ("left", "right"):
+            return None
+        panel = sorted(h.slug for h in read.heroes if h.side == read.winner and h.slug)
+        winning_trio = 1 if panel == trios[0] else 2
+        return "left" if winning_trio == blue_trio else "right"
+
+    def _finalise_orientation(self, match_id, read, trios, blue_trio, margin) -> None:
+        """Close the row with everything trio-relative.
+
+        The orientation was resolved BEFORE anything was announced or recorded - see
+        `_resolve_orientation` - so this only writes it down. Resolving it here instead
+        is how the HIT/MISS line came to be stated against the summary panels rather
+        than against our own draft.
 
         On refusal we still record the trios and the winner. Those need NO orientation:
         the winner and the heroes come off the same panel pair in the same pass, so
         "the trio in this panel won" survives a swap intact. Only `blue_trio` and the
-        draft-relative values are declined, and they are declined rather than guessed.
+        draft-relative values are declined, and declined rather than guessed.
 
         Args:
             match_id: The row to close.
             read: The summary read.
-            trio_1: The canonically first composition.
-            trio_2: The canonically second composition.
+            trios: (trio_1, trio_2), canonically ordered.
+            blue_trio: Which trio was ours, or None.
+            margin: The resolver's margin, for the log.
         """
+        trio_1, trio_2 = trios
         winning_trio = None
         if read.winner in ("left", "right"):
             panel = sorted(
@@ -1270,25 +1333,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             )
             winning_trio = 1 if panel == trio_1 else 2
 
-        carried = getattr(self, "_pending_draft_trios", None)
-        blue_trio = None
-        margin = None
-        if carried is not None:
-            draft_blue, draft_red = carried
-            panel_top = {h.slug for h in read.heroes if h.side == "left" and h.slug}
-            panel_bottom = {h.slug for h in read.heroes if h.side == "right" and h.slug}
-            resolution = resolve(panel_top, panel_bottom, draft_blue, draft_red)
-            margin = resolution.margin
-            if resolution.orientation is Orientation.DIRECT:
-                blue_trio = 1 if sorted(panel_top) == trio_1 else 2
-            elif resolution.orientation is Orientation.SWAPPED:
-                blue_trio = 1 if sorted(panel_bottom) == trio_1 else 2
-
         ratings = getattr(self, "_draft_ratings", (None, None))
         if blue_trio is None:
             # No orientation, so nothing draft-relative may be attached. The carried
-            # prediction and ratings are refused along with the side - the panels
-            # matching neither carried trio is exactly the stale-carryover case.
+            # prediction and ratings are refused along with the side.
             t1_rating = t2_rating = predicted = None
         else:
             t1_rating, t2_rating = (
@@ -1362,6 +1410,13 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         )
         self._claim_draft_frame(match_id)
         self._save_summary_frame(frame, match_id)
+
+        # ORIENTATION FIRST. Everything below - the odds sample, the HIT/MISS line and
+        # the stored row - is stated relative to OUR blue, and resolving it afterwards
+        # is how match 1476 came to announce the wrong verdict while storing the right
+        # heroes. `trios` is None when the read cannot form two complete trios.
+        trios, blue_trio, resolve_margin = self._resolve_orientation(read)
+        blue_is_trio_1 = blue_trio == 1
         # The last market reading before the picks locked, stored against the match.
         # `record_odds` and the table it writes to have existed since the schema was
         # written and were never used - the pools were visible on screen the whole time.
@@ -1374,10 +1429,22 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         sampled_at=datetime.now(UTC)
                         .isoformat(timespec="seconds")
                         .replace("+00:00", "Z"),
-                        left_pool=sample.left_pool,
-                        right_pool=sample.right_pool,
-                        left_odds=sample.left_odds,
-                        right_odds=sample.right_odds,
+                        # The pools are read during the DRAFT, so they are
+                        # blue-relative - and blue is trio `blue_panel` below. When
+                        # orientation is unresolved they are recorded against no trio
+                        # rather than guessed onto one.
+                        trio_1_pool=(
+                            sample.left_pool if blue_is_trio_1 else sample.right_pool
+                        ),
+                        trio_2_pool=(
+                            sample.right_pool if blue_is_trio_1 else sample.left_pool
+                        ),
+                        trio_1_odds=(
+                            sample.left_odds if blue_is_trio_1 else sample.right_odds
+                        ),
+                        trio_2_odds=(
+                            sample.right_odds if blue_is_trio_1 else sample.left_odds
+                        ),
                         spectators=getattr(self, "_spectators", None),
                     ),
                 )
@@ -1411,27 +1478,33 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             # HIT is also the bet result: the stake always goes on the called side, so
             # a separate won/lost line would restate this one. The BETTING line earlier
             # in the same match says whether anything was staked at all.
-            logging.info(f"[SC-75] {format_call_result(p_left, read.winner, source)}")
+            # Stated in OUR frame, not the panels'. `p_left` is draft-blue's
+            # probability; `read.winner` names a summary panel, and for a mirrored
+            # read those are opposite. Comparing them directly is exactly the defect
+            # this whole change exists to remove - so when orientation is unresolved
+            # the verdict is withheld rather than guessed.
+            winner_for_us = self._winner_in_blue_terms(read, trios, blue_trio)
+            if winner_for_us is None:
+                logging.info(
+                    "[SC-75] call result withheld: the summary could not be oriented "
+                    "against the draft, so HIT/MISS would be a coin flip"
+                )
+            else:
+                logging.info(
+                    f"[SC-75] {format_call_result(p_left, winner_for_us, source)}"
+                )
         self._pending_prediction = None
         self._draft_ratings = (None, None)
         self._first_locked_frame = None
 
-        # The two compositions, numbered by the canonical sort. Which one is "1" is a
-        # pure function of the heroes, so two spectators who saw this match with the
-        # panels the other way round both store it under the same numbers.
-        panel_left = sorted(h.slug for h in read.heroes if h.side == "left" and h.slug)
-        panel_right = sorted(
-            h.slug for h in read.heroes if h.side == "right" and h.slug
-        )
-        try:
-            trio_1, trio_2 = canonical_trios({"left": panel_left, "right": panel_right})
-        except ValueError as exc:
+        if trios is None:
             # Cannot form two complete trios. Terminal rather than pending - a row left
             # unclassified is read by the migration predicate as "the reshape has not
             # run" and re-runs it on every launch.
-            logging.warning(f"[SC-75] not representable as two trios: {exc}")
+            logging.warning("[SC-75] not representable as two trios; recorded as such")
             self._store.mark_unrepresentable(match_id)
             return
+        trio_1, _trio_2 = trios
 
         slots: list[HeroSlot] = []
         for hero in read.heroes:
@@ -1499,7 +1572,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             ):
                 logging.info(f"tuned {confirmed} on the summary screen")
         self._store.record_heroes(match_id, slots)
-        self._finalise_orientation(match_id, read, trio_1, trio_2)
+        self._finalise_orientation(match_id, read, trios, blue_trio, resolve_margin)
 
         # Identity can only be finalised HERE, not at insert: the match row is
         # written before the summary is read, so the heroes it is made of are not
@@ -1509,12 +1582,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # pushed. The outcome is not part of comps_key, but it is still checked:
         # a match with no decided winner is not evidence the pool can use, and
         # pushing it would put an unusable row in front of the good one.
-        left_slugs = [
-            s_.hero_slug for s_ in slots if s_.side == "left" and s_.hero_slug
-        ]
-        right_slugs = [
-            s_.hero_slug for s_ in slots if s_.side == "right" and s_.hero_slug
-        ]
+        # By TRIO. `HeroSlot.side` no longer exists, and reading it here raised
+        # AFTER the heroes and canonical_state were committed - so the row looked
+        # finished to the migration predicate while staying unpushable forever,
+        # because its comps_key was never set.
+        left_slugs = [s_.hero_slug for s_ in slots if s_.trio == 1 and s_.hero_slug]
+        right_slugs = [s_.hero_slug for s_ in slots if s_.trio == 2 and s_.hero_slug]
         if read.winner and is_complete(left_slugs, right_slugs, read.winner):
             self._store.finalise_identity(match_id)
 

@@ -63,27 +63,40 @@ def classify(
     row_left: frozenset[str],
     row_right: frozenset[str],
 ) -> Verdict:
-    """Compare a frame's trios against a row's, as SETS, ignoring slot.
+    """Does the frame's orientation agree with the row's?
 
-    Order of checks matters. The frame is judged first: if we could not read it, we
-    have no basis to say anything about the row, and calling that `partial` would put
-    a reader failure into the evidence for a summary-reader defect.
+    THE DATABASE IS THE RECORD; the frame is only evidence about ORIENTATION. No single
+    draft frame holds all six picks, so this never tries to rebuild a match from one.
+
+    A draft frame carries FIVE picks, by the game's design and not by mistake. The snake
+    order is 1 Blue, 2 Red, 3 Red, 4 Blue, 5 Blue, 6 Red, and the game leaves the draft
+    screen the instant pick 6 is made - it is read from the LOCKED screen instead
+    (`solstice_clash.py:1448` records a live run that lost it by leaving early;
+    `2026-07-27-solstice-clash-odds-design.md:178` states betting closes before it locks).
+
+    So blue is ALWAYS complete - slots 1, 4 and 5 all precede 6 - and red is ALWAYS
+    missing exactly one. Requiring three and three would be unsatisfiable by
+    construction, and an earlier version of this function did exactly that: it returned
+    `unreadable` for all 916 frames and adjudicated nothing.
+
+    The complete blue trio settles orientation on its own; red is checked as a SUBSET,
+    which is corroboration rather than the deciding test.
 
     Args:
-        frame_blue: Blue trio read from the draft frame.
-        frame_red: Red trio read from the draft frame.
-        row_left: The row's `side='left'` slugs.
-        row_right: The row's `side='right'` slugs.
+        frame_blue: Blue picks read from the draft frame. Expected to be complete.
+        frame_red: Red picks read from the draft frame. Expected to be one short.
+        row_left: The row's `side='left'` slugs, from the database.
+        row_right: The row's `side='right'` slugs, from the database.
 
     Returns:
         The verdict for this row.
     """
-    if len(frame_blue) != TRIO_SIZE or len(frame_red) != TRIO_SIZE:
+    if len(frame_blue) != TRIO_SIZE or len(frame_red) < TRIO_SIZE - 1:
         return Verdict.UNREADABLE
     if len(row_left) != TRIO_SIZE or len(row_right) != TRIO_SIZE:
         return Verdict.INCOMPLETE
-    if frame_blue == row_left and frame_red == row_right:
+    if frame_blue == row_left and frame_red <= row_right:
         return Verdict.AGREE
-    if frame_blue == row_right and frame_red == row_left:
+    if frame_blue == row_right and frame_red <= row_left:
         return Verdict.MIRRORED
     return Verdict.PARTIAL

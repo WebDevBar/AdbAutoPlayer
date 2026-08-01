@@ -99,8 +99,23 @@ def test_mirrored_when_frame_blue_matches_row_right():
     assert classify(_B, _R, _R, _B) is Verdict.MIRRORED
 
 
-def test_unreadable_when_the_frame_gave_fewer_than_six():
+def test_a_five_pick_draft_frame_is_the_NORMAL_case():
+    """Red is one short on every draft frame - the game leaves before pick 6 locks."""
+    short_red = frozenset({"talene", "lilymay"})
+    assert classify(_B, short_red, _B, _R) is Verdict.AGREE
+    assert classify(_B, short_red, _R, _B) is Verdict.MIRRORED
+
+
+def test_unreadable_when_blue_is_incomplete():
+    """Blue takes slots 1, 4 and 5, so it is complete before the draft ends.
+
+    A short blue read means the READER failed, which is not evidence about the row.
+    """
     assert classify(frozenset({"lucca"}), _R, _B, _R) is Verdict.UNREADABLE
+
+
+def test_unreadable_when_red_is_more_than_one_short():
+    assert classify(_B, frozenset({"talene"}), _B, _R) is Verdict.UNREADABLE
 
 
 def test_incomplete_when_the_row_has_fewer_than_six():

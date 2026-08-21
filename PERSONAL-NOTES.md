@@ -20,7 +20,7 @@ there until the next local build overwrites it.
 machine: the runtime deps, the 1080x1920 requirement, why the viewer must be gamescope and
 not scrcpy, and the adb connection. The Waydroid host install itself - fstab binds,
 SELinux, the service drop-in, the tray companion - stays in
-`~/Dev/webdevbar/fedora-setup/SETUP-waydroid-adbautoplayer.md`. Build, patch set and
+`~/Dev/todor-wdb/fedora-setup/SETUP-waydroid-adbautoplayer.md`. Build, patch set and
 release flow are in this file.
 
 ## Remotes / branches

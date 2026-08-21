@@ -1,5 +1,12 @@
 # Changelog
 
+## Doc: fedora-setup repo moved (2026-08-21)
+
+### Changed
+- **`docs/fedora-waydroid.md` and `PERSONAL-NOTES.md`** - the cross-reference to
+  `SETUP-waydroid-adbautoplayer.md` now points at `~/Dev/todor-wdb/fedora-setup/`. That repo
+  moved to the operator's personal GitHub account in the account split.
+
 ## [wdb-12.9.25-32] - 2026-08-01
 
 The side-orientation rework. Match 1476 was recorded backwards - it stored a winner

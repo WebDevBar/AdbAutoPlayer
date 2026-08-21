@@ -10,6 +10,9 @@
 
 **Source spec:** `docs/superpowers/specs/2026-08-01-side-orientation-design.md` (14 review rounds, green). Read it before starting. Where this plan and the spec disagree, the spec wins and the disagreement is a bug in this plan.
 
+<!-- claims-audit: creates side-audit-by-comps-key.json _solstice_helpers.py draw_screen timeout_screen frame_capture_on sidecar migrate canonical_db a_match golden_local_matches golden_coefficients -->
+<!-- claims-audit: ignore dokploy-ssl-automation.sh -->
+
 ## Global Constraints
 
 - **Two repos.** Client: `/home/toshe/Dev/webdevbar/adbautoplayer`. Server: `/home/toshe/Dev/webdevbar/gameretro-adb-api`. Every task names its repo.

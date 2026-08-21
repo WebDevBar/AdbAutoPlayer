@@ -6,7 +6,7 @@ release and assumes a Windows emulator, so none of this is in upstream's docs.
 Split of responsibility: **this file covers what AdbAutoPlayer needs.** The host-side
 Waydroid install itself - storage on `/mnt/docs`, SELinux labelling, fstab binds, the
 systemd ordering drop-in, the tray companion, hiding per-app launcher entries - lives in
-`~/Dev/webdevbar/fedora-setup/SETUP-waydroid-adbautoplayer.md`. Build and release flow for
+`~/Dev/todor-wdb/fedora-setup/SETUP-waydroid-adbautoplayer.md`. Build and release flow for
 the fork itself is in [`PERSONAL-NOTES.md`](../PERSONAL-NOTES.md).
 
 ## Runtime requirements

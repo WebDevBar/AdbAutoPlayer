@@ -50,7 +50,7 @@ def profile_aware_cache(maxsize: int | None = None):
             profile_index=int   → clear only that profile
             """
             with lock:
-                if not profile_index:
+                if profile_index is None:
                     caches.clear()
                     return
 

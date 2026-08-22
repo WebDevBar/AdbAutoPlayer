@@ -129,7 +129,7 @@ class _TaskMixin(_GameBase):
                 )
                 self.start_game()
             else:
-                logging.warning(f"Task '{task}' failed moving to next Task.")
+                logging.warning(f"Task '{task}' failed moving to next Task: {error}")
             return
 
         logging.error(

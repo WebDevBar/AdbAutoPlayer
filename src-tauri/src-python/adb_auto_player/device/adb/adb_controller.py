@@ -11,6 +11,31 @@ from adb_auto_player.tauri_context import profile_aware_cache
 
 from .adb_device import AdbDeviceWrapper
 
+# getprop boolean flags that some real hardware ships present-but-unset (e.g.
+# HyperOS keeps "ro.kernel.qemu" defined as "0" on physical Xiaomi/POCO
+# phones for app-compatibility reasons). These must be value-checked, not
+# just checked for key presence, or physical devices get misdetected.
+_EMULATOR_BOOL_PROPS = (
+    "ro.kernel.qemu",
+    "ro.boot.qemu",
+    "ro.hardware.virtual_device",
+)
+
+# getprop substrings that only ever appear under virtualization, regardless of
+# where they show up (build fingerprint, brand, product name, ...).
+# Real hardware is never misdetected as an emulator by these; the risk is the
+# opposite direction (a new/obfuscated emulator not being detected).
+_EMULATOR_SUBSTRING_MARKERS = (
+    "ro.bst.",  # BlueStacks
+    "nemu",  # MuMu / Nemu
+    "microvirt",  # MuMu / LDPlayer lineage
+    "goldfish",  # AOSP emulator (ARM)
+    "ranchu",  # AOSP emulator (x86)
+    "vbox",  # Genymotion / VirtualBox-backed
+)
+
+_GETPROP_BOOL_PROP_PATTERN = r"\[{}\]:\s*\[([^\]]*)\]"
+
 
 class AdbController:
     """Functions to control an ADB device."""
@@ -138,6 +163,20 @@ class AdbController:
             package_name_prefixes: Prefixes identifying the game's Android package.
         """
         self._ensure_display_ids_resolved(package_name_prefixes)
+
+    def reset_display_targeting(self) -> None:
+        """Drop cached display ids so the next screenshot/stream re-resolves them.
+
+        On multi-display emulators (e.g. MuMuPlayer's Android 15 image) the
+        game's virtual display is torn down and recreated with a new id every
+        time the app is force-stopped and relaunched. Without this, a
+        mid-task `restart_game()` leaves `screenshot()`/`DeviceStream`
+        targeting a display id that no longer exists, causing screenshots to
+        fail indefinitely on every retry after the restart.
+        """
+        self._screenshot_display_id = None
+        self._input_display_id = None
+        self._display_ids_resolved = False
 
     def _ensure_display_ids_resolved(self, package_name_prefixes: list[str]) -> None:
         """Resolve and cache the game's display ids, once, if not already done."""
@@ -311,10 +350,27 @@ class AdbController:
     @profile_aware_cache(maxsize=1)
     def is_controlling_emulator(self):
         """Whether the controlled device is an emulator or not."""
-        result = str(self.d.shell('getprop | grep "Build"'))
-        if "Build" in result:
-            return True
-        logging.debug('getprop does not contain "Build" assuming Phone')
+        props = str(self.d.shell("getprop"))
+        for bool_prop in _EMULATOR_BOOL_PROPS:
+            pattern = _GETPROP_BOOL_PROP_PATTERN.format(re.escape(bool_prop))
+            match = re.search(pattern, props)
+            if match and match.group(1).strip() not in ("", "0"):
+                logging.debug(
+                    f"getprop {bool_prop}={match.group(1)!r} assuming Emulator"
+                )
+                return True
+        for marker in _EMULATOR_SUBSTRING_MARKERS:
+            if marker in props:
+                logging.debug(f"getprop contains {marker!r} assuming Emulator")
+                return True
+        if "Build" in props:
+            logging.debug(
+                "getprop contains 'Build' but no known emulator marker; "
+                "assuming Phone. If this is actually an emulator, please "
+                "report it so its marker can be added."
+            )
+        else:
+            logging.debug("no emulator markers in getprop assuming Phone")
         return False
 
     def get_input_device(self, name: str) -> str | None:

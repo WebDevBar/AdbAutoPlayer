@@ -29,6 +29,12 @@ from adb_auto_player.models.commands import Command
 
 from .summary_generator import SummaryGenerator
 
+_DEFAULT_MAX_CONSECUTIVE_RESTARTS = 5
+# A restart attempt that keeps the task running this long before failing
+# again is treated as "resolved" — the consecutive-failure streak resets
+# instead of counting toward the give-up cap.
+_CONSECUTIVE_FAILURE_RESET_SECONDS = 5 * 60
+
 
 class Execute:
     """Util class for executing commands, callables, etc."""
@@ -68,6 +74,8 @@ class Execute:
 
         timeout_mins = 0
         timeout_enabled = False
+        watchdog_restart_delay = 40
+        max_consecutive_restarts = _DEFAULT_MAX_CONSECUTIVE_RESTARTS
         try:
             # App.toml is located in the root config dir, not the profile dir
             app_config_dir = SettingsLoader.get_app_config_dir().parent
@@ -80,12 +88,49 @@ class Execute:
                     timeout_mins = advanced.get("restart_stuck_task_after_mins", 60)
                     if timeout_enabled:
                         timeout_mins = max(3, timeout_mins)
-                    watchdog_restart_delay = advanced.get("watchdog_restart_delay", 40)
+                    watchdog_restart_delay = advanced.get(
+                        "watchdog_restart_delay", watchdog_restart_delay
+                    )
+                    max_consecutive_restarts = advanced.get(
+                        "max_consecutive_restarts", max_consecutive_restarts
+                    )
         except Exception:
-            watchdog_restart_delay = 40
+            pass
 
         # --- Watchdog Logic (Activity Based) ---
         last_activity_time = time.monotonic()
+        consecutive_restart_failures = 0
+        attempt_start_time = time.monotonic()
+
+        def register_restart_attempt() -> bool:
+            """Count a restart attempt and decide whether to keep retrying.
+
+            Resets the consecutive-failure streak if the previous attempt
+            kept the task running for at least
+            `_CONSECUTIVE_FAILURE_RESET_SECONDS` before failing again, so an
+            isolated failure after a long healthy run isn't penalized by an
+            earlier, unrelated run of failures.
+
+            Returns:
+                bool: True if under the cap and the caller should attempt
+                    `restart_game()`. False if the consecutive-restart cap
+                    has been reached and the task should give up.
+            """
+            nonlocal consecutive_restart_failures, attempt_start_time
+            if (
+                time.monotonic() - attempt_start_time
+                >= _CONSECUTIVE_FAILURE_RESET_SECONDS
+            ):
+                consecutive_restart_failures = 0
+            consecutive_restart_failures += 1
+            attempt_start_time = time.monotonic()
+            if consecutive_restart_failures > max_consecutive_restarts:
+                logging.error(
+                    f"Giving up after {consecutive_restart_failures} consecutive "
+                    "restarts failed to keep the task running."
+                )
+                return False
+            return True
 
         class ActivityTrackerHandler(logging.Handler):
             def emit(self, record):
@@ -208,7 +253,11 @@ class Execute:
                             "Task timeout triggered, restarting game and "
                             "retrying task..."
                         )
-                        if instance is not None and hasattr(instance, "restart_game"):
+                        if (
+                            instance is not None
+                            and hasattr(instance, "restart_game")
+                            and register_restart_attempt()
+                        ):
                             try:
                                 cast(Any, instance).restart_game()
                                 timeout_triggered = False
@@ -237,7 +286,11 @@ class Execute:
                             f"Task failed with error: {e}. "
                             "Restarting game and retrying..."
                         )
-                        if instance is not None and hasattr(instance, "restart_game"):
+                        if (
+                            instance is not None
+                            and hasattr(instance, "restart_game")
+                            and register_restart_attempt()
+                        ):
                             try:
                                 cast(Any, instance).restart_game()
                                 logging.info(

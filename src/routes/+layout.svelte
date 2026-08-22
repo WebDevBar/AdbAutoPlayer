@@ -296,6 +296,14 @@
     }
 
     try {
+      // Profile settings folders are named after array position, not a
+      // stable ID — shift/remove them on disk before the array itself
+      // shrinks, or later profiles would silently read the wrong folder.
+      await invoke("delete_profile_settings", {
+        deletedIndex: index,
+        profileCountBefore: currentProfiles.length,
+      });
+
       const newSettings = {
         ...settings.settings,
         profiles: {

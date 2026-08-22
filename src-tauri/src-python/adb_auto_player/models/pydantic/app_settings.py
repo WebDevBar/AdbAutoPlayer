@@ -134,6 +134,16 @@ class AdvancedSettings(BaseModel):
         title="Watchdog Restart Delay (Seconds)",
         description="Wait time before restarting the task if the game is closed.",
     )
+    max_consecutive_restarts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        title="Watchdogs: Max Consecutive Restarts",
+        description=(
+            "Give up instead of restarting again after this many restarts in a "
+            "row fail to keep the task running for at least 5 minutes."
+        ),
+    )
 
 
 class AppSettings(TomlSettings):

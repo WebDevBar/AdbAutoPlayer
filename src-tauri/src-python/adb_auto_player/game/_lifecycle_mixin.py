@@ -65,6 +65,10 @@ class _LifecycleMixin(_GameBase):
         """Force-stop then relaunch the game."""
         self.force_stop_game()
         self.start_game()
+        # A relaunch can get a new virtual display (id) on multi-display
+        # emulators, so cached display targeting must be re-resolved.
+        self.device.reset_display_targeting()
+        self.device.resolve_display_targeting(self.package_name_prefixes)
 
     def assert_frame_and_input_delay_below_threshold(
         self,

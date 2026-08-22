@@ -102,6 +102,43 @@ class TestGame(unittest.TestCase):
         get_screenshot.return_value = IO.load_image(f2)
         self.assertTrue(game.wait_for_roi_change(start_image=start_image, timeout=0))
 
+    @patch.object(Game, "game_find_template_match")
+    def test_wait_for_template_diagnostic_recheck_logs_warning_on_late_success(
+        self, game_find_template_match
+    ) -> None:
+        """diagnostic_recheck=True logs a suggestion on a late success.
+
+        A late success during the diagnostic window must not silently swallow
+        the timeout: GameTimeoutError is still raised, but a warning with a
+        concrete suggested timeout value is logged first.
+        """
+        game = MockGame()
+        game_find_template_match.side_effect = [None, MagicMock()]
+
+        with self.assertLogs(level="WARNING") as log_ctx:
+            with self.assertRaises(GameTimeoutError):
+                game.wait_for_template(
+                    "foo.png",
+                    timeout=0,
+                    diagnostic_recheck=True,
+                )
+
+        self.assertEqual(game_find_template_match.call_count, 2)
+        self.assertTrue(any("timeout" in msg.lower() for msg in log_ctx.output))
+
+    @patch.object(Game, "game_find_template_match")
+    def test_wait_for_template_without_diagnostic_recheck(
+        self, game_find_template_match
+    ) -> None:
+        """diagnostic_recheck defaults to False: no extra polling on timeout."""
+        game = MockGame()
+        game_find_template_match.side_effect = [None, MagicMock()]
+
+        with self.assertRaises(GameTimeoutError):
+            game.wait_for_template("foo.png", timeout=0)
+
+        self.assertEqual(game_find_template_match.call_count, 1)
+
     @patch.object(Game, "get_screenshot")
     def test_wait_for_roi_change_with_crop(self, get_screenshot) -> None:
         """Test wait_for_roi_change with cropping.

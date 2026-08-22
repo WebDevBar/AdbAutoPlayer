@@ -50,3 +50,39 @@ pub fn save_settings(
 
     Ok(())
 }
+
+/// Keep per-profile settings folders (`{config_dir}/{profile_index}/`) in sync
+/// with the profile array after a profile is deleted from the frontend.
+///
+/// Profile folders are named after their array position, not a stable ID, so
+/// deleting an entry shifts every later profile's index without this — each
+/// later profile would then read/write the settings folder that used to
+/// belong to whichever profile occupied that slot before.
+#[tauri::command]
+pub fn delete_profile_settings(
+    app_handle: AppHandle,
+    deleted_index: u8,
+    profile_count_before: u8,
+) -> Result<(), CommandError> {
+    let config_dir = app_handle
+        .path()
+        .app_config_dir()
+        .map_err(|_| CommandError::ConfigDirNotFound)?;
+
+    let profile_dir = |index: u8| config_dir.join(index.to_string());
+
+    let deleted_dir = profile_dir(deleted_index);
+    if deleted_dir.exists() {
+        fs::remove_dir_all(&deleted_dir)?;
+    }
+
+    for index in (deleted_index + 1)..profile_count_before {
+        let from = profile_dir(index);
+        let to = profile_dir(index - 1);
+        if from.exists() {
+            fs::rename(&from, &to)?;
+        }
+    }
+
+    Ok(())
+}

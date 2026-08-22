@@ -250,10 +250,10 @@ def run_task(
     try:
         e = Execute.find_command_and_execute(command, get_game_tasks())
         if isinstance(e, BaseException):
-            logging.error(e)
+            logging.error(e, exc_info=e)
             sys.exit(1)
     except Exception as exc:
-        logging.error(exc)
+        logging.error(exc, exc_info=exc)
         sys.exit(1)
 
 

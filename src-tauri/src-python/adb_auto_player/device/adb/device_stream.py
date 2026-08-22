@@ -3,7 +3,6 @@
 import logging
 import threading
 import time
-from functools import lru_cache
 
 import av
 import numpy as np
@@ -17,16 +16,34 @@ from av.video.codeccontext import VideoCodecContext
 
 from .adb_controller import AdbController
 
+# Hardware decoders that were selectable (codec registered in the linked
+# ffmpeg build) but produced no frames at runtime, e.g. `h264_cuvid` on a PC
+# without a working NVIDIA GPU/driver. `CodecContext.create()` only checks
+# codec registration, not actual hardware availability, so this is the only
+# way to detect the failure and stop retrying the same broken decoder.
+# Keyed by decoder name, value is the `time.monotonic()` timestamp of the
+# failure. Entries expire after `_DECODER_RETRY_COOLDOWN_SECONDS` so a decoder
+# that failed because the GPU was temporarily busy/driverless (or a card was
+# swapped in) gets retried instead of being disabled for the rest of the
+# process's lifetime.
+_failed_decoders: dict[str, float] = {}
+_DECODER_RETRY_COOLDOWN_SECONDS = 30 * 60
 
-@lru_cache(maxsize=1)
+
 def _get_best_decoder(hardware_decoding: bool) -> str:
-    """Find and cache the best available H264 decoder."""
+    """Find the best available H264 decoder."""
     selected_decoder = None
 
     if hardware_decoding:
         h264_decoders = _get_available_h264_decoders()
 
         for decoder in h264_decoders:
+            failed_at = _failed_decoders.get(decoder)
+            if (
+                failed_at is not None
+                and time.monotonic() - failed_at < _DECODER_RETRY_COOLDOWN_SECONDS
+            ):
+                continue
             try:
                 _ = CodecContext.create(decoder, "r")
                 selected_decoder = decoder
@@ -56,12 +73,33 @@ def _get_best_decoder(hardware_decoding: bool) -> str:
     )
 
 
-def _get_codec_context() -> VideoCodecContext:
-    """Get codec context using cached decoder selection."""
+def _get_codec_context() -> tuple[str, VideoCodecContext]:
+    """Get a codec context for the best currently available decoder.
+
+    Returns:
+        tuple[str, VideoCodecContext]: the decoder name alongside its context,
+        so callers can blacklist a hardware decoder that gets selected but
+        turns out not to produce any frames at runtime.
+    """
     decoder_name = _get_best_decoder(
         SettingsLoader.adb_settings().advanced.hardware_decoding
     )
-    return VideoCodecContext.create(decoder_name, "r")  # ty: ignore[invalid-return-type]
+    context: VideoCodecContext = VideoCodecContext.create(decoder_name, "r")  # ty: ignore[invalid-assignment]
+    return (
+        decoder_name,
+        context,
+    )
+
+
+def _mark_decoder_failed(decoder_name: str) -> None:
+    """Temporarily blacklist a hardware decoder that produced no frames."""
+    if decoder_name == "h264":
+        return
+    logging.warning(
+        f"Hardware decoder {decoder_name!r} produced no frames, "
+        "falling back to the next available decoder"
+    )
+    _failed_decoders[decoder_name] = time.monotonic()
 
 
 class StreamingNotSupportedError(AutoPlayerWarningError):
@@ -93,7 +131,7 @@ class DeviceStream:
         if fps is None:
             fps = SettingsLoader.adb_settings().device.streaming_fps
 
-        self.codec = _get_codec_context()
+        self._decoder_name, self.codec = _get_codec_context()
         self.controller = controller
         self.fps = fps
         self.latest_frame: np.ndarray | None = None
@@ -156,17 +194,31 @@ class DeviceStream:
                 return
             time.sleep(0.1)
 
-        # If no frame received after 4 seconds, fallback to --time-limit=1
-        if self._running and self.get_latest_frame() is None:
+        if not self._running or self.get_latest_frame() is not None:
+            return
+
+        # No frame after 4 seconds. If a hardware decoder was selected but
+        # never actually produced a frame (e.g. registered in ffmpeg but no
+        # working GPU behind it), switching capture strategy alone can't fix
+        # that — blacklist it and re-select, which falls through to the next
+        # hardware decoder or finally software "h264".
+        if self._decoder_name != "h264":
+            _mark_decoder_failed(self._decoder_name)
+            try:
+                self._decoder_name, self.codec = _get_codec_context()
+            except StreamingNotSupportedError as e:
+                logging.debug(f"No fallback decoder available: {e}")
+        else:
             logging.info(
                 "Continuous stream capture timed out, falling back to --time-limit=1"
             )
             self._use_time_limit = True
-            if self._process:
-                try:
-                    self._process.close()
-                except Exception:
-                    pass
+
+        if self._process:
+            try:
+                self._process.close()
+            except Exception:
+                pass
 
     def stop(self) -> None:
         """Stop the screen streaming thread."""

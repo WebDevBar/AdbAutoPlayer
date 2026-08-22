@@ -20,6 +20,10 @@ from ._base import _GameBase
 
 T = TypeVar("T")
 
+# Extra window checked once a wait times out, to tell "genuinely not there"
+# apart from "the system is just slower than the configured timeout".
+_DIAGNOSTIC_RECHECK_SECONDS = 5.0
+
 
 class _UndesiredResultError(Exception):
     """Raised inside polling loops to signal the desired result has not yet occurred."""
@@ -38,6 +42,7 @@ class _TemplateMixin(_GameBase):
         timeout_message: str,
         delay: float = 0.5,
         timeout: float = 30,
+        diagnostic_recheck: bool = False,
     ) -> T:
         """Poll *operation* until it succeeds or *timeout* elapses.
 
@@ -47,6 +52,12 @@ class _TemplateMixin(_GameBase):
             timeout_message: Message for GameTimeoutError if timeout expires.
             delay: Seconds to wait between polls.
             timeout: Maximum seconds to wait.
+            diagnostic_recheck: If True, keep polling for an extra
+                `_DIAGNOSTIC_RECHECK_SECONDS` after the timeout expires. A
+                late success logs a warning suggesting the user raise the
+                relevant delay/timeout setting, then still raises
+                GameTimeoutError — this is diagnostics only, not a silent
+                timeout extension.
 
         Returns:
             Whatever *operation* returns on success.
@@ -60,8 +71,32 @@ class _TemplateMixin(_GameBase):
                 return operation()
             except _UndesiredResultError:
                 if monotonic() >= end_time:
-                    raise GameTimeoutError(timeout_message)
+                    break
                 sleep(delay)
+
+        if diagnostic_recheck:
+            diagnostic_end = monotonic() + _DIAGNOSTIC_RECHECK_SECONDS
+            while True:
+                try:
+                    operation()
+                except _UndesiredResultError:
+                    if monotonic() >= diagnostic_end:
+                        break
+                    sleep(delay)
+                else:
+                    extra_seconds = monotonic() - end_time
+                    suggested_timeout = min(timeout + extra_seconds + 1, 60.0)
+                    logging.warning(
+                        f"{timeout_message} — but it appeared "
+                        f"{extra_seconds:.1f}s after the {timeout:.0f}s "
+                        "timeout. Your emulator/device may be slower than "
+                        "your current settings expect; try raising the "
+                        "relevant timeout/delay in ADB Settings to about "
+                        f"{suggested_timeout:.0f}s."
+                    )
+                    break
+
+        raise GameTimeoutError(timeout_message)
 
     # ------------------------------------------------------------------
     # Single-template operations
@@ -248,6 +283,7 @@ class _TemplateMixin(_GameBase):
         delay: float = 0.5,
         timeout: float | None = None,
         timeout_message: str | None = None,
+        diagnostic_recheck: bool = False,
     ) -> TemplateMatchResult:
         """Wait until the template appears on screen.
 
@@ -259,6 +295,10 @@ class _TemplateMixin(_GameBase):
             delay (float, optional): Poll interval in seconds.
             timeout (float | None, optional): Timeout in seconds (uses global default).
             timeout_message (str | None, optional): Custom timeout message.
+            diagnostic_recheck (bool, optional): Keep checking a few seconds
+                past the timeout and, on a late success, log a suggested
+                timeout value instead of failing silently. Use for critical
+                navigation steps, not high-frequency/expected-absent checks.
 
         Returns:
             TemplateMatchResult
@@ -287,7 +327,11 @@ class _TemplateMixin(_GameBase):
             )
 
         return self._execute_or_timeout(
-            find_template, delay=delay, timeout=timeout, timeout_message=timeout_message
+            find_template,
+            delay=delay,
+            timeout=timeout,
+            timeout_message=timeout_message,
+            diagnostic_recheck=diagnostic_recheck,
         )
 
     def wait_until_template_disappears(
@@ -351,6 +395,7 @@ class _TemplateMixin(_GameBase):
         timeout: float | None = None,
         timeout_message: str | None = None,
         ensure_order: bool = True,
+        diagnostic_recheck: bool = False,
     ) -> TemplateMatchResult:
         """Wait until any of the given templates appears on screen.
 
@@ -363,6 +408,10 @@ class _TemplateMixin(_GameBase):
             timeout (float | None, optional): Timeout in seconds.
             timeout_message (str | None, optional): Custom timeout message.
             ensure_order (bool, optional): Re-check once to enforce template priority.
+            diagnostic_recheck (bool, optional): Keep checking a few seconds
+                past the timeout and, on a late success, log a suggested
+                timeout value instead of failing silently. Use for critical
+                navigation steps, not high-frequency/expected-absent checks.
 
         Returns:
             TemplateMatchResult
@@ -390,7 +439,11 @@ class _TemplateMixin(_GameBase):
             )
 
         result = self._execute_or_timeout(
-            find_template, delay=delay, timeout=timeout, timeout_message=timeout_message
+            find_template,
+            delay=delay,
+            timeout=timeout,
+            timeout_message=timeout_message,
+            diagnostic_recheck=diagnostic_recheck,
         )
 
         if not ensure_order:

@@ -96,7 +96,7 @@ def main() -> None:
 
     e = Execute.find_command_and_execute(args.command, get_game_tasks())
     if isinstance(e, BaseException):
-        logging.error(e, exc_info=True)
+        logging.error(e, exc_info=e)
         sys.exit(1)
     sys.exit(0)
 

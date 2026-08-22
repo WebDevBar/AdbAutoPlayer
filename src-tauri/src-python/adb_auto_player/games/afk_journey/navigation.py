@@ -64,6 +64,7 @@ class Navigation(PopupMessageHandler, ABC):
                 self._handle_restart(Navigation._get_overview_navigation_templates())
             elif attempts >= restart_attempts and not restart_attempted:
                 logging.warning("Failed to navigate to default state.")
+                self.capture_debug_screenshot("navigation_failed")
                 self._handle_restart(Navigation._get_overview_navigation_templates())
                 restart_attempted = True
             elif attempts >= max_attempts:
@@ -265,11 +266,13 @@ class Navigation(PopupMessageHandler, ABC):
                         "resonating_hall/equipment.png",
                     ],
                     timeout=self.navigation_timeout,
+                    diagnostic_recheck=True,
                 )
                 logging.debug("Successfully entered Resonating Hall.")
                 break
             except AutoPlayerError as e:
                 logging.warning(e)
+                self.capture_debug_screenshot("resonating_hall_not_found")
                 last_error = e
         self.sleep_action()
         return
@@ -303,11 +306,16 @@ class Navigation(PopupMessageHandler, ABC):
             "battle_modes/afk_stage.png", ConfidenceValue("75%")
         )
 
-        self.wait_for_template(
-            template="navigation/resonating_hall_label.png",
-            crop_regions=CropRegions(left=0.3, right=0.3, top=0.9),
-            timeout=self.navigation_timeout,
-        )
+        try:
+            self.wait_for_template(
+                template="navigation/resonating_hall_label.png",
+                crop_regions=CropRegions(left=0.3, right=0.3, top=0.9),
+                timeout=self.navigation_timeout,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("afk_stages_screen_not_found")
+            raise e
         self.tap(Point(x=550, y=1080))  # click rewards popup
         self.sleep_action()
 
@@ -322,6 +330,7 @@ class Navigation(PopupMessageHandler, ABC):
             ],
             threshold=ConfidenceValue("75%"),
             timeout=self.template_timeout,
+            diagnostic_recheck=True,
         )
 
         if result.template != "popup/quick_purchase.png":
@@ -338,6 +347,7 @@ class Navigation(PopupMessageHandler, ABC):
             ],
             threshold=ConfidenceValue("75%"),
             timeout=self.template_timeout,
+            diagnostic_recheck=True,
         )
 
     def navigate_to_battle_modes_screen(self) -> None:
@@ -351,6 +361,7 @@ class Navigation(PopupMessageHandler, ABC):
             except GameTimeoutError as e:
                 attempt += 1
                 if attempt >= max_attempts:
+                    self.capture_debug_screenshot("battle_modes_screen_not_found")
                     raise e
                 else:
                     continue
@@ -383,11 +394,16 @@ class Navigation(PopupMessageHandler, ABC):
         self.tap(self.CENTER_POINT)
         self.tap(self.CENTER_POINT)
 
-        self.wait_for_template(
-            template="duras_trials/socketed_charms_overview.png",
-            crop_regions=CropRegions(left=0.7, bottom=0.8),
-            timeout=self.template_timeout,
-        )
+        try:
+            self.wait_for_template(
+                template="duras_trials/socketed_charms_overview.png",
+                crop_regions=CropRegions(left=0.7, bottom=0.8),
+                timeout=self.template_timeout,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("duras_trials_screen_not_found")
+            raise e
         self.sleep_action()
         return
 
@@ -398,11 +414,16 @@ class Navigation(PopupMessageHandler, ABC):
             self.swipe_up(sy=1350, ey=500)
             self.sleep_navigation()
 
-        return self.wait_for_template(
-            template=template,
-            timeout_message=timeout_message,
-            timeout=self.template_timeout,
-        )
+        try:
+            return self.wait_for_template(
+                template=template,
+                diagnostic_recheck=True,
+                timeout_message=timeout_message,
+                timeout=self.template_timeout,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("battle_mode_entry_not_found")
+            raise e
 
     def navigate_to_legend_trials_select_tower(self) -> None:
         """Navigate to Legend Trials select tower screen."""
@@ -415,18 +436,23 @@ class Navigation(PopupMessageHandler, ABC):
         )
 
         self._tap_till_template_disappears(result.template)
-        self.wait_for_any_template(
-            templates=[
-                "legend_trials/s_header.png",
-                "legend_trials/banner_lightbearer.png",
-                "legend_trials/banner_wilder.png",
-                "legend_trials/banner_graveborn.png",
-                "legend_trials/banner_mauler.png",
-            ],
-            crop_regions=CropRegions(left=0.1, right=0.1, top=0.1, bottom=0.1),
-            timeout_message="Could not find Legend Trial Header",
-            timeout=self.template_timeout,
-        )
+        try:
+            self.wait_for_any_template(
+                templates=[
+                    "legend_trials/s_header.png",
+                    "legend_trials/banner_lightbearer.png",
+                    "legend_trials/banner_wilder.png",
+                    "legend_trials/banner_graveborn.png",
+                    "legend_trials/banner_mauler.png",
+                ],
+                crop_regions=CropRegions(left=0.1, right=0.1, top=0.1, bottom=0.1),
+                timeout_message="Could not find Legend Trial Header",
+                timeout=self.template_timeout,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("legend_trials_screen_not_found")
+            raise e
         self.sleep_action()
 
     def navigate_to_arcane_labyrinth(self) -> None:
@@ -462,17 +488,22 @@ class Navigation(PopupMessageHandler, ABC):
 
         self._tap_till_template_disappears(result.template)
         self.sleep_navigation()
-        _ = self.wait_for_any_template(
-            templates=[
-                "arcane_labyrinth/select_a_crest.png",
-                "arcane_labyrinth/confirm.png",
-                "arcane_labyrinth/quit.png",
-                "arcane_labyrinth/enter.png",
-                "arcane_labyrinth/heroes_icon.png",
-            ],
-            threshold=ConfidenceValue("70%"),
-            delay=1,
-        )
+        try:
+            _ = self.wait_for_any_template(
+                templates=[
+                    "arcane_labyrinth/select_a_crest.png",
+                    "arcane_labyrinth/confirm.png",
+                    "arcane_labyrinth/quit.png",
+                    "arcane_labyrinth/enter.png",
+                    "arcane_labyrinth/heroes_icon.png",
+                ],
+                threshold=ConfidenceValue("70%"),
+                delay=1,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("arcane_labyrinth_entry_not_found")
+            raise e
         return
 
     def navigate_to_world_chat(self) -> None:
@@ -489,11 +520,16 @@ class Navigation(PopupMessageHandler, ABC):
             return
 
         self.navigate_to_world_chat()
-        world_chat_label = self.wait_for_template(
-            "chat/label_world_chat.png",
-            crop_regions=CropRegions(bottom="50%", right="50%", left="10%"),
-            timeout=5,
-        )
+        try:
+            world_chat_label = self.wait_for_template(
+                "chat/label_world_chat.png",
+                crop_regions=CropRegions(bottom="50%", right="50%", left="10%"),
+                timeout=5,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("world_chat_label_not_found")
+            raise e
         self.tap(
             world_chat_label.box.top_left + Offset(-70, 550),
             log_message="Opening Team-Up chat",

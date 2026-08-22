@@ -132,6 +132,54 @@ class TestExecuteRestart(unittest.TestCase):
             self.assertIsInstance(result, GenericAdbUnrecoverableError)
             mock_instance.restart_game.assert_not_called()
 
+    def test_gives_up_after_max_consecutive_restarts(self) -> None:
+        """Test that the task stops restarting after hitting the cap.
+
+        Regression test for an infinite restart loop: a task that keeps
+        failing immediately after every restart (e.g. because the game's
+        display id changed and screenshots can never succeed again) used to
+        retry forever. `restart_game()` itself succeeding each time — it's
+        the *task* that keeps failing right after — so the cap must be
+        enforced independently of whether `restart_game()` raises.
+        """
+        mock_action = MagicMock(side_effect=Exception("Normal error"))
+        cmd = Command(name="ErrorCommand", action=mock_action)
+        commands = {"category": [cmd]}
+
+        mock_instance = MagicMock()
+        mock_instance.restart_game = MagicMock()
+
+        app_settings = {
+            "advanced": {
+                "restart_stuck_task": True,
+                "restart_stuck_task_after_mins": 5,
+                "max_consecutive_restarts": 3,
+            }
+        }
+
+        with (
+            patch("time.sleep", return_value=None),
+            patch(
+                "adb_auto_player.util.execute.tomllib.load", return_value=app_settings
+            ),
+            patch("builtins.open", mock_open()),
+            patch(
+                "adb_auto_player.file_loader.SettingsLoader.get_app_config_dir",
+                return_value=Path("dummy"),
+            ),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = Execute.find_command_and_execute(
+                "errorcommand", commands, instance=mock_instance
+            )
+
+            self.assertIsInstance(result, Exception)
+            # The action is called once per attempt: 3 allowed restarts means
+            # 4 total attempts (the initial one plus 3 retries) before giving
+            # up instead of retrying forever.
+            self.assertEqual(mock_action.call_count, 4)
+            self.assertEqual(mock_instance.restart_game.call_count, 3)
+
     def test_restart_on_exception_failure(self) -> None:
         """Test that the task returns the original error when restart_game fails."""
         mock_action = MagicMock(side_effect=Exception("Normal error"))

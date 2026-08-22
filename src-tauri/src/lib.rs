@@ -58,6 +58,7 @@ pub mod ext_mod {
                         save_settings,
                         get_app_settings_form,
                         save_app_settings,
+                        delete_profile_settings,
                     ])
                     .setup(|app| {
                         app.manage(std::sync::Mutex::new(AppSettings::default()));

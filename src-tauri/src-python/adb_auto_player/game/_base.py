@@ -164,6 +164,7 @@ class _GameBase(ABC):
         delay: float = 0.5,
         timeout: float | None = None,
         timeout_message: str | None = None,
+        diagnostic_recheck: bool = False,
     ) -> TemplateMatchResult: ...
 
     @abstractmethod
@@ -177,6 +178,7 @@ class _GameBase(ABC):
         timeout: float | None = None,
         timeout_message: str | None = None,
         ensure_order: bool = True,
+        diagnostic_recheck: bool = False,
     ) -> TemplateMatchResult: ...
 
     @abstractmethod

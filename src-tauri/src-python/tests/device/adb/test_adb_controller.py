@@ -115,3 +115,53 @@ class TestResolveDisplayIds:
         controller.tap(Point(460, 1830))
 
         mock_d.tap.assert_called_once_with("460", "1830", display_id=None)
+
+
+class TestIsControllingEmulator:
+    """Regression tests for `AdbController.is_controlling_emulator`.
+
+    The old heuristic matched the unanchored substring "Build" anywhere in
+    the full `getprop` dump. On Tensor Pixels (6/7/8/9 series), the Samsung
+    vendor RIL firmware string contains "Build <date>", which is unrelated
+    to the OS build and caused real phones to be misdetected as emulators.
+    """
+
+    def test_tensor_pixel_ril_string_is_not_an_emulator(self):
+        controller, _ = _make_controller(
+            [
+                "[gsm.version.ril-impl]: [Samsung S.LSI Vendor RIL 5400 V2.3 "
+                "Build 2026-04-30 04:48:08]"
+            ]
+        )
+
+        assert controller.is_controlling_emulator is False
+
+    def test_qemu_marker_is_an_emulator(self):
+        controller, _ = _make_controller(["[ro.kernel.qemu]: [1]"])
+
+        assert controller.is_controlling_emulator is True
+
+    def test_qemu_marker_set_to_zero_is_not_an_emulator(self):
+        """Regression test for HyperOS (POCO X5 Pro) issue #806.
+
+        Xiaomi/HyperOS ships `ro.kernel.qemu` present but unset (`0`) on
+        physical hardware; only a truthy value should count as an emulator.
+        """
+        controller, _ = _make_controller(["[ro.kernel.qemu]: [0]"])
+
+        assert controller.is_controlling_emulator is False
+
+    def test_bluestacks_marker_is_an_emulator(self):
+        controller, _ = _make_controller(["[ro.bst.build.type]: [release]"])
+
+        assert controller.is_controlling_emulator is True
+
+    def test_mumu_marker_is_an_emulator(self):
+        controller, _ = _make_controller(["[ro.product.brand]: [nemu]"])
+
+        assert controller.is_controlling_emulator is True
+
+    def test_no_props_is_not_an_emulator(self):
+        controller, _ = _make_controller(["[ro.product.brand]: [google]"])
+
+        assert controller.is_controlling_emulator is False

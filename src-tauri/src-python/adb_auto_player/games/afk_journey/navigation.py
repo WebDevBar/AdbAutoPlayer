@@ -37,6 +37,15 @@ class Navigation(PopupMessageHandler, ABC):
     RESONATING_HALL_POINT = Point(x=620, y=1830)
     BATTLE_MODES_POINT = Point(x=460, y=1830)
 
+    # Kept short and slow: a long/fast swipe can be interpreted as a fling
+    # with extra momentum on real phone touchscreens (vs. emulators), which
+    # scrolls past the target entry entirely. Retrying a shorter swipe a few
+    # times reaches the same entries without overshooting.
+    _BATTLE_MODES_SWIPE_SY = 1200
+    _BATTLE_MODES_SWIPE_EY = 700
+    _BATTLE_MODES_SWIPE_DURATION = 1.5
+    _BATTLE_MODES_SWIPE_MAX_ATTEMPTS = 4
+
     def navigate_to_world(self) -> None:
         """Navigate to world view. Previously default_state.
 
@@ -410,9 +419,18 @@ class Navigation(PopupMessageHandler, ABC):
     def _find_in_battle_modes(
         self, template: str, timeout_message: str
     ) -> TemplateMatchResult:
-        if not self.game_find_template_match(template):
-            self.swipe_up(sy=1350, ey=500)
+        attempts = 0
+        while (
+            not self.game_find_template_match(template)
+            and attempts < self._BATTLE_MODES_SWIPE_MAX_ATTEMPTS
+        ):
+            self.swipe_up(
+                sy=self._BATTLE_MODES_SWIPE_SY,
+                ey=self._BATTLE_MODES_SWIPE_EY,
+                duration=self._BATTLE_MODES_SWIPE_DURATION,
+            )
             self.sleep_navigation()
+            attempts += 1
 
         try:
             return self.wait_for_template(

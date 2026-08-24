@@ -130,3 +130,5 @@ class HeroesEnum(StrEnum):
     Orion = auto()
     Rolan = auto()
     Voracia = auto()
+    Taichi_and_Agumon = auto()
+    Yamato_and_Gabumon = auto()

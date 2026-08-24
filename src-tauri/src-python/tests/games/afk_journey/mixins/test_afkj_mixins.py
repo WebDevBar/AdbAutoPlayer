@@ -131,14 +131,20 @@ class TestAFKJMixinsCoverage:
     def test_run_arena_full_flow(self):
         """Cover run_arena main loop and logic."""
         bot = MockAFKJ()
-        # Mock exhausted attempts after 1 run
-        with patch.object(
-            bot, "game_find_template_match", side_effect=[False, True, False]
-        ):
-            with patch.object(bot, "_choose_opponent", return_value=True):
-                with patch.object(bot, "_battle", return_value=True):
-                    with patch.object(bot, "_claim_free_attempt", return_value=False):
-                        bot.run_arena()
+        # _enter_arena (navigation) is covered separately by
+        # test_arena_enter_arena_error_coverage; stub it here so this test's
+        # game_find_template_match budget only covers run_arena's own loop.
+        with patch.object(bot, "_enter_arena"):
+            # Mock exhausted attempts after 1 run
+            with patch.object(
+                bot, "game_find_template_match", side_effect=[False, True]
+            ):
+                with patch.object(bot, "_choose_opponent", return_value=True):
+                    with patch.object(bot, "_battle", return_value=True):
+                        with patch.object(
+                            bot, "_claim_free_attempt", return_value=False
+                        ):
+                            bot.run_arena()
 
     def test_push_legend_trials_full_flow(self):
         """Cover push_legend_trials main loop and faction logic."""

@@ -175,5 +175,78 @@ class TestNavigationExtended(unittest.TestCase):
         self.assertEqual(result, Overview.WORLD)
 
 
+class TestFindInBattleModes(unittest.TestCase):
+    """Regression tests for the Battle Modes scroll-and-find loop.
+
+    A single long/fast swipe could fling past the target entry on real
+    phone touchscreens (vs. emulators), leaving the entry off-screen and
+    the search timing out. `_find_in_battle_modes` now retries a shorter
+    swipe, re-checking for the template after each one instead of
+    swiping once and hoping.
+    """
+
+    def setUp(self):
+        self.nav = MockNavigation.__new__(MockNavigation)
+        self.mock_game_find_template_match = MagicMock()
+        self.mock_swipe_up = MagicMock()
+        self.mock_sleep_navigation = MagicMock()
+        self.mock_wait_for_template = MagicMock()
+        self.nav.game_find_template_match = self.mock_game_find_template_match
+        self.nav.swipe_up = self.mock_swipe_up
+        self.nav.sleep_navigation = self.mock_sleep_navigation
+        self.nav.wait_for_template = self.mock_wait_for_template
+
+    def test_stops_swiping_once_template_is_found(self):
+        """Swiping should stop as soon as the entry becomes visible."""
+        match = TemplateMatchResult(
+            template="battle_modes/duras_trials.png",
+            confidence=ConfidenceValue(1.0),
+            box=Box(Point(100, 100), 50, 50),
+        )
+        self.mock_game_find_template_match.side_effect = [None, None, match]
+        self.mock_wait_for_template.return_value = match
+
+        result = self.nav._find_in_battle_modes(
+            template="battle_modes/duras_trials.png",
+            timeout_message="not found",
+        )
+
+        self.assertEqual(result, match)
+        self.assertEqual(self.mock_swipe_up.call_count, 2)
+        self.assertEqual(self.mock_sleep_navigation.call_count, 2)
+
+    def test_gives_up_swiping_after_max_attempts(self):
+        """Should not swipe forever if the entry never appears."""
+        self.mock_game_find_template_match.return_value = None
+        self.mock_wait_for_template.return_value = MagicMock()
+
+        self.nav._find_in_battle_modes(
+            template="battle_modes/duras_trials.png",
+            timeout_message="not found",
+        )
+
+        self.assertEqual(
+            self.mock_swipe_up.call_count,
+            self.nav._BATTLE_MODES_SWIPE_MAX_ATTEMPTS,
+        )
+
+    def test_no_swipe_when_already_visible(self):
+        """Should not swipe at all if the entry is already on screen."""
+        match = TemplateMatchResult(
+            template="battle_modes/duras_trials.png",
+            confidence=ConfidenceValue(1.0),
+            box=Box(Point(100, 100), 50, 50),
+        )
+        self.mock_game_find_template_match.return_value = match
+        self.mock_wait_for_template.return_value = match
+
+        self.nav._find_in_battle_modes(
+            template="battle_modes/duras_trials.png",
+            timeout_message="not found",
+        )
+
+        self.mock_swipe_up.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

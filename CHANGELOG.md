@@ -1,5 +1,34 @@
 # Changelog
 
+## [wdb-12.12.0-35] - 2026-09-06
+
+### Added
+
+- **Savannah Cup support.** The event that replaced Solstice Clash on 2026-09-03 is the same
+  game with different art, and the bot now spectates it. Walking the whole flow on a device
+  showed only two of fourteen templates were event-specific - the events-list card and the
+  event screen. The host dialog, the Fortune Picks button, the draft and prematch anchors and
+  both result screens matched unchanged.
+- **Per-event geometry.** `cell_registry` carries an `event_id`. Savannah draws a 5x3 draft grid
+  where Solstice drew 5x4, and its locked-pick row sits about 500px higher, below a chat ticker
+  that would otherwise clip it.
+- **Every playable hero.** The roster is the wiki's 125, not one event's 118, and the shipped
+  icons were refreshed from the game: Rolan, Voracia, Eryndor and both Digimon duos were all
+  released after the previous dump.
+
+### Fixed
+
+- **The theme was being read wrong, and stored anyway.** The OCR region caught the "Current
+  Theme" heading and clipped the name, giving `Current Theme Fortress O`. Nothing failed - the
+  garbled string was written to the match - so this silently mis-filed data rather than losing it
+  loudly.
+- **The events list scrolls.** The Savannah Cup card moves as other events end, so a single
+  match-and-tap missed it whenever it started below the fold. It now scrolls and re-checks, and
+  running out of list means the event has ended: the run stops cleanly instead of spending two
+  more attempts from its failure budget.
+- **Three hero names were wrong** against the wiki: Isabelle, Smokey and Sylphyra are Isabella,
+  Smokey & Meerky and Sylphira. Old spellings still load, so saved exclusions survive the rename.
+
 ## Doc: fedora-setup repo moved (2026-08-21)
 
 ### Changed

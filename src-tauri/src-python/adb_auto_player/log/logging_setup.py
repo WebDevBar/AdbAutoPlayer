@@ -2,6 +2,7 @@
 
 import collections
 import logging
+import re
 import os
 import sys
 from collections import deque
@@ -15,6 +16,52 @@ from adb_auto_player.util import (
 )
 
 from .log_presets import LogPreset
+
+
+# The GUI renders log messages as HTML, so a few of them carry <span class="sc-*">
+# markers to colour a hero side or a prediction verdict. A terminal is not a browser:
+# printed raw, those tags are noise wrapped around the words that matter. Rather than
+# strip them and lose the emphasis, map each class onto the ANSI colour it stands for.
+_SPAN_COLOURS: dict[str, str] = {
+    "sc-blue": "\033[94m",
+    "sc-red": "\033[91m",
+    "sc-hit": "\033[92m",
+    "sc-miss": "\033[93m",
+}
+_SPAN = re.compile(r'<span class="([a-z-]+)">(.*?)</span>', re.DOTALL)
+
+
+def _render_spans(message: str, reset: str, restore: str) -> str:
+    """Turn the GUI's colour spans into ANSI, keeping the surrounding colour.
+
+    Args:
+        message: The raw message, possibly containing span markers.
+        reset: The ANSI reset sequence.
+        restore: The colour to return to after a span, so the rest of the line
+            keeps
+            the level colour it would otherwise have lost.
+
+    Returns:
+        The message with spans rendered as colour.
+    """
+
+    def swap(m: re.Match[str]) -> str:
+        colour = _SPAN_COLOURS.get(m.group(1), "")
+        return f"{colour}{m.group(2)}{reset}{restore}" if colour else m.group(2)
+
+    return _SPAN.sub(swap, message)
+
+
+def _strip_spans(message: str) -> str:
+    """Remove span markers entirely, for output that carries no colour.
+
+    Args:
+        message: The raw message.
+
+    Returns:
+        The message with every span replaced by its text.
+    """
+    return _SPAN.sub(lambda m: m.group(2), message)
 
 
 class BaseLogHandler(logging.Handler):
@@ -126,11 +173,16 @@ class TerminalLogHandler(BaseLogHandler):
         else:
             color = self.COLORS.get(log_level, self.COLORS["RESET"])
 
+        message = _render_spans(
+            StringHelper.sanitize_path(record.getMessage()),
+            reset=self.COLORS["RESET"],
+            restore=color,
+        )
         formatted_message: str = (
             f"{color}"
             f"[{log_level}] "
             f"{TracebackHelper.format_debug_info(record)} "
-            f"{StringHelper.sanitize_path(record.getMessage())}"
+            f"{message}"
             f"{self.COLORS['RESET']}"
         )
         print(formatted_message)
@@ -155,7 +207,7 @@ class TextLogHandler(BaseLogHandler):
         formatted_message: str = (
             f"{timestamp_with_ms} [{log_level}] "
             f"{TracebackHelper.format_debug_info(record)} "
-            f"{StringHelper.sanitize_path(record.getMessage())}"
+            f"{_strip_spans(StringHelper.sanitize_path(record.getMessage()))}"
         )
         print(formatted_message)
         sys.stdout.flush()
@@ -181,7 +233,14 @@ def setup_logging(handler_type: LogHandlerType, level: int | str) -> None:
         pass
 
     logger: logging.Logger = logging.getLogger()
-    logger.setLevel(level)
+    # The ROOT stays at DEBUG so records exist for the warning-context file to keep.
+    # `level` is what the CONSOLE shows, applied to its handler below. Setting the root
+    # to INFO instead would mean the DEBUG records are never created at all, and the
+    # file that exists to explain a failure would hold only the failure.
+    #
+    # DISABLE is the exception: it means silence, so it is applied to the root and
+    # nothing is recorded anywhere.
+    logger.setLevel(logging.DEBUG if level not in (99, "DISABLE") else level)
 
     if "raw" == handler_type:
         return
@@ -196,6 +255,25 @@ def setup_logging(handler_type: LogHandlerType, level: int | str) -> None:
 
     handler_class = handler_mapping.get(handler_type)
     if handler_class:
-        logger.addHandler(handler_class())
+        handler = handler_class()
+        # The ROOT logger stays wherever the caller put it - usually DEBUG - because
+        # WarningContextFileHandler needs those records for the ring buffer it flushes
+        # when something fails. Quieting the root instead would empty that buffer and
+        # leave a failure with no lead-up, which is the whole point of the file.
+        #
+        # So the filtering happens HERE, on the console handler alone: a run prints
+        # INFO and above, and `--log-level DEBUG` is what opts into the firehose.
+        if level in (logging.DEBUG, "DEBUG"):
+            handler.setLevel(logging.DEBUG)
+        else:
+            handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+
+        # Now that the console is quiet, the DEBUG detail has to go SOMEWHERE or
+        # quieting it just destroys evidence. This handler was written for exactly
+        # that and was never actually installed - nothing called it. A clean run
+        # leaves an empty file; a run that hits a WARNING writes the failure and the
+        # records leading up to it.
+        attach_warning_context_file_logging(logger)
     else:
         raise ValueError(f"Unknown handler type: {handler_type}")

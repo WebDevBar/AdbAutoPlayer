@@ -112,7 +112,12 @@ class DevHelper:
                 )
 
         except subprocess.CalledProcessError as e:
-            logging.error(
+            # DEBUG, not ERROR. This is a developer convenience that compares local
+            # `main` against origin - and a fork checkout has no `main` at all, so
+            # `git rev-parse main` fails on every single run and printed a red ERROR
+            # above the first line of real output. Nothing about running a game mode
+            # depends on it.
+            logging.debug(
                 f"Git command failed: {e}\n"
                 f"Command: {e.cmd}\n"
                 f"Output: {e.output.decode().strip() if e.output else ''}\n"

@@ -109,5 +109,8 @@ Attempts = 5
 "Opponent Position" = "Left"
 
 ["WDB Modes"]
+"Auto-Bet" = true
+"Auto-Bet Confidence %" = 58
+"Auto-Bet Slider Offset" = 18
 "Save Draft Screenshots" = false
 "Screenshot Folder" = ""

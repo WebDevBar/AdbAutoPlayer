@@ -51,3 +51,36 @@ release number in `src-tauri/src-python/adb_auto_player/wdb_version.py`, and eve
 it: tags are `wdb-<upstream>-<release>`, e.g. `wdb-12.12.0-35`.
 
 Bump `WDB_RELEASE` when cutting a build. `build-rpm.sh` and the Linux bundle config follow it.
+
+## Sync from a source checkout: you have no key, and the failure is silent
+
+`SolsticeClashCollect` records matches locally and pushes them to a shared pool at
+`gameretro.net/adb`. That pool authenticates with a fork key which is **baked into release builds
+and never committed** - the workflow writes a gitignored `_forkkey.py` from the
+`ADB_SYNC_KEY_BUILTIN` secret.
+
+So a checkout run from source sends an empty key, and the server answers **404 on every call**:
+
+```
+[SC-33] sync server error 404
+```
+
+That 404 is the server saying "you are not our client". It is deliberately not a 401, so it looks
+exactly like the API being down or unrouted. **It is not a server problem.** Matches keep
+collecting with `pushed_at NULL` and push later, so nothing is lost.
+
+To sync from source, either:
+
+```bash
+export ADB_SYNC_KEY=<the fork key>       # per-run, no rebuild
+```
+
+or copy `_forkkey.py` out of an installed build into
+`src-tauri/src-python/adb_auto_player/games/afk_journey/services/solstice/`.
+
+The key is filed at `~/.local/share/webdevbar/gameretro-adb-api.md` on the workstation. It is also
+recoverable from any previous build - the file ships inside the bundle.
+
+**A non-default `ADB_SYNC_URL` disables sync unless `ADB_SYNC_KEY` is also set** (`sync.py`
+`SyncConfig.load`), so one mistyped variable cannot send the built-in key and everyone's match data
+to an arbitrary host.

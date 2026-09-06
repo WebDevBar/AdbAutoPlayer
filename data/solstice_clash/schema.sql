@@ -94,8 +94,14 @@ CREATE TABLE IF NOT EXISTS hero_alias(
 );
 
 -- Screen regions, measured on raw 1080x1920 ADB frames (never rescaled screenshots).
+-- Geometry is PER EVENT, not global. Savannah Cup draws a 5x3 draft grid where
+-- Solstice Clash drew 5x4, and its locked-pick row sits ~500px higher. Both sets must
+-- coexist: stored Solstice frames are still identified against Solstice coordinates,
+-- and a single global table silently applied the newest event's numbers to every old
+-- capture - which is how ten identification tests started failing at once.
 CREATE TABLE IF NOT EXISTS cell_registry(
   id              INTEGER PRIMARY KEY,
+  event_id        INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
   screen          TEXT NOT NULL,   -- 'prematch_locked_teams' | 'draft' | 'usable_heroes'
   cell_name       TEXT NOT NULL,
   cell_type       TEXT NOT NULL,   -- 'locked_pick' | 'draft_locked_pick' | 'draft_card'
@@ -105,8 +111,12 @@ CREATE TABLE IF NOT EXISTS cell_registry(
   slot            INTEGER,
   base_resolution TEXT NOT NULL DEFAULT '1080x1920',
   verified_at     TEXT,
-  UNIQUE(screen, cell_name)
+  UNIQUE(event_id, screen, cell_name)
 );
+
+-- The matching index is created by migrate.py, NOT here. schema.sql runs BEFORE the
+-- migrations, so on an existing database this file still sees a cell_registry with no
+-- event_id column and indexing it fails the whole script.
 
 -- Per-art, per-cell-type transform. The three cell types have different aspect
 -- ratios, so they need different recipes.

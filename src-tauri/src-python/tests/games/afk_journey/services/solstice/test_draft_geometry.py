@@ -36,7 +36,7 @@ DRAFT_TEMPLATE = ANCHORS.parent / "draft_anchor.png"
 
 @pytest.fixture(scope="module")
 def library():
-    cfg = SolsticeConfig.load(solstice_db_path())
+    cfg = SolsticeConfig.load(solstice_db_path(), event_slug="solstice-clash")
     return cfg, IconLibrary.build(cfg, solstice_icon_dir())
 
 

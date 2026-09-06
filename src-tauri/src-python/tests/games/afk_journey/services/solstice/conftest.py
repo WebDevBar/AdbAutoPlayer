@@ -87,9 +87,24 @@ def slot_of():
 
 @pytest.fixture(scope="session")
 def cfg(db_path):
+    """Solstice geometry, named EXPLICITLY.
+
+    Every stored frame in this suite is a Solstice Clash capture, so the cells must be
+    Solstice's. Relying on the default would silently re-point these tests at whichever
+    event the client currently collects - which is exactly how a live-event change broke
+    ten identification tests at once.
+    """
     from adb_auto_player.games.afk_journey.services.solstice.config import SolsticeConfig
 
-    return SolsticeConfig.load(db_path)
+    return SolsticeConfig.load(db_path, event_slug="solstice-clash")
+
+
+@pytest.fixture(scope="session")
+def savannah_cfg(db_path):
+    """Savannah Cup geometry, for tests that assert the current event's numbers."""
+    from adb_auto_player.games.afk_journey.services.solstice.config import SolsticeConfig
+
+    return SolsticeConfig.load(db_path, event_slug="savannah-cup")
 
 
 @pytest.fixture(scope="session")

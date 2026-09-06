@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from adb_auto_player.games.afk_journey.services.solstice.matchkey import comps_key
 from adb_auto_player.games.afk_journey.services.solstice.store import (
+    POOL_SIZE,
     EVENT_SLUG,
     HeroSlot,
     MatchRecord,
@@ -111,12 +112,15 @@ def test_pool_is_recorded_including_banned_slots(tmp_db):
         [
             PoolSlot(1, "indris", "spui_herohead_87", "identified", 0, 0.95, 0.34),
             PoolSlot(6, None, None, "banned", 1),
-            PoolSlot(20, None, None, "banned", 1),
+            # The LAST slot, derived rather than typed: this was 20 for Solstice
+            # Clash and 15 for Savannah Cup, and a literal here fails the test for a
+            # reason that has nothing to do with what it is checking.
+            PoolSlot(POOL_SIZE, None, None, "banned", 1),
         ],
     )
     rows = store.pool_for(mid)
     assert len(rows) == 3
-    assert {r.slot for r in rows if r.banned} == {6, 20}
+    assert {r.slot for r in rows if r.banned} == {6, POOL_SIZE}
     assert rows[0].hero_slug == "indris"
 
 
@@ -266,7 +270,9 @@ def test_rejects_out_of_range_pool_slots(tmp_db):
     store = MatchStore(tmp_db)
     mid = store.record_match(MatchRecord(source="compete", captured_at="x"))
     with pytest.raises(ValueError, match="out of range"):
-        store.record_pool(mid, [PoolSlot(21, "sonja", "x", "identified")])
+        store.record_pool(
+            mid, [PoolSlot(POOL_SIZE + 1, "sonja", "x", "identified")]
+        )
     with pytest.raises(ValueError, match="out of range"):
         store.record_pool(mid, [PoolSlot(0, "sonja", "x", "identified")])
 
@@ -280,7 +286,11 @@ def test_pool_is_complete_detects_a_partial_pool(tmp_db):
     )
     assert store.pool_is_complete(mid) is False
     store.record_pool(
-        mid, [PoolSlot(i, "sonja", "x", "identified") for i in range(5, 21)]
+        mid,
+        [
+            PoolSlot(i, "sonja", "x", "identified")
+            for i in range(5, POOL_SIZE + 1)
+        ],
     )
     assert store.pool_is_complete(mid) is True
 
@@ -878,5 +888,11 @@ def test_a_keyless_row_forces_the_migration_to_run_again(tmp_db):
         keyed = con.execute(
             "SELECT comps_key FROM match WHERE id=?", (match_id,)
         ).fetchone()[0]
-    assert keyed == comps_key(EVENT_SLUG, left, right)
+    # The key must use THIS ROW's event, not whichever event the client happens to be
+    # collecting now. The row was pinned to event_id=1 above, so resolve that rather
+    # than assuming EVENT_SLUG - they differ the moment a new event starts, and
+    # `_event_slug_for` is exactly the code path that keeps a backlog correct.
+    with store._connect() as con:
+        row_event = con.execute("SELECT slug FROM event WHERE id=1").fetchone()[0]
+    assert keyed == comps_key(row_event, left, right)
     assert store._schema_is_current(module), "and must then settle, not loop"

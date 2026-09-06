@@ -311,9 +311,15 @@ def _comps(entry: dict[str, Any]) -> str:
 _WORKER: dict[str, Any] = {}
 
 
-def _worker_init(db_path: str, icon_dir: str) -> None:
-    """Build the geometry and icon library once per worker process."""
-    cfg = SolsticeConfig.load(Path(db_path))
+def _worker_init(db_path: str, icon_dir: str, event_slug: str) -> None:
+    """Build the geometry and icon library once per worker process.
+
+    `event_slug` is passed EXPLICITLY. Geometry is per event now, and
+    `SolsticeConfig.load` defaults to whichever event the client currently collects -
+    so a bare call made this Solstice audit read Solstice frames through Savannah Cup's
+    5x3 grid, scoring every cell against the wrong rectangle without complaint.
+    """
+    cfg = SolsticeConfig.load(Path(db_path), event_slug=event_slug)
     _WORKER["cfg"] = cfg
     _WORKER["library"] = IconLibrary.build(cfg, Path(icon_dir))
 
@@ -333,6 +339,7 @@ def audit(
     frame_dir: Path,
     cutoff: datetime,
     workers: int = 1,
+    event_slug: str = DEFAULT_EVENT_SLUG,
 ) -> list[Row]:
     """Classify every saved draft frame against its stored row.
 
@@ -346,6 +353,9 @@ def audit(
         frame_dir: Where `draft-<match_id>.png` files live.
         cutoff: Ignore matches captured after this.
         workers: Worker processes for the icon matching, which dominates the runtime.
+        event_slug: Whose cell geometry to read the frames with. These frames are
+            Solstice Clash captures, so the default is solstice-clash - the
+            config loader would otherwise pick the currently collected event.
 
     Returns:
         One `Row` per audited frame, ordered by match id.
@@ -366,7 +376,7 @@ def audit(
         for match_id, path in sorted(frame_index(frame_dir).items())
         if match_id in matches
     ]
-    reads = _run_reads(work, db_path, icon_dir, workers)
+    reads = _run_reads(work, db_path, icon_dir, workers, event_slug)
 
     rows: list[Row] = []
     for match_id, blue, red in reads:
@@ -406,15 +416,16 @@ def _run_reads(
     db_path: Path,
     icon_dir: Path,
     workers: int,
+    event_slug: str = DEFAULT_EVENT_SLUG,
 ) -> list[tuple[int, list[str], list[str]]]:
     """Read every frame, in this process or a pool of them."""
     if workers <= 1:
-        _worker_init(str(db_path), str(icon_dir))
+        _worker_init(str(db_path), str(icon_dir), event_slug)
         return [_read_frame(item) for item in work]
     with ProcessPoolExecutor(
         max_workers=workers,
         initializer=_worker_init,
-        initargs=(str(db_path), str(icon_dir)),
+        initargs=(str(db_path), str(icon_dir), event_slug),
     ) as pool:
         return list(pool.map(_read_frame, work, chunksize=4))
 
@@ -854,6 +865,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         " database keeps growing while the audit runs.",
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
+    parser.add_argument(
+        "--event-slug",
+        default=DEFAULT_EVENT_SLUG,
+        help=(
+            "Which event's cell geometry to read the frames with. Defaults to "
+            "solstice-clash, matching the frames this audit was written for; "
+            "SolsticeConfig.load would otherwise use whichever event is being "
+            "collected now, which is a different grid."
+        ),
+    )
     parser.add_argument("--frames", type=Path, default=DEFAULT_FRAMES)
     parser.add_argument(
         # Anchored to the REPO, not the working directory. A cwd-relative default
@@ -904,7 +925,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     cutoff = parse_timestamp(args.cutoff)
-    rows = audit(args.db, args.frames, cutoff, workers=args.workers)
+    rows = audit(
+        args.db, args.frames, cutoff,
+        workers=args.workers, event_slug=args.event_slug,
+    )
     if not rows:
         print("no frames matched a stored row under this cutoff", file=sys.stderr)
         return 2

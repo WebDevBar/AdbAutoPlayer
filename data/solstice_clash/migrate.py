@@ -344,6 +344,22 @@ DEFAULT_DRAFT_PICK_CELLS = [
 # spectate_prematch: from live/match01/raw/000104002.png. Cards span y 940-1120 with the
 # level badge at the bottom, so the art is y 965-1085. Centres x: 132/270/405 (blue) and
 # 677/810/945 (red).
+# The six draft-screen lock slots, measured 2026-07-25 and taken from the shipped
+# database. Present here because the fresh-install path seeds ONLY from these DEFAULT_*
+# lists: without it a database built from empty ends up missing `draft_locked_pick`
+# entirely, `_schema_is_current` can never be satisfied, and the migration re-runs on
+# every launch without ever being able to create what it is looking for.
+#
+# Slot order is 1,4,5 left and 2,3,6 right - the game's own pick order, not positional.
+DEFAULT_DRAFT_LOCKED_PICK_CELLS = [
+    ("draft", "draft_lock_left1", "draft_locked_pick", 55, 428, 155, 502, "left", 1),
+    ("draft", "draft_lock_right2", "draft_locked_pick", 640, 428, 740, 502, "right", 2),
+    ("draft", "draft_lock_right3", "draft_locked_pick", 783, 428, 883, 502, "right", 3),
+    ("draft", "draft_lock_left4", "draft_locked_pick", 197, 428, 297, 502, "left", 4),
+    ("draft", "draft_lock_left5", "draft_locked_pick", 340, 428, 440, 502, "left", 5),
+    ("draft", "draft_lock_right6", "draft_locked_pick", 926, 428, 1026, 502, "right", 6),
+]
+
 DEFAULT_PREMATCH_CELLS = [
     # y0 is 1005, NOT 965. Measured on device 2026-07-26: the card spans y954-1125 and
     # the star crown occupies its top ~40px, so a window starting at 965 crops the crown
@@ -1129,18 +1145,64 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
             "UPDATE cell_registry SET cell_name=REPLACE(cell_name,'_red','_right')"
         )
 
+    con.execute(
+        "INSERT OR IGNORE INTO event(slug,name,game) VALUES(?,?,?)",
+        ("solstice-clash", "Solstice Clash", "afk-journey"),
+    )
+    solstice_event_id = con.execute(
+        "SELECT id FROM event WHERE slug='solstice-clash'"
+    ).fetchone()[0]
+
+    # cell_registry gained event_id: geometry is per event, and a global table applied
+    # Savannah Cup's 5x3 grid to stored Solstice frames. SQLite cannot alter a UNIQUE
+    # constraint, so the table is rebuilt. Existing rows are Solstice by definition -
+    # it was the only event when they were measured.
+    have = {r[1] for r in con.execute("PRAGMA table_info(cell_registry)")}
+    if "event_id" not in have:
+        con.execute("ALTER TABLE cell_registry RENAME TO cell_registry_old")
+        con.execute(
+            "CREATE TABLE cell_registry("
+            " id INTEGER PRIMARY KEY,"
+            " event_id INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,"
+            " screen TEXT NOT NULL, cell_name TEXT NOT NULL, cell_type TEXT NOT NULL,"
+            " x0 INTEGER NOT NULL, y0 INTEGER NOT NULL,"
+            " x1 INTEGER NOT NULL, y1 INTEGER NOT NULL,"
+            " side TEXT, slot INTEGER,"
+            " base_resolution TEXT NOT NULL DEFAULT '1080x1920', verified_at TEXT,"
+            " UNIQUE(event_id, screen, cell_name))"
+        )
+        con.execute(
+            "INSERT INTO cell_registry(event_id,screen,cell_name,cell_type,"
+            " x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
+            " SELECT ?,screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,"
+            " base_resolution,verified_at FROM cell_registry_old",
+            (solstice_event_id,),
+        )
+        con.execute("DROP TABLE cell_registry_old")
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cell_registry_event"
+            " ON cell_registry(event_id)"
+        )
+
+    # The event row must exist BEFORE any cell is inserted: cell_registry.event_id is
+    # NOT NULL, and these are Solstice cells. The events/themes block further down runs
+    # too late for this. Without it every insert below violated NOT NULL - and because
+    # they are INSERT OR IGNORE, SQLite SWALLOWED the violation: a fresh database ended
+    # up with 21 cells instead of 71 and no Solstice geometry at all, silently.
+
     for cells in (
         DEFAULT_SUMMARY_CELLS,
         DEFAULT_DRAFT_PICK_CELLS,
         DEFAULT_PREMATCH_CELLS,
+        DEFAULT_DRAFT_LOCKED_PICK_CELLS,
     ):
         for screen, name, cell_type, x0, y0, x1, y1, side, slot in cells:
             con.execute(
                 "INSERT OR IGNORE INTO cell_registry"
-                "(screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,base_resolution,"
-                " verified_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
-                (screen, name, cell_type, x0, y0, x1, y1, side, slot),
+                "(event_id,screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,"
+                " base_resolution,verified_at)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,'1080x1920',datetime('now'))",
+                (solstice_event_id, screen, name, cell_type, x0, y0, x1, y1, side, slot),
             )
 
     # Correct prematch cells seeded before the 2026-07-26 measurement. INSERT OR IGNORE
@@ -1261,13 +1323,15 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         # would silently re-file matches already attributed to a theme.
         if starts:
             con.execute(
-                "UPDATE theme SET starts_at=? WHERE slug=? AND starts_at IS NULL",
-                (starts, slug),
+                "UPDATE theme SET starts_at=?"
+                " WHERE event_id=? AND slug=? AND starts_at IS NULL",
+                (starts, event_id, slug),
             )
         if ends:
             con.execute(
-                "UPDATE theme SET ends_at=? WHERE slug=? AND ends_at IS NULL",
-                (ends, slug),
+                "UPDATE theme SET ends_at=?"
+                " WHERE event_id=? AND slug=? AND ends_at IS NULL",
+                (ends, event_id, slug),
             )
 
     # Backfill matches recorded before the tables existed. Matched on the raw OCR
@@ -1287,6 +1351,81 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         "  SELECT id FROM theme WHERE event_id=? AND is_default=1"
         ") WHERE theme_id IS NULL",
         (event_id,),
+    )
+
+    # Savannah Cup, live 2026-09-03 with 1.7.4: Solstice Clash reskinned on the same
+    # engine. Seeded here and not only in schema.sql, because an install already at the
+    # current schema version never re-runs the schema - it only runs this. Without it,
+    # resolve_theme() returns (None, None, None) for every Savannah Cup match.
+    #
+    # AFTER the backfill above on purpose. That backfill claims every `event_id IS NULL`
+    # row for Solstice, which is correct only while Solstice is the only event those
+    # rows could belong to. Seeding first would not change what it claims, but it would
+    # make the ordering look incidental when it is not.
+    con.execute(
+        "INSERT OR IGNORE INTO event(slug,name,game) VALUES(?,?,?)",
+        ("savannah-cup", "Savannah Cup", "afk-journey"),
+    )
+    savannah_id = con.execute(
+        "SELECT id FROM event WHERE slug='savannah-cup'"
+    ).fetchone()[0]
+    for slug, name, starts, ends, is_default in (
+        ("unknown", "Unknown / Default", None, None, 1),
+        # END observed: the event screen read "Rotates in 2d 11h" at 2026-09-06 12:46
+        # local, landing on midnight UTC as every Solstice rotation did. START inferred
+        # from that same three-day cadence and NOT observed - the event opened 09-03 and
+        # whatever ran until 09-06 was never captured, so those fall to the default.
+        (
+            "forsaken-fortress",
+            "Forsaken Fortress",
+            "2026-09-06T00:00:00Z",
+            "2026-09-09T00:00:00Z",
+            0,
+        ),
+    ):
+        con.execute(
+            "INSERT OR IGNORE INTO theme"
+            "(event_id,slug,name,starts_at,ends_at,is_default) VALUES(?,?,?,?,?,?)",
+            (savannah_id, slug, name, starts, ends, is_default),
+        )
+
+    # Savannah Cup geometry, measured on live captures 2026-09-06. The draft grid is
+    # 5x3 (Solstice was 5x4) and the locked-pick row sits at y1000 rather than y1495 -
+    # far enough up that the old rows landed on the betting slider.
+    savannah_cells = [
+        ("draft", f"draft_card_{n + 1:02d}", "draft_card",
+         171 + 155 * (n % 5), 631 + 220 * (n // 5),
+         171 + 155 * (n % 5) + 146, 631 + 220 * (n // 5) + 197, None, n + 1)
+        for n in range(15)
+    ] + [
+        ("prematch_locked_teams", f"locked_pick_{i}", "locked_pick",
+         x, 1000, x + 130, 1125, "left" if i <= 3 else "right", i)
+        for i, x in enumerate([70, 205, 340, 610, 745, 880], 1)
+    ]
+    for screen, name, ctype, x0, y0, x1, y1, side, slot in savannah_cells:
+        con.execute(
+            "INSERT OR IGNORE INTO cell_registry(event_id,screen,cell_name,cell_type,"
+            "x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,'1080x1920','2026-09-06')",
+            (savannah_id, screen, name, ctype, x0, y0, x1, y1, side, slot),
+        )
+
+    # The other four cell types are INHERITED from Solstice, not re-measured. The
+    # 2026-09-06 screen walk found those screens unchanged by the reskin: the summary
+    # screen's six cells framed their portraits exactly, and the locked-team and
+    # spectate anchors matched their Solstice templates at 0.94-1.00. Copying them keeps
+    # every cell type populated for this event - `cells("summary_hero")` returning empty
+    # raises StopIteration deep in the record path, which is a worse failure than
+    # slightly-off geometry would be.
+    #
+    # Re-measure these if identification degrades on Savannah frames.
+    con.execute(
+        "INSERT OR IGNORE INTO cell_registry(event_id,screen,cell_name,cell_type,"
+        "x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
+        " SELECT ?,screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,"
+        " base_resolution,verified_at FROM cell_registry"
+        " WHERE event_id=? AND cell_type NOT IN ('draft_card','locked_pick')",
+        (savannah_id, event_id),
     )
 
     now = datetime.datetime.now().isoformat(timespec="seconds")

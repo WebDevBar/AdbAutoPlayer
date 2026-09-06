@@ -21,12 +21,18 @@ TRIO_B = ("antandra", "arden", "atalanta")
 
 @pytest.fixture
 def migrate():
-    root = Path(__file__).resolve()
-    while root.name != "adbautoplayer":
-        root = root.parent
-    spec = importlib.util.spec_from_file_location(
-        "_migrate", root / "data" / "solstice_clash" / "migrate.py"
-    )
+    # Find the FILE, never a directory spelled "adbautoplayer". The previous loop
+    # `while root.name != "adbautoplayer": root = root.parent` never terminates on a
+    # checkout with any other casing - `Path("/").parent` is `/` - and this repo is
+    # `AdbAutoPlayer`. Same defect as test_canon.py had; both hung the suite silently.
+    target = Path("data") / "solstice_clash" / "migrate.py"
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / target
+        if candidate.is_file():
+            break
+    else:
+        raise AssertionError(f"could not find {target} above {__file__}")
+    spec = importlib.util.spec_from_file_location("_migrate", candidate)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

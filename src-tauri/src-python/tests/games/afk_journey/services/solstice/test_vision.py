@@ -58,11 +58,11 @@ LOCKED_TRUTH = {
 
 @pytest.fixture(scope="module")
 def library(db_path):
-    return IconLibrary.build(SolsticeConfig.load(db_path), ICON_DIR)
+    return IconLibrary.build(SolsticeConfig.load(db_path, event_slug="solstice-clash"), ICON_DIR)
 
 
 def test_extract_cell_returns_the_declared_size(db_path, frames, read_frame):
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     cell = cfg.cells("draft_card")[0]
     out = vision.extract_cell(frame, cell)
@@ -71,7 +71,7 @@ def test_extract_cell_returns_the_declared_size(db_path, frames, read_frame):
 
 def test_extract_cell_rejects_a_wrongly_sized_frame(db_path, frames, read_frame):
     """A rescaled screenshot must fail loudly, not silently crop the wrong region."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     scaled = cv2.resize(frame, (frame.shape[1] // 2, frame.shape[0] // 2))
     with pytest.raises(ValueError, match="1080x1920"):
@@ -81,7 +81,7 @@ def test_extract_cell_rejects_a_wrongly_sized_frame(db_path, frames, read_frame)
 def test_identifies_every_unbanned_draft_cell(
     db_path, frames, library, read_frame, slot_of
 ):
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     wrong, low = [], []
     for cell in cfg.cells("draft_card"):
@@ -101,7 +101,7 @@ def test_identifies_every_unbanned_draft_cell(
 
 def test_identifies_every_locked_pick(db_path, frames, library, read_frame, slot_of):
     """The 54/54 locked-pick baseline, encoded rather than merely cited."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["prematch_locked"])
     wrong, low = [], []
     for cell in cfg.cells("locked_pick"):
@@ -121,7 +121,7 @@ def test_skinned_cells_still_resolve_to_the_hero(
     db_path, frames, library, read_frame, slot_of
 ):
     """A picked hero re-renders SKINNED in the grid; it must still map to the hero."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     by_slot = {slot_of(c): c for c in cfg.cells("draft_card")}
     for slot, slug in ((10, "rowan"), (15, "lily_may")):
@@ -138,7 +138,7 @@ def test_unknown_when_the_portrait_is_covered(
     db_path, frames, library, read_frame, slot_of
 ):
     """A banned cell must come back unknown, never guessed."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     banned = next(c for c in cfg.cells("draft_card") if slot_of(c) == 6)
     res = vision.identify_cell(
@@ -151,7 +151,7 @@ def test_unknown_when_the_portrait_is_covered(
 def test_identification_carries_runner_up_provenance(
     db_path, frames, library, read_frame, slot_of
 ):
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)  # Sonja
     res = vision.identify_cell(
@@ -166,7 +166,7 @@ def test_pool_constraint_does_not_change_the_answer(
     db_path, frames, library, read_frame, slot_of
 ):
     """Narrowing to the pool must keep the answer and not shrink the margin."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)  # Sonja
     gray = vision.extract_cell(frame, cell)
@@ -216,7 +216,7 @@ def test_ban_detection_finds_exactly_the_two_banned_cells(
     The red/blue pair alone missed one hero's overlay (0.279 / 0.241), letting a banned
     card through as a phantom hero.
     """
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     glyphs = vision.load_ban_glyphs(anchor_dir)
     assert len(glyphs) >= 3, f"expected >= 3 glyph variants, found {len(glyphs)}"
@@ -231,7 +231,7 @@ def test_ban_detection_finds_exactly_the_two_banned_cells(
 def test_identify_pool_reads_the_whole_grid(
     db_path, frames, anchor_dir, library, read_frame
 ):
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     pool = vision.identify_pool(
         read_frame(frames["draft_selecting"]), cfg, library, anchor_dir
     )
@@ -245,7 +245,7 @@ def test_identify_with_pool_reports_which_tier_answered(
     db_path, frames, library, read_frame, slot_of
 ):
     """A pool hit and a full-library fallback must be distinguishable afterwards."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)  # Sonja
     gray = vision.extract_cell(frame, cell)
@@ -299,7 +299,7 @@ def test_empty_pool_is_rejected(db_path, frames, library, read_frame, slot_of):
 
     Accepting it would silently mark every pick as a pool miss and hide the failure.
     """
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     frame = read_frame(frames["draft_selecting"])
     cell = next(c for c in cfg.cells("draft_card") if slot_of(c) == 19)
     gray = vision.extract_cell(frame, cell)

@@ -145,12 +145,35 @@ _SIDES = frozenset({"left", "right"})
 _HERO_STATUSES = frozenset({"identified", "unknown"})
 _POOL_STATUSES = frozenset({"identified", "unknown", "banned"})
 _OUTCOMES = frozenset({"left", "right", "draw"})
-POOL_SIZE = 20  # the draft grid is always 5x4
+# Savannah Cup draws a 5x3 grid. Solstice Clash drew 5x4, and this was written
+# as 'always 5x4' when that was the only event this client had seen. Measured
+# on the live event screen 2026-09-06; no wiki source states a pool size for
+# Savannah Cup, so whether it varies BY THEME is unknown and untested.
+# Every cell type the record path indexes into. `cells("summary_hero")` returning
+# empty raises a bare StopIteration deep in _record_summary, so an event missing
+# any of these is not usable - checked at startup rather than mid-match.
+_REQUIRED_CELL_TYPES = frozenset(
+    {
+        "draft_card",
+        "locked_pick",
+        "summary_hero",
+        "draft_locked_pick",
+        "draft_pick",
+        "prematch_pick",
+    }
+)
+
+POOL_SIZE = 15
 _SIDE_SIZE = 3  # every Solstice Clash comp is exactly three heroes
 
 # The only event this client records. Was a bare literal in three places; the
 # mixin needs it too, and a fourth copy is how they start disagreeing.
-EVENT_SLUG = "solstice-clash"
+#
+# Changed to savannah-cup 2026-09-06. This is NOT cosmetic: comps_key() hashes
+# the slug into a match's identity, so leaving it on solstice-clash would file
+# every Savannah Cup match under the wrong event AND let two matches from
+# different events collide on one key in the shared pool.
+EVENT_SLUG = "savannah-cup"
 
 # Two captures belong to the SAME occurrence when they fall within this many
 # seconds of each other. Single-linkage: a capture within the window of two
@@ -368,6 +391,37 @@ class MatchStore:
             # launch and re-running the migration forever.
             match_columns = {r[1] for r in con.execute("PRAGMA table_info(match)")}
             if "canonical_state" not in match_columns:
+                return False
+
+            # GEOMETRY FOR THE EVENT WE COLLECT. cell_registry became per-event, and
+            # migrate.py seeds the new event's cells - but seeding is not a column, so
+            # every predicate above passes on a database that has the column and none of
+            # the rows. `cells("summary_hero")` then returns empty and the record path
+            # dies on a bare StopIteration with no message. Same failure mode as the
+            # unkeyed-rows check above: structurally complete, semantically empty.
+            cell_columns = {
+                r[1] for r in con.execute("PRAGMA table_info(cell_registry)")
+            }
+            if "event_id" not in cell_columns:
+                return False
+            # EVERY cell type, not merely some rows. A first attempt asked only whether
+            # the event had any cells at all, and passed on a database holding this
+            # event's 15 draft cards and none of its summary cells - exactly the state
+            # that raises StopIteration. The complete set is whatever any event defines.
+            ours = {
+                r[0]
+                for r in con.execute(
+                    "SELECT DISTINCT cr.cell_type FROM cell_registry cr"
+                    " JOIN event e ON e.id = cr.event_id WHERE e.slug = ?",
+                    (EVENT_SLUG,),
+                )
+            }
+            # The REQUIRED set, named explicitly. Comparing against "whatever any event
+            # defines" has a hole: on an empty cell_registry both sides are empty, the
+            # difference is empty, and a database with no geometry at all reports itself
+            # current - skipping the very rebuild that would populate it. Set equality
+            # cannot detect the absence of everything.
+            if _REQUIRED_CELL_TYPES - ours:
                 return False
             pending = con.execute(
                 "SELECT 1 FROM match WHERE canonical_state IS NULL LIMIT 1"
@@ -1007,7 +1061,14 @@ class MatchStore:
                 # The crowd's money, from the newest sample. LEFT JOIN because most
                 # matches have none - joined mid-draft, or an older client.
                 " o.trio_1_pool, o.trio_2_pool, o.trio_1_odds, o.trio_2_odds,"
-                " o.spectators"
+                " o.spectators,"
+                # The match's OWN event, never the module constant. A backlog
+                # collected before the client moved to a new event is still
+                # unpushed local rows, and stamping them with today's EVENT_SLUG
+                # submits another event's matches into this one's pool - wrong
+                # for every contributor, not just this install.
+                " (SELECT slug FROM event WHERE id = match.event_id)"
+                "   AS row_event_slug"
                 " FROM match"
                 " LEFT JOIN match_odds o ON o.id = ("
                 "   SELECT id FROM match_odds WHERE match_id = match.id"
@@ -1031,7 +1092,9 @@ class MatchStore:
                         "local_id": r[0],
                         "source": r[2],
                         "captured_at": r[3],
-                        "event_slug": EVENT_SLUG,
+                        # Falls back only when the row predates event_id being
+                        # populated; a NULL there is old data, not this event.
+                        "event_slug": r[18] or EVENT_SLUG,
                         # The raw screen read, never a slug: identity is the
                         # server's to decide.
                         "theme_ocr": r[4],
@@ -1102,12 +1165,15 @@ class MatchStore:
                     con.execute("DELETE FROM match WHERE id=?", (clash[0],))
                 else:
                     takes_key = self._resolve_local_clash(con, local_id, int(clash[0]))
-            theme_id = None
-            if theme_slug:
-                row = con.execute(
-                    "SELECT id FROM theme WHERE slug=?", (theme_slug,)
-                ).fetchone()
-                theme_id = row[0] if row else None
+            # Scoped to the event this match belongs to, not the first slug match.
+            owner = con.execute(
+                "SELECT slug FROM event WHERE id ="
+                " (SELECT event_id FROM match WHERE id=?)",
+                (local_id,),
+            ).fetchone()
+            theme_id = self._theme_id_for(
+                con, theme_slug, owner[0] if owner else None
+            )
             con.execute(
                 # COALESCE, not a bare `?`: when this row loses the clash it becomes
                 # a member of another occurrence and must stay UNKEYED, while still
@@ -1211,6 +1277,37 @@ class MatchStore:
             )
         return True
 
+    def _theme_id_for(
+        self,
+        con: sqlite3.Connection,
+        theme_slug: str | None,
+        event_slug: str | None = None,
+    ) -> int | None:
+        """Resolve a theme slug WITHIN one event.
+
+        `theme` is UNIQUE(event_id, slug), not UNIQUE(slug): every event has its own
+        'unknown' default, and Savannah Cup could reuse any Solstice theme name. A bare
+        `WHERE slug=?` returns whichever row SQLite reaches first, so a match could be
+        filed under another event's theme - and 'unknown' is the one slug guaranteed to
+        exist under both.
+
+        Args:
+            con: The open connection to query on.
+            theme_slug: The theme's slug, or None.
+            event_slug: The event to look within. Defaults to the event being collected.
+
+        Returns:
+            The theme id, or None when the slug is empty or matches nothing.
+        """
+        if not theme_slug:
+            return None
+        row = con.execute(
+            "SELECT t.id FROM theme t JOIN event e ON e.id = t.event_id"
+            " WHERE t.slug=? AND e.slug=?",
+            (theme_slug, event_slug or EVENT_SLUG),
+        ).fetchone()
+        return row[0] if row else None
+
     def mark_push_rejected(self, local_id: int, reason: str) -> None:
         """A row the server refuses is not a failed push - retrying is pointless."""
         with self._connect() as con:
@@ -1230,12 +1327,10 @@ class MatchStore:
             ).fetchone()
             if existing is not None:
                 return None
-            theme_id = None
-            if row.get("theme_slug"):
-                t = con.execute(
-                    "SELECT id FROM theme WHERE slug=?", (row["theme_slug"],)
-                ).fetchone()
-                theme_id = t[0] if t else None
+            # A pulled row carries its own event; it may not be the one we collect.
+            theme_id = self._theme_id_for(
+                con, row.get("theme_slug"), row.get("event_slug")
+            )
             cur = con.execute(
                 # blue_trio is NOT set, and that is the point: we never watched this
                 # draft, so there is no blue. The NULL IS the flag - it is what

@@ -213,7 +213,30 @@ DETAILS_TIMEOUT = 15.0
 # multiple lines. Verified against s3.png: RapidOCR reads "Converging Paths" cleanly
 # from this exact region; Tesseract on the same crop garbled it ("Converoino Pathe"),
 # so RapidOCR is used here rather than the TesseractBackend default seen elsewhere.
-_THEME_NAME_REGION = (1195, 1280, 10, 540)  # y0, y1, x0, x1
+# y0, y1, x0, x1. Re-measured on the Savannah Cup event screen 2026-09-06: the
+# Solstice values caught the "Current Theme" HEADING and clipped the name itself,
+# reading 'Current Theme Fortress O' instead of 'Forsaken Fortress'. That fails
+# silently - a garbled name is still stored as match.theme - so it is worse than a
+# crash. Verified by OCR on a real capture before changing.
+_THEME_NAME_REGION = (1235, 1320, 50, 580)
+
+
+# The event this mode currently drives. Savannah Cup (2026-09-03) is Solstice Clash
+# reskinned: same 3v3 pick-and-ban, same "Royal City Show" host, same Fortune Picks
+# button in the same place. Only the two entry-point images differ, so only these two
+# paths move per event - everything downstream matched the old templates unchanged.
+_EVENT_CARD_TEMPLATE = "event/savannah_cup/events_card"
+_EVENT_SCREEN_TEMPLATE = "event/savannah_cup/event_screen"
+
+
+class _EventNotRunningError(GameActionFailedError):
+    """The event card is not in the events list, so the event is over.
+
+    Distinct from a navigation failure on purpose: a run that cannot find the card
+    should stop rather than spend its remaining failure budget rediscovering that a
+    limited-time event has ended.
+    """
+
 
 # User-tested: short presses can fail to open the popup, over-long ones do no harm. The
 # cost is asymmetric, so bias long rather than tuning for the minimum that worked once.
@@ -733,9 +756,27 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             [
                 "navigation/hamburger_menu",
                 "dailies/hamburger/events",
-                "event/solstice_clash/events_card",
             ]
         )
+        # The card is NOT part of the chain any more. The events list scrolls, and which
+        # events are above Savannah Cup changes as other events end, so the card's
+        # position is not fixed and a single match-and-tap misses it whenever it starts
+        # below the fold. _find_in_battle_modes is the existing check-swipe-check loop
+        # (navigation.py), already tuned to short slow swipes so a fling cannot
+        # overshoot the card.
+        try:
+            card = self._find_in_battle_modes(
+                template=_EVENT_CARD_TEMPLATE,
+                timeout_message="[SC-26] Savannah Cup card not in the events list",
+            )
+        except GameTimeoutError as exc:
+            # Scrolled the whole list and it is not there. That is not a transient
+            # failure worth two more attempts from the 3-strike budget - a limited-time
+            # event that has ended never comes back within a run. Stop cleanly.
+            raise _EventNotRunningError(
+                "[SC-27] Savannah Cup is not in the events list - the event has ended"
+            ) from exc
+        self._tap_till_template_disappears(card.template)
         # Arrival is confirmed by WAITING for a title that persists, never by tapping it.
         # Confirm we are on the Solstice Clash event page, then tap Fortune Picks by
         # COORDINATE. The button sits in a fixed position on this page, and template
@@ -743,9 +784,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # template cut from an earlier capture of the same page. Arrival is what needs
         # verifying; the button's location does not.
         self.wait_for_template(
-            template="event/solstice_clash/event_screen",
+            template=_EVENT_SCREEN_TEMPLATE,
             timeout=EVENT_SCREEN_TIMEOUT,
-            timeout_message="[SC-01] did not reach the Solstice Clash event page",
+            timeout_message="[SC-01] did not reach the Savannah Cup event page",
         )
         # Read the theme HERE, while the event screen is up. It shows "Current Theme:
         # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
@@ -1208,6 +1249,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                         f"[SC-20] no match recorded "
                         f"({consecutive_failures}/{max_restarts})"
                     )
+            except _EventNotRunningError as exc:
+                # MUST precede the generic handler below, which would otherwise count
+                # this as a strike and spend two more cycles rediscovering it. The card
+                # was absent from the whole scrolled events list: the event is over, and
+                # no amount of retrying brings a limited-time event back inside one run.
+                logging.info(f"{exc} - stopping (recorded {recorded} match(es))")
+                self._overlay_stop()
+                return
             except Exception as exc:
                 # A match that was already RECORDED does not count as a failure, however
                 # the cycle ended. _run_one_match writes the match before navigating back,

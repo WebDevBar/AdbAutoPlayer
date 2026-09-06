@@ -69,7 +69,11 @@ def test_a_frame_with_no_stored_row_is_dropped_not_classified(tmp_path, monkeypa
 
     handed_to_the_reader: list[int] = []
 
-    def _fake_reads(work, db_path, icon_dir, workers):
+    def _fake_reads(work, db_path, icon_dir, workers, event_slug):
+        # event_slug is asserted, not ignored: geometry is per event now, and the whole
+        # point of threading it through audit() is that a Solstice audit must not read
+        # its frames with the currently-collected event's grid.
+        assert event_slug == mod.DEFAULT_EVENT_SLUG, event_slug
         handed_to_the_reader.extend(match_id for match_id, _ in work)
         return [(match_id, list(_LEFT), list(_RIGHT[:2])) for match_id, _ in work]
 

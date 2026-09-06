@@ -61,7 +61,7 @@ def test_header_drives_dimensions_not_a_hardcoded_size():
 
 
 def test_library_covers_every_usable_roster_hero(db_path):
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     lib = IconLibrary.build(cfg, ICON_DIR)
     slugs = {e.slug for e in lib.entries()}
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -78,7 +78,7 @@ def test_library_covers_every_usable_roster_hero(db_path):
 
 def test_library_excludes_npcs(db_path):
     """IDs >= 1000 are NPCs, mobs and bosses - they never appear in a draft."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     lib = IconLibrary.build(cfg, ICON_DIR)
     heroes = cfg.heroes()
     for entry in lib.entries():
@@ -89,7 +89,7 @@ def test_library_excludes_npcs(db_path):
 
 def test_library_includes_skins_mapped_to_their_hero(db_path):
     """A skin resolves to its HERO. Identification never needs to name the skin."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     lib = IconLibrary.build(cfg, ICON_DIR)
     skins = [e for e in lib.entries() if e.art_kind == "skin"]
     assert skins, "no skin entries in the library"
@@ -103,7 +103,7 @@ def test_gamma_brightens_the_decoded_art(db_path):
     Decoded RGB renders darker than the game draws it; library_config.gamma
     (exponent 1/1.8) raised the match median from 0.9550 to 0.9718 on labelled cells.
     """
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     raw = decode_ast(ICON_DIR / "hero" / SONJA)
     lib = IconLibrary.build(cfg, ICON_DIR)
     entry = next(e for e in lib.entries() if e.art_ref == "spui_herohead_66")
@@ -114,7 +114,7 @@ def test_gamma_brightens_the_decoded_art(db_path):
 
 def test_for_slugs_narrows_the_candidate_set(db_path):
     """The pool constraint: 121 candidates down to <= 20 for a given match."""
-    cfg = SolsticeConfig.load(db_path)
+    cfg = SolsticeConfig.load(db_path, event_slug="solstice-clash")
     lib = IconLibrary.build(cfg, ICON_DIR)
     subset = lib.for_slugs({"sonja", "eironn"})
     assert subset, "expected entries for those heroes"

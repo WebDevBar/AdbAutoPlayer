@@ -15,6 +15,11 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from adb_auto_player.games.afk_journey.services.solstice.store import (
+    EVENT_SLUG,
+    MatchStore,
+)
+
 
 @dataclass(frozen=True)
 class Cell:
@@ -68,13 +73,39 @@ class SolsticeConfig:
         self._aliases = aliases
 
     @classmethod
-    def load(cls, db_path: Path) -> SolsticeConfig:
+    def load(cls, db_path: Path, event_slug: str | None = None) -> SolsticeConfig:
+        """Load geometry for ONE event.
+
+        Geometry is per event, not global: Savannah Cup draws a 5x3 draft grid where
+        Solstice Clash drew 5x4, and its locked-pick row sits ~500px higher. Loading
+        every row would apply the newest event's coordinates to stored frames from an
+        older one, which silently destroys identification rather than failing.
+
+        Args:
+            db_path: The hero library database.
+            event_slug: Which event's geometry to load. Defaults to the event this
+                client currently collects.
+
+        Returns:
+            A config carrying only that event's cells.
+        """
+        # Bring the database up to date FIRST. `cell_registry.event_id` arrived after
+        # some installs were already collecting, and both this and MatchStore are lazy
+        # properties on the mixin with no ordering between them - so whichever is
+        # touched first must be the one that migrates. Reaching a read-only connection
+        # before that raised `no such column: cr.event_id` on every existing install.
+        # MatchStore._ensure_schema is idempotent and caches per path, so this is free
+        # on the second call.
+        MatchStore(Path(db_path))
+
         con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             cells: dict[str, list[Cell]] = {}
             for row in con.execute(
-                "SELECT cell_name,cell_type,x0,y0,x1,y1,side,slot FROM cell_registry "
-                "ORDER BY cell_type, slot"
+                "SELECT cr.cell_name,cr.cell_type,cr.x0,cr.y0,cr.x1,cr.y1,cr.side,"
+                "cr.slot FROM cell_registry cr JOIN event e ON e.id = cr.event_id "
+                "WHERE e.slug = ? ORDER BY cr.cell_type, cr.slot",
+                (event_slug or EVENT_SLUG,),
             ):
                 cells.setdefault(row[1], []).append(Cell(*row))
             tunables = dict(con.execute("SELECT key,value FROM library_config"))

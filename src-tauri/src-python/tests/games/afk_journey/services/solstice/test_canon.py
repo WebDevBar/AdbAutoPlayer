@@ -149,12 +149,19 @@ def test_the_two_canonical_implementations_agree():
     """`migrate.py` runs standalone and cannot import the package, so the three pure
     functions exist twice on purpose. This is what stops the copies drifting.
     """
-    root = Path(__file__).resolve()
-    while root.name != "adbautoplayer":
-        root = root.parent
-    spec = importlib.util.spec_from_file_location(
-        "_canon_rows", root / "data" / "solstice_clash" / "canon_rows.py"
-    )
+    # Walk up looking for the FILE, not for a directory called "adbautoplayer".
+    # The old loop was `while root.name != "adbautoplayer": root = root.parent`, which
+    # spins forever on any checkout not spelled in lower case - `Path("/").parent` is
+    # `/`, so it never terminates and never raises. This directory is `AdbAutoPlayer`,
+    # and the comparison is case-sensitive, so the whole test suite hung here.
+    target = Path("data") / "solstice_clash" / "canon_rows.py"
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / target
+        if candidate.is_file():
+            break
+    else:
+        raise AssertionError(f"could not find {target} above {__file__}")
+    spec = importlib.util.spec_from_file_location("_canon_rows", candidate)
     std = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(std)
 

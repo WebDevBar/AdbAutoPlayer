@@ -8,6 +8,26 @@ class HeroesEnum(StrEnum):
     def _generate_next_value_(name, start, count, last_values):
         return name.replace("_and_", " & ").replace("_", " ")
 
+    @classmethod
+    def _missing_(cls, value: object) -> "HeroesEnum | None":
+        """Accept names this enum used to spell wrongly.
+
+        `excluded_heroes` in a saved profile is `list[HeroesEnum]`, so a stored value
+        that no longer matches a member does not degrade - the whole settings load
+        fails validation and the user loses every exclusion they had set.
+
+        Three names were corrected against the wiki's playable hero list on 2026-09-06.
+        Anyone who had excluded one of them has it written in their profile under the
+        old spelling, so the old spellings must keep resolving. New profiles are written
+        with the corrected values.
+        """
+        renamed = {
+            "Isabelle": cls.Isabella,
+            "Smokey": cls.Smokey_and_Meerky,
+            "Sylphyra": cls.Sylphira,
+        }
+        return renamed.get(value) if isinstance(value, str) else None
+
     Aliceth = auto()
     Alna = auto()
     Alsa = auto()
@@ -52,7 +72,7 @@ class HeroesEnum(StrEnum):
     Hugin = auto()
     Igor = auto()
     Indris = auto()
-    Isabelle = auto()
+    Isabella = auto()
     Kafra = auto()
     Kazim = auto()
     Koko = auto()
@@ -104,11 +124,11 @@ class HeroesEnum(StrEnum):
     Silven = auto()
     Silvina = auto()
     Sinbad = auto()
-    Smokey = auto()
+    Smokey_and_Meerky = auto()
     Solise = auto()
     Sonja = auto()
     Soren = auto()
-    Sylphyra = auto()
+    Sylphira = auto()
     Talene = auto()
     Tasi = auto()
     Temesia = auto()

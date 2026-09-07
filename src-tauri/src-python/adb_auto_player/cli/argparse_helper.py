@@ -36,8 +36,14 @@ class ArgparseHelper:
         parser.add_argument(
             "--log-level",
             choices=["DISABLE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-            default="DEBUG",
-            help="Log level",
+            default="INFO",
+            help=(
+                "How much reaches the CONSOLE. Defaults to INFO: a run's DEBUG lines "
+                "are template matches and taps, which bury the handful of lines a "
+                "person is actually reading for. They are still kept - the "
+                "warning-context file holds the DEBUG lead-up and flushes it when "
+                "something goes wrong."
+            ),
         )
         parser.add_argument(
             "--app-config-dir",

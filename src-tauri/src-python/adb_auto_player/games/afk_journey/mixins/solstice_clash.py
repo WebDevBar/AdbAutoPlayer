@@ -722,7 +722,12 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         # The line a person actually looks for after a match. Announced in BOTH record
         # paths - it was missing entirely, and a winner buried in the [SC-40] detail
         # line is not something the eye finds in a scrolling log.
-        logging.info(f"[SC-40] {announce_winner(read.winner)}")
+        #
+        # `None`, not `read.winner`: this path sets `blue_trio=None` because it never
+        # watched the draft, so which colour won is genuinely unknown. Passing the
+        # panel here mapped left->blue and asserted a colour we cannot support. The
+        # [SC-40] line above still states which PANEL won, so nothing is lost.
+        logging.info(f"[SC-40] {announce_winner(None)}")
         return True
 
     def _open_spectate(self) -> tuple[bool, str | None]:
@@ -1570,7 +1575,20 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
 
         # Outside the prediction block on purpose: a match with no prediction still
         # has a winner, and that is exactly when the log would otherwise say nothing.
-        logging.info(f"[SC-75] {announce_winner(read.winner)}")
+        #
+        # Announced in BLUE/RED terms, never in panel terms. `read.winner` is which
+        # PANEL won, and the panel a side occupies is not fixed - that is the whole
+        # reason orientation is resolved at all. Passing it straight to
+        # announce_winner mapped left->blue unconditionally and printed "BLUE WINS"
+        # directly above "red won - MISS" on the same match.
+        #
+        # When orientation could not be resolved, `_winner_in_blue_terms` returns None
+        # and announce_winner says "result unresolved" - which is the honest answer,
+        # because without it we genuinely do not know which colour won.
+        logging.info(
+            f"[SC-75] "
+            f"{announce_winner(self._winner_in_blue_terms(read, trios, blue_trio))}"
+        )
 
         pending = getattr(self, "_pending_prediction", None)
         if pending is not None and match_id:

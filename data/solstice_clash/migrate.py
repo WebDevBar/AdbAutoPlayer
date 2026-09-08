@@ -1382,6 +1382,22 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
             "2026-09-09T00:00:00Z",
             0,
         ),
+        # Starts exactly where Forsaken Fortress ends - the operator confirmed the
+        # rotation lands on tonight's reset, and the two boundaries are the same
+        # instant, so no capture falls between them. The END is unknown until the
+        # next rotation is observed, and NULL is the honest answer: this theme
+        # therefore absorbs everything after it until that date is filled in, which
+        # `pull_themes` then re-files retroactively.
+        ("fierce-duel", "Fierce Duel", "2026-09-09T00:00:00Z", None, 0),
+        # ORDER known from the operator, TIMINGS not. Seeded with no window at all so
+        # the rows exist to be filled the moment each rotation is seen. A guessed
+        # boundary would file matches under a theme nobody confirmed, which is the
+        # failure every NULL in this table exists to prevent.
+        ("top-defender", "Top Defender", None, None, 0),
+        ("tactical-grounds", "Tactical Grounds", None, None, 0),
+        # Ran before Forsaken Fortress - the event opened 09-03 and that theme was
+        # never captured, so its window stays unknown too.
+        ("tranquil-grounds", "Tranquil Grounds", None, None, 0),
     ):
         con.execute(
             "INSERT OR IGNORE INTO theme"

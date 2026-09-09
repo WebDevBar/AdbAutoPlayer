@@ -1,6 +1,6 @@
 # One CLI, one settings layer, shared with the GUI - design
 
-Written 2026-09-09, revision 7. Supersedes the withdrawn v1/v2 implementation plans, which were
+Written 2026-09-09, revision 8. Supersedes the withdrawn v1/v2 implementation plans, which were
 drafted before `docs/cli-revamp-notes.md` was read and treated the menu as a feature of its own.
 
 ## The principle
@@ -134,11 +134,25 @@ no-seeding decision stands - but for this reason, not the old one.
 **The consequence this design must own: the editor writes into git-tracked files that upstream
 also changes.** Every `merge upstream/main` becomes a conflict or a silent overwrite of operator
 edits, and the working tree is permanently dirty. This is the strongest argument for relocating
-the CLI's config outside the repo - the very migration this spec defers.
+the CLI's config outside the repo.
 
-**Open decision, owner's call:** migrate the config location as part of this work, or keep writing
-into the repo and accept the merge friction. The rest of the design is unaffected either way,
-because the resolver takes the directory as input.
+**Decision, taken by the owner 2026-09-09: relocate.** The CLI's config moves to the GUI's own
+directory, `~/.config/com.AdbAutoPlayer.AdbAutoPlayer/`, identifier confirmed at
+`tauri.conf.json:37`. Two reasons and one bonus:
+
+- Every `merge upstream/main` stops conflicting, and the tree stops going dirty on save.
+- There is almost nothing to carry: `App.toml` and `ADB.toml` are byte-identical to upstream, so
+  only `AFKJourney.toml`'s 7 local lines move.
+- It also unifies the location with the GUI, which this spec had listed as **not delivered**.
+
+**The migration must CREATE the two-level layout explicitly.** That directory does not exist on
+this machine, so on first run the resolver's third branch would class it flat and the layouts would
+diverge permanently (see the accepted consequence above). The migration therefore writes
+`<config>/App.toml` and `<config>/0/{ADB,AFKJourney}.toml` itself, after which branch 2 fires for
+every later run. `afk-bot.sh:42` then passes `<config>/0` as `--app-config-dir`.
+
+**This is a one-time, explicitly requested migration, not something a first run does silently** -
+which is the same rule the no-seeding decision above states.
 
 ## Requirements this must satisfy
 
@@ -386,9 +400,10 @@ Delivered:
 
 **Not delivered, stated plainly rather than implied:**
 
-- **The GUI and the CLI do NOT end up reading the same files.** Migration is deferred (see above),
-  and no GUI config dir exists on this machine. After this work the CLI still reads
-  `src-tauri/settings/`. Unifying the location is a separate, deliberate migration.
+- **The GUI and the CLI read the same files only in location, not in coverage.** After the
+  migration both point at `~/.config/com.AdbAutoPlayer.AdbAutoPlayer/`. But the GUI has never run
+  on this machine, so that claim is unproven from the GUI side until it does, and the Python and
+  Rust models have drifted (below), so the two front ends will not agree on every key even then.
 - **Requirement 3 is only partly met.** `docs/cli-revamp-notes.md` asks to "view the last N lines
   DURING a run". Execution is synchronous (`execute.py:175-176`), so what is delivered is a replay
   AFTER a run. Since `--output terminal` already streams live, the replay adds little; the live
@@ -458,6 +473,9 @@ Each step is independently testable, and the first two are bug fixes that stand 
 8. **Custom-routine slot editor** - registry choices, preserve-and-mark unknown names, refuse to
    add a duplicate, reorder within a slot.
 9. **Deque log-tail handler**, offered after a completed run.
-10. **`todor-wdb/the-drey-setup`** - `afk-bot.sh` default argument, drop the emulator pre-check,
-    name the no-argument log.
-11. **End-to-end SSH proof run**, which is requirement zero from the notes.
+10. **Config migration** - create `~/.config/com.AdbAutoPlayer.AdbAutoPlayer/App.toml` and
+    `.../0/{ADB,AFKJourney}.toml` from the repo copies, verify the resolver reports two-level, and
+    leave `src-tauri/settings/` untouched and tracked so upstream merges stay clean.
+11. **`todor-wdb/the-drey-setup`** - point `afk-bot.sh:42` at the new `--app-config-dir`, add the
+    default argument, drop the emulator pre-check, name the no-argument log.
+12. **End-to-end SSH proof run**, which is requirement zero from the notes.

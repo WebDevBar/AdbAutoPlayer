@@ -1,5 +1,32 @@
 # Changelog
 
+## [wdb-12.12.1-36] - 2026-09-09
+
+Upstream 12.12.1 plus the fixes found by running the bot for two days.
+
+### Fixed
+
+- **The winner headline could name the wrong side.** A match printed "BLUE WINS" directly above
+  "red won - MISS". The headline used which PANEL won, and panel position is not side colour -
+  resolving that is the whole point of the orientation step. Stored data was always correct; only
+  the printed line was wrong.
+- **The CLI printed HTML.** Log messages carry `<span class="sc-*">` markers because the GUI
+  renders them as HTML; in a terminal those tags wrapped the words that mattered. They now render
+  as colour, and `--output text` strips them.
+- **DEBUG no longer floods the console.** It defaulted to on, so every template match and tap
+  scrolled past the handful of lines worth reading. The detail is not lost: it goes to
+  `~/.local/state/adb-auto-player/debug.log`, which stays empty unless something goes wrong and
+  then holds the failure plus the steps leading to it.
+- **A red ERROR on every run.** A developer helper compared local `main` against origin; a fork
+  checkout has no `main`, so it failed every time and printed above the first real output.
+
+### Added
+
+- **`c1`, `c2`, `c3`** as aliases for the three custom routines, shown beside them in the command
+  list.
+- **Savannah Cup theme windows** through Top Defender, so matches file against the right theme
+  instead of falling to the default and being dropped from the odds model.
+
 ## [wdb-12.12.0-35] - 2026-09-06
 
 ### Added

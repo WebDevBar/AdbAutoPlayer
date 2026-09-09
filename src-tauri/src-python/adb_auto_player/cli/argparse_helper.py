@@ -6,6 +6,20 @@ from argparse import Namespace
 from adb_auto_player.models.commands import Command
 
 
+# Short names for the commands typed most often. `AFKJCustomRoutine2` is three words
+# of camelCase and a digit to reach a thing the UI just calls "Custom Routine 2", and
+# it is the command a person runs daily - so it gets an alias, accepted anywhere the
+# full name is and shown beside it in the listing.
+COMMAND_ALIASES: dict[str, str] = {
+    "c1": "AFKJCustomRoutine",
+    "c2": "AFKJCustomRoutine2",
+    "c3": "AFKJCustomRoutine3",
+}
+
+# The reverse direction, for the help output. Built once rather than searched per line.
+_ALIAS_OF = {target: alias for alias, target in COMMAND_ALIASES.items()}
+
+
 class ArgparseHelper:
     """Argparse helper functions."""
 
@@ -25,6 +39,18 @@ class ArgparseHelper:
                 cmd.name
                 for category_commands in commands.values()
                 for cmd in category_commands
+            ]
+            # Aliases are real choices, not a pre-parse rewrite: argparse validates
+            # against this list, so a rewrite would have to happen before validation
+            # and would lose argparse's own error message for a genuine typo.
+            + [
+                alias
+                for alias, target in COMMAND_ALIASES.items()
+                if any(
+                    cmd.name == target
+                    for category_commands in commands.values()
+                    for cmd in category_commands
+                )
             ],
         )
         parser.add_argument(
@@ -59,12 +85,43 @@ class ArgparseHelper:
         return parser
 
     @staticmethod
+    def resolve_command(name: str) -> str:
+        """Map a short alias to the command it stands for.
+
+        Args:
+            name: What the user typed.
+
+        Returns:
+            The real command name, or `name` unchanged when it is not an alias.
+        """
+        return COMMAND_ALIASES.get(name, name)
+
+    @staticmethod
     def get_log_level_from_args(args: Namespace) -> int | str:
         """Get log level from command line arguments."""
         log_level = args.log_level
         if log_level == "DISABLE":
             log_level = 99
         return log_level
+
+
+
+def _format_command_line(cmd) -> str:
+    """One listing row: the command, its alias if it has one, and its tooltip.
+
+    The alias is shown INLINE rather than in a separate legend - a legend is a second
+    place to look, and the point of the alias is to be seen while reading the list.
+
+    Args:
+        cmd: The command to render.
+
+    Returns:
+        The formatted line.
+    """
+    alias = _ALIAS_OF.get(cmd.name)
+    label = f"{cmd.name} ({alias})" if alias else cmd.name
+    tooltip = getattr(cmd.menu_item, "tooltip", "")
+    return f"    {label:<36} {tooltip}" if tooltip else f"    {label}"
 
 
 def _build_argparse_formatter(commands_by_category: dict[str, list[Command]]):
@@ -122,11 +179,7 @@ def _build_argparse_formatter(commands_by_category: dict[str, list[Command]]):
                 if common_cmds:
                     parts.append("  Common Commands:")
                     for cmd in sorted(common_cmds, key=lambda c: c.name.lower()):
-                        tooltip = getattr(cmd.menu_item, "tooltip", "")
-                        if tooltip:
-                            parts.append(f"    {cmd.name:<30} {tooltip}")
-                        else:
-                            parts.append(f"    {cmd.name}")
+                        parts.append(_format_command_line(cmd))
 
                 other_groups = {
                     k: v for k, v in commands_by_category.items() if k != "Commands"
@@ -138,11 +191,7 @@ def _build_argparse_formatter(commands_by_category: dict[str, list[Command]]):
                     ):
                         parts.append(f"  - {group_name}:")
                         for cmd in sorted(group_cmds, key=lambda c: c.name.lower()):
-                            tooltip = getattr(cmd.menu_item, "tooltip", "")
-                            if tooltip:
-                                parts.append(f"    {cmd.name:<30} {tooltip}")
-                            else:
-                                parts.append(f"    {cmd.name}")
+                            parts.append(_format_command_line(cmd))
 
                 return "\n".join(parts) + "\n"
 

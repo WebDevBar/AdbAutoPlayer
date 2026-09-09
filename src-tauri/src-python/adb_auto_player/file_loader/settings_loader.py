@@ -30,6 +30,35 @@ class SettingsLoader:
         return value
 
     @staticmethod
+    def app_settings_path() -> Path:
+        """Where App.toml lives, for whichever layout is in use.
+
+        The GUI keeps settings two levels deep: `App.toml` sits in the config ROOT and
+        every other file in a per-profile subdirectory, so `app_config_dir` means the
+        PROFILE directory and the root is its parent (`src/settings.rs`,
+        `src/commands.rs`). Callers encoded that as `get_app_config_dir().parent`.
+
+        The CLI has no profile directory - it is handed a flat directory holding all
+        three TOMLs. `.parent` then walks one level ABOVE them, finds nothing, and
+        every reader silently falls back to defaults. That is not hypothetical: on
+        2026-09-09 `App.toml` was being ignored on every CLI run, so `template_timeout`,
+        `action_delay` and `navigation_delay` were defaults no matter what the file
+        said, and `Game.app_settings` swallowed the miss in a bare `except`.
+
+        Checking the profile directory FIRST and the parent second serves both layouts
+        without either caller needing to know which one it is in.
+
+        Returns:
+            The path App.toml should be read from. May not exist, which callers already
+            handle - the point is that it is the RIGHT path to check.
+        """
+        config_dir = SettingsLoader.get_app_config_dir()
+        flat = config_dir / "App.toml"
+        if flat.is_file():
+            return flat
+        return config_dir.parent / "App.toml"
+
+    @staticmethod
     def set_app_config_dir(value: Path) -> None:
         """Set App Config Dir."""
         _profile_app_config_dir.set(value)

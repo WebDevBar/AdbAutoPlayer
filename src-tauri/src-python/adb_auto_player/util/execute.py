@@ -77,9 +77,10 @@ class Execute:
         watchdog_restart_delay = 40
         max_consecutive_restarts = _DEFAULT_MAX_CONSECUTIVE_RESTARTS
         try:
-            # App.toml is located in the root config dir, not the profile dir
-            app_config_dir = SettingsLoader.get_app_config_dir().parent
-            app_settings_path = app_config_dir / "App.toml"
+            # App.toml sits in the config ROOT for the GUI's two-level layout and
+            # alongside the other TOMLs for the CLI's flat one. The resolver serves
+            # both; hardcoding `.parent` here meant the CLI read no App.toml at all.
+            app_settings_path = SettingsLoader.app_settings_path()
             if app_settings_path.exists():
                 with open(app_settings_path, "rb") as f:
                     app_settings = tomllib.load(f)

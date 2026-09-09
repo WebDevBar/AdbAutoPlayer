@@ -71,9 +71,7 @@ class Game(
     def app_settings(self) -> AppSettings:
         """Global application settings (loaded from App.toml)."""
         try:
-            app_config_dir = SettingsLoader.get_app_config_dir().parent
-            app_settings_path = app_config_dir / "App.toml"
-            return AppSettings.from_toml(app_settings_path)
+            return AppSettings.from_toml(SettingsLoader.app_settings_path())
         except Exception:
             return AppSettings()
 

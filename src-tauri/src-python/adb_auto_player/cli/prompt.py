@@ -12,8 +12,14 @@ unwinds the whole menu.
 from collections.abc import Sequence
 from typing import Any
 
-CANCELLED = object()
-"""Returned when the user pressed Ctrl+C or Ctrl+D instead of answering."""
+from . import tui
+
+CANCELLED = tui.CANCELLED
+"""Returned when the user cancelled instead of answering.
+
+Shared with `tui` so a caller can compare against one sentinel whichever front end
+answered.
+"""
 
 
 def _input(prompt: str) -> str | Any:
@@ -27,6 +33,10 @@ def _input(prompt: str) -> str | Any:
 def ask_line(prompt: str, default: str | None = None) -> str | Any:
     """Ask for a single line of text.
 
+    Uses the full-screen front end when a terminal is available, and falls back to
+    a printed prompt otherwise - a cron run, a pipe, or a terminal prompt_toolkit
+    cannot drive.
+
     Args:
         prompt: Shown before the cursor.
         default: Returned when the user just presses enter.
@@ -34,6 +44,9 @@ def ask_line(prompt: str, default: str | None = None) -> str | Any:
     Returns:
         The entered text, the default, or CANCELLED.
     """
+    if tui.is_available():
+        return tui.ask_line(prompt, default)
+
     suffix = f" [{default}]" if default is not None else ""
     answer = _input(f"{prompt}{suffix}: ")
     if answer is CANCELLED:
@@ -44,19 +57,30 @@ def ask_line(prompt: str, default: str | None = None) -> str | Any:
     return answer
 
 
-def choose(title: str, options: Sequence[str], back: str = "Back") -> int | Any:
-    """Show a numbered list and return the chosen index.
+def choose(
+    title: str,
+    options: Sequence[str],
+    back: str = "Back",
+    subtitle: str = "",
+) -> int | Any:
+    """Show a list and return the chosen index.
 
     Args:
-        title: Printed above the list.
+        title: Shown above the list.
         options: The choices, in display order.
         back: Label for the always-present zero option.
+        subtitle: Optional second header line.
 
     Returns:
         The zero-based index into `options`, -1 for the back option, or CANCELLED.
     """
+    if tui.is_available():
+        return tui.select(title, options, back=back, subtitle=subtitle)
+
     while True:
         print(f"\n{title}")
+        if subtitle:
+            print(f"  {subtitle}")
         for i, option in enumerate(options, start=1):
             print(f"  {i:>3}. {option}")
         print(f"  {0:>3}. {back}")
@@ -88,6 +112,9 @@ def confirm(prompt: str, default: bool = False) -> bool | Any:
     Returns:
         True, False, or CANCELLED.
     """
+    if tui.is_available():
+        return tui.confirm(prompt, default)
+
     answer = ask_line(f"{prompt} (y/n)", "y" if default else "n")
     if answer is CANCELLED:
         return CANCELLED

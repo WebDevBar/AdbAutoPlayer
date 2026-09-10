@@ -38,6 +38,16 @@ class _Field:
         return str(self.schema.get("type", "string"))
 
     @property
+    def section(self) -> str:
+        """Top-level table this field belongs to, or "" for a bare key."""
+        return self.dotted_key.split(".")[0] if "." in self.dotted_key else ""
+
+    @property
+    def leaf_title(self) -> str:
+        """The field's own label, without the section prefix the walk added."""
+        return self.title.split(" / ")[-1]
+
+    @property
     def choices(self) -> list[str] | None:
         """Allowed values, for an enum or an array of enums."""
         for holder in (self.schema, self.schema.get("items", {})):
@@ -66,7 +76,13 @@ def collect_fields(model: type[BaseModel]) -> list[_Field]:
     Returns:
         Editable fields, in declaration order.
     """
-    root = model.model_json_schema(by_alias=False)
+    # by_alias=True is REQUIRED, not cosmetic. AFKJourney.toml is keyed by alias
+    # (["AFK Stages"], Attempts) while the field names are afk_stages.attempts.
+    # Building dotted keys from field names made every value read as None, and a
+    # save would have written a parallel table the model never reads - leaving the
+    # real settings untouched and the file full of junk. App.toml hid this because
+    # its models declare no aliases.
+    root = model.model_json_schema(by_alias=True)
     fields: list[_Field] = []
 
     def walk(schema: dict[str, Any], prefix: str, label: str) -> None:
@@ -166,8 +182,56 @@ def _edit_field(field: _Field, data: dict[str, Any]) -> bool:
     return _prompt_scalar(field, data, current)
 
 
+def _section_label(fields: list[_Field], section: str) -> str:
+    """Human label for a section, from the first field that carries one."""
+    for field in fields:
+        if field.section == section and " / " in field.title:
+            return field.title.split(" / ")[0]
+    return section or "General"
+
+
+def _edit_section(fields: list[_Field], data: dict[str, Any], title: str) -> bool:
+    """Edit the fields of one section. Returns True if anything changed."""
+    changed = False
+    while True:
+        labels = [
+            f"{f.leaf_title} = {settings_file.get_in(data, f.dotted_key)}"
+            for f in fields
+        ]
+        index = prompt.choose(title, labels, back="Done")
+        if index is prompt.CANCELLED or index == -1:
+            return changed
+        changed = _edit_field(fields[index], data) or changed
+
+
+def _save(path: Path, data: dict[str, Any], model: type[BaseModel], on_saved) -> bool:
+    """Validate then write. Returns True when the caller should stop editing."""
+    try:
+        settings_file.validate(data, model)
+    except ValidationError as exc:
+        lines = [f"{exc.error_count()} invalid value(s) - NOT saved:"]
+        lines += [
+            f"  {'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()
+        ]
+        prompt.message("\n".join(lines))
+        return False
+    try:
+        settings_file.write(path, data)
+    except Exception as exc:  # a bad write must not kill the menu
+        prompt.message(f"NOT saved - {exc}")
+        return True
+    logging.debug(f"CLI wrote {path}")
+    if on_saved is not None:
+        on_saved()
+    return True
+
+
 def edit(path: Path, model: type[BaseModel], on_saved=None) -> None:
-    """Run the edit loop for one settings file.
+    """Run the edit loop for one settings file, grouped by section.
+
+    A flat list of every field is unusable: the game settings have 50+ of them and a
+    terminal has 24 rows. Sections mirror the TOML's own tables, so no single list
+    is longer than a screen.
 
     Args:
         path: The TOML to edit. It need not exist yet.
@@ -176,51 +240,41 @@ def edit(path: Path, model: type[BaseModel], on_saved=None) -> None:
     """
     try:
         data = settings_file.read(path)
-    except Exception as exc:
-        print(f"  cannot read {path}: {exc}")
+    except Exception as exc:  # report and return, never crash the menu
+        prompt.message(f"cannot read {path}: {exc}")
         return
 
     fields = collect_fields(model)
     if not fields:
-        print(f"  no editable fields in {model.__name__}")
+        prompt.message(f"no editable fields in {model.__name__}")
         return
+
+    sections: list[str] = []
+    for field in fields:
+        if field.section not in sections:
+            sections.append(field.section)
 
     dirty = False
     while True:
-        labels = [
-            f"{f.title} = {settings_file.get_in(data, f.dotted_key)}" for f in fields
-        ]
-        title = f"{path.name}{' *' if dirty else ''}"
-        index = prompt.choose(
-            title, labels, back="Save and go back" if dirty else "Back"
-        )
+        labels = []
+        for section in sections:
+            members = [f for f in fields if f.section == section]
+            labels.append(f"{_section_label(fields, section)}  ({len(members)})")
 
+        index = prompt.choose(
+            f"{path.name}{'   * unsaved' if dirty else ''}",
+            labels,
+            back="Save and go back" if dirty else "Back",
+            subtitle=str(path),
+        )
         if index is prompt.CANCELLED:
             index = -1
 
         if index == -1:
-            if not dirty:
+            if not dirty or _save(path, data, model, on_saved):
                 return
-            try:
-                settings_file.validate(data, model)
-            except ValidationError as exc:
-                print(f"\n  NOT saved - {exc.error_count()} invalid value(s):")
-                for error in exc.errors():
-                    print(
-                        f"    {'.'.join(str(p) for p in error['loc'])}: {error['msg']}"
-                    )
-                if prompt.confirm("Keep editing?", default=True) is True:
-                    continue
-                return
-            try:
-                settings_file.write(path, data)
-            except Exception as exc:
-                print(f"  NOT saved - {exc}")
-                return
-            print(f"  saved {path}")
-            logging.debug(f"CLI wrote {path}")
-            if on_saved is not None:
-                on_saved()
-            return
+            continue
 
-        dirty = _edit_field(fields[index], data) or dirty
+        section = sections[index]
+        members = [f for f in fields if f.section == section]
+        dirty = _edit_section(members, data, _section_label(fields, section)) or dirty

@@ -28,10 +28,25 @@ from adb_auto_player.util import Execute, SummaryGenerator
 
 from . import log_tail, prompt, routine_editor, settings_editor
 
-_GAME = "AFKJourney"
+# The game is looked up in GAME_REGISTRY rather than named here. Its key is the
+# MODULE name (`afk_journey`) while its settings file is `AFKJourney.toml` - two
+# different identifiers, and hardcoding the wrong one made the routine editor
+# report "no custom routine tasks registered" and refuse to open a perfectly good
+# file.
+_GAME_KEY = "afk_journey"
 
 # Main menu entries, named so the dispatch below is not a run of magic indices.
 _RUN_TASK, _ROUTINES, _GAME_SETTINGS, _APP_SETTINGS = range(4)
+
+
+def _game_settings_file() -> str:
+    """The settings filename this game declares, e.g. AFKJourney.toml."""
+    from adb_auto_player.registries import GAME_REGISTRY  # noqa: PLC0415
+
+    metadata = GAME_REGISTRY.get(_GAME_KEY)
+    return getattr(metadata, "config_file_path", None) or "AFKJourney.toml"
+
+
 _TAIL_LINES = 40
 
 
@@ -63,7 +78,7 @@ def _report_resolved_files(root: Path, profile_dir: Path) -> None:
     expected = (
         (root, "App.toml"),
         (profile_dir, "ADB.toml"),
-        (profile_dir, f"{_GAME}.toml"),
+        (profile_dir, _game_settings_file()),
     )
     missing = [name for directory, name in expected if not (directory / name).is_file()]
     for directory, name in expected:
@@ -171,13 +186,13 @@ def run() -> int:
             _choose_and_run()
         elif index == _ROUTINES:
             routine_editor.edit(
-                profile_dir / f"{_GAME}.toml", _GAME, _clear_settings_caches
+                profile_dir / _game_settings_file(), _GAME_KEY, _clear_settings_caches
             )
         elif index == _GAME_SETTINGS:
             from adb_auto_player.games.afk_journey.settings import Settings  # noqa: PLC0415
 
             settings_editor.edit(
-                profile_dir / f"{_GAME}.toml", Settings, _clear_settings_caches
+                profile_dir / _game_settings_file(), Settings, _clear_settings_caches
             )
         elif index == _APP_SETTINGS:
             _app_settings_menu(root, profile_dir)

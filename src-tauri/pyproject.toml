@@ -26,6 +26,9 @@ dependencies = [
     "texture2ddecoder>=1.0.6",
     # Ours: the CLI settings editor writes TOML back. tomllib reads but cannot write.
     "tomli-w>=1.2.0,<2",
+    # Ours: the CLI menu is a full-screen scrollable TUI. 39 tasks and 50+ settings
+    # do not fit a 24-row terminal, and a printed list scrolls out of reach in tmux.
+    "prompt-toolkit>=3.0.52,<4",
 ]
 
 [project.scripts]

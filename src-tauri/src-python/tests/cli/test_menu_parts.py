@@ -160,3 +160,25 @@ class TestRunExitHandling:
         assert SummaryGenerator().entries
         menu._run_task("Whatever")
         assert not SummaryGenerator().entries
+
+
+class TestTasksByCategory:
+    """Grouping the task list the way the GUI's accordion groups it."""
+
+    def test_the_gui_test_fixture_and_its_placeholder_category_are_hidden(self):
+        from adb_auto_player.cli import menu  # noqa: PLC0415
+
+        groups = menu._tasks_by_category()
+        # "Category" is literal placeholder text in zzz_config_example, not a
+        # category. Grouping turned it into a top-level heading.
+        assert "Category" not in groups
+        names = [command.name for commands in groups.values() for command in commands]
+        assert not [name for name in names if name.startswith("zzz_config_example")]
+        assert names, "everything was filtered out, not just the fixture"
+
+    def test_every_task_lands_in_exactly_one_group(self):
+        from adb_auto_player.cli import menu  # noqa: PLC0415
+
+        groups = menu._tasks_by_category()
+        names = [command.name for commands in groups.values() for command in commands]
+        assert len(names) == len(set(names))

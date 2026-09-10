@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from adb_auto_player.file_loader import SettingsLoader
+from adb_auto_player.models.commands import Command
 from adb_auto_player.models.decorators import CacheGroup
 from adb_auto_player.registries import cache_clear
 from adb_auto_player.task_loader import get_game_tasks
@@ -48,6 +49,17 @@ def _game_settings_file() -> str:
 
 
 _TAIL_LINES = 40
+
+# Commands with no GUI category - the CLI-only ones, which carry a MenuItem
+# built from the command name and display_in_gui=False.
+_UNCATEGORISED = "Other"
+
+# Upstream's GUI test fixture ("Just for GUI testing."), whose one visible command
+# is filled with placeholder metadata - category="Category", tooltip="Tooltip". A
+# flat list buried that as one row among 39; grouping promoted the filler word to a
+# top-level heading. Filtered here rather than in the game file, so a
+# `merge upstream/main` never conflicts over it.
+_HIDDEN_GAME_MODULES = frozenset({"zzz_config_example"})
 
 
 def _reset_between_runs() -> None:
@@ -122,17 +134,69 @@ def _run_task(command: str) -> None:
             print(line)
 
 
+def _tasks_by_category() -> dict[str, list[Command]]:
+    """Tasks grouped the way the GUI's accordion groups them.
+
+    Deduplicated by command name: a task registered on a mixin and on the game
+    itself appears once in the per-module tables of `get_game_tasks`.
+
+    Returns:
+        Category name to its commands, each list sorted by display label.
+    """
+    from adb_auto_player.registries import GAME_REGISTRY  # noqa: PLC0415
+
+    # get_game_tasks keys by DISPLAY name, so the modules to hide are resolved
+    # through the registry rather than by naming "Google Play" here.
+    hidden = {
+        GAME_REGISTRY[module].name
+        for module in _HIDDEN_GAME_MODULES
+        if module in GAME_REGISTRY
+    }
+
+    unique: dict[str, Command] = {}
+    for game_name, commands in get_game_tasks().items():
+        if game_name in hidden:
+            continue
+        for command in commands:
+            unique.setdefault(command.name, command)
+
+    groups: dict[str, list[Command]] = {}
+    for command in unique.values():
+        category = str(command.menu_item.category or _UNCATEGORISED)
+        groups.setdefault(category, []).append(command)
+    for commands in groups.values():
+        commands.sort(key=lambda command: command.menu_item.label)
+    return groups
+
+
 def _choose_and_run() -> None:
-    """Pick a task from the registry and run it."""
-    tasks = get_game_tasks()
-    names = sorted({cmd.name for commands in tasks.values() for cmd in commands})
-    if not names:
+    """Pick a category, then a task in it, and run it."""
+    groups = _tasks_by_category()
+    if not groups:
         print("  no tasks registered")
         return
-    index = prompt.choose("Run a task", names)
-    if index is prompt.CANCELLED or index == -1:
+
+    # Alphabetical, with the catch-all last - it holds the CLI-only commands the
+    # GUI never shows, so it is the least likely thing being looked for.
+    categories = sorted(groups, key=lambda name: (name == _UNCATEGORISED, name))
+    while True:
+        index = prompt.choose(
+            "Run a task",
+            [f"{name}   ({len(groups[name])})" for name in categories],
+        )
+        if index is prompt.CANCELLED or index == -1:
+            return
+
+        commands = groups[categories[index]]
+        choice = prompt.choose(
+            categories[index], [command.menu_item.label for command in commands]
+        )
+        if choice is prompt.CANCELLED:
+            return
+        if choice == -1:
+            continue  # back to the category list, not out of the menu
+        _run_task(commands[choice].name)
         return
-    _run_task(names[index])
 
 
 def _app_settings_menu(root: Path, profile_dir: Path) -> None:

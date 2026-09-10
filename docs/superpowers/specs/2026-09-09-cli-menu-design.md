@@ -1,6 +1,6 @@
 # One CLI, one settings layer, shared with the GUI - design
 
-Written 2026-09-09, revision 8. Supersedes the withdrawn v1/v2 implementation plans, which were
+Written 2026-09-10, revision 9. Supersedes the withdrawn v1/v2 implementation plans, which were
 drafted before `docs/cli-revamp-notes.md` was read and treated the menu as a feature of its own.
 
 ## The principle
@@ -70,14 +70,26 @@ class the App.toml fix just closed.
 
 ```
 given DIR (--app-config-dir, else main_cli.py's derived <repo>/src-tauri/settings):
-    if (DIR / "App.toml").is_file():          # flat: everything lives here
-        root = DIR;         profile_dir = DIR
-    elif (DIR.parent / "App.toml").is_file(): # two-level: DIR is the profile dir
-        root = DIR.parent;  profile_dir = DIR
-    else:                                      # neither file exists yet
-        root = DIR;         profile_dir = DIR  # flat, because the CLI never creates
-                                               # the two-level layout
+    if (DIR / "App.toml").is_file():           # DIR is the config ROOT
+        root = DIR
+        idx  = App.toml -> profiles.active_profile   (default 0)
+        profile_dir = root/str(idx) if that dir exists else root   # else: legacy flat
+    elif (DIR.parent / "App.toml").is_file():  # DIR is already a profile dir
+        root = DIR.parent;  profile_dir = DIR  # the GUI's own per-task invocation
+    else:                                       # neither file exists yet
+        root = DIR;  profile_dir = DIR          # flat; the CLI never creates two-level
+                                                # implicitly - only the migration does
 ```
+
+**`--app-config-dir` points at the config ROOT, and the profile comes from `active_profile`.**
+An earlier draft had the wrapper pass `<config>/0` and hardcode profile 0. That breaks the single
+guarantee relocation exists to provide: `App.toml` carries `profiles.active_profile`
+(`app_settings.py:96`, default 0) and the GUI obeys it (`src/lib/utils/settings.ts:16-18` calls
+`profiles.select(...)`). Add a profile in the GUI and it writes `1/`, while a hardcoded CLI keeps
+editing `0/`. Deleting a profile is worse - `commands.rs:81-84` renumbers the survivors with
+`fs::rename`, so the CLI's `0` silently becomes what used to be profile 1.
+
+Branch 2 stays because the GUI itself passes a profile dir (`__main__.py:153-155`).
 
 **The third branch is the one an earlier draft got wrong.** A two-output rule with only two
 branches is a READ rule pressed into service as a WRITE rule: a flat directory whose `App.toml`
@@ -102,11 +114,12 @@ visible.
 
 The flat/two-level test itself is the one `SettingsLoader.app_settings_path()` already makes
 (`settings_loader.py:55-59`), generalised to return both values. In the flat case **root and
-profile directory are the same directory**, and `active_profile` is ignored because there is
-nowhere for a second profile to live.
+profile directory are the same directory**, and `active_profile` resolves to a directory that does
+not exist, so the rule falls back to the root - which is what the legacy flat layout needs.
 
-**`--app-config-dir` therefore means "the directory the settings are in"**, which is what both
-callers already pass. It does not change meaning.
+**`--app-config-dir` means "the config root"**, which is what `main_cli.py` already derives and
+what `afk-bot.sh` will pass after the migration. The GUI's own per-task invocation keeps passing a
+profile dir and is served by branch 2.
 
 ## The repo TOMLs are upstream-tracked, and the CLI writes into them
 
@@ -148,8 +161,8 @@ directory, `~/.config/com.AdbAutoPlayer.AdbAutoPlayer/`, identifier confirmed at
 **The migration must CREATE the two-level layout explicitly.** That directory does not exist on
 this machine, so on first run the resolver's third branch would class it flat and the layouts would
 diverge permanently (see the accepted consequence above). The migration therefore writes
-`<config>/App.toml` and `<config>/0/{ADB,AFKJourney}.toml` itself, after which branch 2 fires for
-every later run. `afk-bot.sh:42` then passes `<config>/0` as `--app-config-dir`.
+`<config>/App.toml` and `<config>/0/{ADB,AFKJourney}.toml` itself, after which branch 1 resolves
+`0/` through `active_profile`. `afk-bot.sh:42` passes `<config>` - the root, not the profile dir.
 
 **This is a one-time, explicitly requested migration, not something a first run does silently** -
 which is the same rule the no-seeding decision above states.
@@ -197,7 +210,7 @@ by `choices=` (`cli/argparse_helper.py:35-55`), so bare `afkadb` and `afkadb hel
 by argparse before `main_cli.py:52` ever runs. The positional becomes optional with a default, and
 `help` is added as an accepted value.
 
-## The three things that will destroy operator data if done naively
+## The four things that will destroy operator data if done naively
 
 ### 1. Writing through a Pydantic model deletes keys
 
@@ -216,13 +229,27 @@ also already drifted - Rust `UISettings` has `minimize_should_go_to_tray` (`sett
 Python's does not (`app_settings.py:62`) - so "the editor shows every setting" is a claim this
 design does NOT make.
 
-### 2. "It loaded" is not validation
+### 2. Two writers, one file
+
+After relocation the GUI and the CLI write the same TOMLs, and the Rust side writes them
+non-atomically (`settings.rs:428-429`, `commands.rs:38-41`). A truncated intermediate read is
+especially bad here because `from_toml` swallows the parse error and returns defaults
+(`toml_settings.py:28-41`), so the next save would persist those defaults over real data.
+
+**Every CLI write is atomic: temp file in the same directory, then `os.replace`.** That is a few
+lines and removes the truncated-read window entirely.
+
+**Locking is NOT specified, deliberately.** Simultaneous GUI and CLI edits would still last-writer-
+win. The GUI has never run on this machine, so a lock protects against a situation that does not
+exist yet; adding one is a separate change if the GUI is ever installed alongside.
+
+### 3. "It loaded" is not validation
 
 `from_toml` catches **every** exception, not just `ValidationError` (`toml_settings.py:28-41`), and
 falls back to defaults. A save path relying on load to prove validity will write anything.
 Validation calls `model_validate` directly and lets the error propagate.
 
-### 3. Saves reformat the file
+### 4. Saves reformat the file
 
 `tomli-w` does not preserve comments or layout, and the checked-in TOMLs use quoted table names and
 multiline arrays that a rewrite would flatten. `TaskListSettings` compounds it: a
@@ -468,14 +495,16 @@ Each step is independently testable, and the first two are bug fixes that stand 
    with semantic-preservation tests covering legacy string tasks and keys no model declares.
 5. **argparse** - optional positional, `help` value, tty gate, stderr listing when not a tty.
 6. **Menu loop** - the run path, `SystemExit` code inspection, `KeyboardInterrupt` handling,
-   `SummaryGenerator` reset, cache clear after every save, startup report of resolved files.
-7. **Scalar and enum-list editors** for the three TOMLs.
+   `SummaryGenerator` reset, startup report of resolved files. No save path exists yet, so the
+   cache-clear-on-save requirement lands with the editors in step 7, not here.
+7. **Scalar and enum-list editors** for the three TOMLs, each save atomic and followed by the
+   cache clear.
 8. **Custom-routine slot editor** - registry choices, preserve-and-mark unknown names, refuse to
    add a duplicate, reorder within a slot.
 9. **Deque log-tail handler**, offered after a completed run.
 10. **Config migration** - create `~/.config/com.AdbAutoPlayer.AdbAutoPlayer/App.toml` and
     `.../0/{ADB,AFKJourney}.toml` from the repo copies, verify the resolver reports two-level, and
     leave `src-tauri/settings/` untouched and tracked so upstream merges stay clean.
-11. **`todor-wdb/the-drey-setup`** - point `afk-bot.sh:42` at the new `--app-config-dir`, add the
-    default argument, drop the emulator pre-check, name the no-argument log.
+11. **`todor-wdb/the-drey-setup`** - point `afk-bot.sh:42` at the config ROOT, add the default
+    argument, drop the emulator pre-check, name the no-argument log.
 12. **End-to-end SSH proof run**, which is requirement zero from the notes.

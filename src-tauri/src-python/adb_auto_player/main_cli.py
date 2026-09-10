@@ -5,7 +5,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from adb_auto_player.cli import ArgparseHelper
+from adb_auto_player.cli import HELP_COMMAND, MENU_COMMAND, ArgparseHelper
 from adb_auto_player.file_loader import SettingsLoader
 from adb_auto_player.log import setup_logging
 from adb_auto_player.task_loader import get_game_tasks
@@ -49,9 +49,6 @@ def main() -> None:
     parser = ArgparseHelper.build_argument_parser(get_game_tasks())
     args = parser.parse_args()
 
-    if not args.command:
-        parser.error("the following arguments are required: command")
-
     setup_logging(args.output, ArgparseHelper.get_log_level_from_args(args))
     DevHelper.log_is_main_up_to_date()
 
@@ -93,6 +90,15 @@ def main() -> None:
 
     SettingsLoader.set_app_config_dir(app_config_dir)
     SettingsLoader.set_resource_dir(resource_dir)
+
+    if args.command == HELP_COMMAND:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.command == MENU_COMMAND:
+        from adb_auto_player.cli import menu  # noqa: PLC0415 - pulls in the editors
+
+        sys.exit(menu.run())
 
     # Aliases are resolved HERE, after argparse has validated the choice, so a
     # genuine typo still gets argparse's own error listing every valid command.

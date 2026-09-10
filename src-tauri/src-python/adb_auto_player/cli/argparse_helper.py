@@ -19,6 +19,10 @@ COMMAND_ALIASES: dict[str, str] = {
 # The reverse direction, for the help output. Built once rather than searched per line.
 _ALIAS_OF = {target: alias for alias, target in COMMAND_ALIASES.items()}
 
+# Not games' commands: what the CLI itself does when given no command, or `help`.
+MENU_COMMAND = "menu"
+HELP_COMMAND = "help"
+
 
 class ArgparseHelper:
     """Argparse helper functions."""
@@ -34,8 +38,17 @@ class ArgparseHelper:
         )
         parser.add_argument(
             "command",
-            help="Command to run",
-            choices=[
+            # Optional so that a bare `afkadb` reaches the menu and `afkadb help`
+            # prints the listing. Both used to die inside argparse - `command` was a
+            # required positional constrained by `choices`, so neither ever reached
+            # main_cli. MENU_COMMAND and HELP_COMMAND are choices for the same reason
+            # aliases are: argparse validates against this list, so anything not in
+            # it is rejected before we can act on it.
+            nargs="?",
+            default=MENU_COMMAND,
+            help="Command to run. Omit for the interactive menu.",
+            choices=[MENU_COMMAND, HELP_COMMAND]
+            + [
                 cmd.name
                 for category_commands in commands.values()
                 for cmd in category_commands
@@ -103,7 +116,6 @@ class ArgparseHelper:
         if log_level == "DISABLE":
             log_level = 99
         return log_level
-
 
 
 def _format_command_line(cmd) -> str:

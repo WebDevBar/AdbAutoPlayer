@@ -1,6 +1,6 @@
 # One CLI, one settings layer, shared with the GUI - design
 
-Written 2026-09-10, revision 9. Supersedes the withdrawn v1/v2 implementation plans, which were
+Written 2026-09-10, revision 10. IMPLEMENTED. Supersedes the withdrawn v1/v2 implementation plans, which were
 drafted before `docs/cli-revamp-notes.md` was read and treated the menu as a feature of its own.
 
 ## The principle
@@ -508,3 +508,53 @@ Each step is independently testable, and the first two are bug fixes that stand 
 11. **`todor-wdb/the-drey-setup`** - point `afk-bot.sh:42` at the config ROOT, add the default
     argument, drop the emulator pre-check, name the no-argument log.
 12. **End-to-end SSH proof run**, which is requirement zero from the notes.
+
+
+## Implementation notes, written after the fact
+
+What the 12 steps actually produced, and the two places reality differed.
+
+| Step | Landed as |
+|---|---|
+| 1-2 | `registries/registries.py` gains `register_cache` and `cache_clear`; `settings_loader` decorators swapped |
+| 3 | `SettingsLoader.resolve_layout()` returning `(root, profile_dir)` |
+| 4 | `file_loader/settings_file.py` - raw-dict round trip, atomic write |
+| 5 | `command` positional optional, `menu` and `help` as choices |
+| 6 | `cli/menu.py` |
+| 7 | `cli/settings_editor.py`, driven by the model JSON schema |
+| 8 | `cli/routine_editor.py` |
+| 9 | `cli/log_tail.py` |
+| 10 | `scripts/migrate_cli_config.py`, applied |
+| 11 | `the-drey-setup` `afk-bot.sh` |
+| 12 | Proof runs below |
+
+**`ui.theme` is an enum, not free text.** The editor renders a picker for any field
+whose schema carries `enum`, which is most of `App.toml`. Worth knowing before
+writing a scripted test against it.
+
+**Ruff, run across `src-python/`, reformats 24 files unrelated to this work.** Scope
+the path to what you changed.
+
+**`uv sync` must run from the repo ROOT.** `pytest` lives in the root workspace's dev
+group, so syncing from `src-tauri/` uninstalls it.
+
+### Proof runs
+
+- `afk-bot.sh help` - exits 0, lists every task, reads the migrated config.
+- `afk-bot.sh` with no tty - prints the guidance to stderr and exits 2. No hang, so
+  a cron entry cannot wedge on a prompt.
+- `afk-bot.sh` on a real pty - menu renders, resolves
+  `~/.config/com.AdbAutoPlayer.AdbAutoPlayer` as root with `0/` as the profile, and
+  quits cleanly. The saved log contains zero escape sequences, so the `tee` pipeline
+  is intact.
+- Editing `ui.theme` through the menu changes exactly that one line;
+  `notifications_enabled` and `action_log_limit`, which no model declares, survive.
+
+### Still open
+
+- **No locking between the GUI and the CLI.** Writes are atomic, so no torn file, but
+  simultaneous edits are last-writer-wins. Deliberate: the GUI has never run here.
+- **A later GUI save of `App.toml` still drops undeclared keys** - Rust serialises its
+  typed struct. The CLI preserving them is a CLI-only guarantee.
+- **Requirement 3 remains partly met.** The tail is a replay after a run, not a live
+  view during one.

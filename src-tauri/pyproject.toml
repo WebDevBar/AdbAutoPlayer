@@ -24,6 +24,8 @@ dependencies = [
     # Ours: decoding the game's AST/LZ4/ASTC hero icon containers for Solstice Clash.
     "lz4>=4.4.5",
     "texture2ddecoder>=1.0.6",
+    # Ours: the CLI settings editor writes TOML back. tomllib reads but cannot write.
+    "tomli-w>=1.2.0,<2",
 ]
 
 [project.scripts]

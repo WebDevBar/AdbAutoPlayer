@@ -171,7 +171,12 @@ def select(
         return CANCELLED
 
     from prompt_toolkit.application import Application  # noqa: PLC0415
-    from prompt_toolkit.layout import HSplit, Layout, Window  # noqa: PLC0415
+    from prompt_toolkit.layout import (  # noqa: PLC0415
+        HSplit,
+        Layout,
+        ScrollOffsets,
+        Window,
+    )
     from prompt_toolkit.layout.controls import FormattedTextControl  # noqa: PLC0415
     from prompt_toolkit.styles import Style  # noqa: PLC0415
 
@@ -194,6 +199,10 @@ def select(
             number = "  0" if i == len(entries) - 1 else f"{i + 1:>3}"
             selected = i == state["cursor"]
             style = "class:selected" if selected else "class:entry"
+            if selected:
+                # This fragment is what prompt_toolkit scrolls to. Without it the
+                # control reports its cursor on line 0 and the view never moves.
+                rendered.append(("[SetCursorPosition]", ""))
             rendered.append((style, f" {'>' if selected else ' '} {number}. {entry}\n"))
         return rendered
 
@@ -214,10 +223,15 @@ def select(
                 Window(FormattedTextControl(header), height=2 if subtitle else 1),
                 Window(
                     FormattedTextControl(body, focusable=True),
-                    # Keeping the cursor line in view as it moves is the whole
-                    # point: a list longer than the terminal stays reachable.
-                    get_vertical_scroll=lambda w: max(
-                        0, state["cursor"] - _SCROLL_MARGIN
+                    # Scrolling is prompt_toolkit's own, driven by the
+                    # [SetCursorPosition] fragment body() marks the selected row
+                    # with. A get_vertical_scroll hint CANNOT do this: it is
+                    # applied first (containers.py:2503), then the built-in
+                    # scroll pass reads the control's cursor position - 0 without
+                    # that fragment - and drags the view straight back to the top,
+                    # so any list longer than the window never scrolled at all.
+                    scroll_offsets=ScrollOffsets(
+                        top=_SCROLL_MARGIN, bottom=_SCROLL_MARGIN
                     ),
                 ),
                 Window(FormattedTextControl(footer), height=1),

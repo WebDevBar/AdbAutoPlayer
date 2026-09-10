@@ -62,7 +62,8 @@ from adb_auto_player.log import LogPreset
 from adb_auto_player.models.decorators import CacheGroup
 from adb_auto_player.models.pydantic.app_settings import AppSettings
 from adb_auto_player.models.registries import GameMetadata
-from adb_auto_player.registries import CACHE_REGISTRY, CUSTOM_ROUTINE_REGISTRY
+from adb_auto_player.registries import CUSTOM_ROUTINE_REGISTRY
+from adb_auto_player.registries import cache_clear as _cache_clear
 from adb_auto_player.task_loader import get_game_tasks
 from adb_auto_player.tauri_context import TauriContext
 from adb_auto_player.tauri_helpers import get_game_gui_options, get_game_metadata
@@ -416,19 +417,6 @@ async def stop_task(
 
 class CacheClear(ProfileContext):
     trigger: Literal["adb-settings-updated", "game-settings-updated"]
-
-
-def _cache_clear(
-    group: CacheGroup,
-    profile_index: int | None = None,
-) -> None:
-    """Clear cache for a specific group."""
-    for func, profile_aware in CACHE_REGISTRY.get(group, []):
-        if cache_clear_func := getattr(func, "cache_clear", None):
-            if profile_aware and profile_index is not None:
-                cache_clear_func(profile_index)
-            else:
-                cache_clear_func()
 
 
 @tauri_profile_aware_command

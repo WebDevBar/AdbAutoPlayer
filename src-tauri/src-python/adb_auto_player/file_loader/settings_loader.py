@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from adb_auto_player.models.decorators import CacheGroup
+from adb_auto_player.registries import register_cache
 from adb_auto_player.models.pydantic import (
     AdbSettings,
 )
@@ -97,32 +98,23 @@ class SettingsLoader:
         return SettingsLoader.get_app_config_dir()
 
     @staticmethod
+    @register_cache(CacheGroup.ADB_SETTINGS)
     @profile_aware_cache(maxsize=1)
     def adb_settings() -> AdbSettings:
-        """Locate and load the general settings AdbAutoPlayer.toml file."""
-        from adb_auto_player.decorators import register_cache  # noqa: PLC0415
-
-        @register_cache(CacheGroup.ADB_SETTINGS)
-        def _load():
-            settings_file_path = SettingsLoader.settings_dir() / "ADB.toml"
-            logging.debug(f"Python AdbAutoPlayer.toml path: {settings_file_path}")
-            return AdbSettings.from_toml(settings_file_path)
-
-        return _load()
+        """Locate and load the ADB.toml settings file."""
+        settings_file_path = SettingsLoader.settings_dir() / "ADB.toml"
+        logging.debug(f"Python ADB.toml path: {settings_file_path}")
+        return AdbSettings.from_toml(settings_file_path)
 
     @staticmethod
+    @register_cache(CacheGroup.APP_SETTINGS)
     @profile_aware_cache(maxsize=1)
     def app_settings():
         """Locate and load the general application settings AdbAutoPlayer.toml file."""
-        from adb_auto_player.decorators import register_cache  # noqa: PLC0415
         from adb_auto_player.models.pydantic.app_settings import (  # noqa: PLC0415
             AppSettings,
         )
 
-        @register_cache(CacheGroup.APP_SETTINGS)
-        def _load():
-            settings_file_path = SettingsLoader.settings_dir() / "AdbAutoPlayer.toml"
-            logging.debug(f"Python AdbAutoPlayer.toml path: {settings_file_path}")
-            return AppSettings.from_toml(settings_file_path)
-
-        return _load()
+        settings_file_path = SettingsLoader.settings_dir() / "AdbAutoPlayer.toml"
+        logging.debug(f"Python AdbAutoPlayer.toml path: {settings_file_path}")
+        return AppSettings.from_toml(settings_file_path)

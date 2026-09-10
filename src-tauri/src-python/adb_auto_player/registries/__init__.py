@@ -8,6 +8,8 @@ from .registries import (
     COMMAND_REGISTRY,
     CUSTOM_ROUTINE_REGISTRY,
     GAME_REGISTRY,
+    cache_clear,
+    register_cache,
 )
 
 __all__ = [
@@ -15,4 +17,6 @@ __all__ = [
     "COMMAND_REGISTRY",
     "CUSTOM_ROUTINE_REGISTRY",
     "GAME_REGISTRY",
+    "cache_clear",
+    "register_cache",
 ]

@@ -128,6 +128,18 @@ SIGMA_RATING = 0.5
 # useless until the new theme fills in. That is the honest position when the thing being
 # modelled genuinely changed, and it is a weight to revisit once two themes each hold a
 # few hundred matches and the question can be answered rather than judged.
+# 2026-09-12, Round 6 of the findings ledger: this 0.0 is now measured as WRONG,
+# and the reasoning above is backwards. Within Savannah Cup the sibling theme
+# transfers - Forsaken Fortress into Fierce Duel at weight 1.0 is -0.0087 logloss
+# and 57.7% -> 61.8% accuracy, found independently by both reviewers (Codex CI
+# [-0.0125, -0.0044]). It is the EVENT boundary that destroys transfer, not the
+# theme boundary: fitted hero strengths correlate r = 0.42-0.47 across themes
+# within an event and r = -0.03 to +0.14 across events.
+#
+# Left at 0.0 on purpose until Top Defender (collecting from 2026-09-12) supplies
+# a SECOND theme pair. The evidence is one pair in one direction, and this
+# constant has already been changed twice on too little. See
+# docs/solstice-clash/model-findings-ledger.md, Round 6.
 CROSS_THEME_WEIGHT = 0.0
 
 MAX_ITERATIONS = 100

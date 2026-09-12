@@ -19,7 +19,7 @@ a new data source - not simply more matches. Detail for each is further down.
 
 | route | why it is closed | last measured |
 |---|---|---|
-| **Carrying hero strengths across a theme rotation** | 47% directional cold, worse than a coin. Symmetric: null in the reverse direction too. Not a roster problem - the old fit knew 5.6 of 6 heroes. Hurts as a decayed prior at every k from 1 to 1000 | 2026-07-29, 365 vs 70 |
+| **Carrying hero strengths across a theme rotation** | RE-OPENED 2026-09-12, see Round 6. Within Savannah Cup the sibling theme transfers at -0.0087 logloss, measured independently by both reviewers. The original entry stands as written: 47% directional cold, symmetric, not a roster problem, hurts as a decayed prior at every k from 1 to 1000 | closed 2026-07-29, 365 vs 70; re-opened 2026-09-12, n=1388 |
 | **Rank-weighted hero popularity** | Correlation with fitted hero strength is 0.008 - it measures nothing. Its 61-match pass was luck; at 155 it is -0.0078, 6/25 | 2026-07-29, n=155 rated |
 | **Plain hero popularity** | Bandwagon count, null throughout | n=335 |
 | **Post-match stats (atk/heal/tank) in any shape** | ~16 variants across 3 rounds: raw, share, log, class-centred, outcome-adjusted, several shrinkages, team balance, damage-vs-opposing-tanking, stats-per-rating, consistency. None clears the bar; most dilute Bradley-Terry. Their variance is dominated by ROLE, and role composition is separately the worst family tested | 2026-07-29, n=435 |
@@ -1019,3 +1019,98 @@ corpus grows and is not converged.
   results at 3+ SE that replicate on fresh seeds and temporally deserve belief.
 - **The leakage yardstick:** using this match's own sword stat scores 0.3230. Any hero-stat
   model reporting anywhere near 0.32-0.55 has leaked, whatever its write-up says.
+
+## Round 6, 2026-09-12, n=3428 across two EVENTS
+
+The first round to ask about an EVENT boundary rather than a theme rotation. Savannah Cup
+had been running for six days and Solstice Clash had been finished for five weeks, so for
+the first time there were two complete events to compare.
+
+Fable and Codex measured independently on a frozen snapshot. Neither read the other's
+work. Their split schemes differ: Fable used walk-forward blocks plus 5-fold with 5
+repeats, Codex used expanding chronological windows plus a frozen 70/30 holdout and
+2000-resample block bootstraps. Both verified their fitter against the shipped `odds.fit`
+to within 5.6e-17 at weight 0 before reporting anything.
+
+### Solstice data does not help Savannah, as rows or as a prior
+
+Recommended weight is 0. Both agents reached it independently.
+
+| variant | Fable, paired vs baseline | Codex, paired vs baseline |
+|---|---|---|
+| rows at 0.1 | +0.0004 to +0.0010 | +0.000826, CI crosses zero |
+| rows at 0.25 | +0.0023 to +0.0037 | +0.003085 |
+| rows at 1.0 | +0.0145 to +0.0177 | +0.016106, CI [+0.0079, +0.0242] |
+| prior mean at 0.25 | -0.0010 +/- 0.0009 | -0.000390, CI [-0.0022, +0.0015] |
+
+The prior-mean framing is the better one and both tested it. It degrades gracefully where
+extra rows do not. Its best result is still a null.
+
+### Hero coverage is not the reason
+
+93 of 103 Savannah heroes appear in Solstice, covering roughly 90% of Savannah
+hero-appearances. Both agents measured this separately and agree. The heroes are the same
+and their fitted strengths do not agree, so the cause is not the roster.
+
+| correlation of fitted hero strengths | r |
+|---|---|
+| within Solstice, theme to theme | 0.26 to 0.42 |
+| within Savannah, Forsaken Fortress to Fierce Duel | 0.47 |
+| Solstice pooled to Forsaken Fortress | -0.03 |
+| Solstice pooled to Fierce Duel | +0.14 |
+
+### The zero-shot number is what settles it
+
+A fit on all 2039 Solstice matches predicts Savannah at logloss 0.7019 and 52.7%
+directional accuracy. A coin is 0.6931 and 50%. A weight sweep can only ever say "less
+bad"; this says "not information". Run it first on any future transfer question.
+
+### The early-data gain is a placebo
+
+Both agents found an apparent gain around N=100, which is the regime the feature would
+exist for. Codex permuted the hero labels: 5 of 100 randomised Solstice hero mappings
+matched or beat the real weight-0.25 result. Fable reached the same place differently,
+noting nothing in that regime beats a flat 0.6931 and that `MIN_MATCHES_FOR_ODDS = 40`
+hides the number there anyway. The gain is "less overfit than 100 rows", not evidence.
+
+### Carrying strengths across a theme rotation is RE-OPENED
+
+This reverses the entry closed on 2026-07-29 at 365 vs 70 matches. Within Savannah Cup
+the sibling theme transfers, and both agents measured it while looking for something else.
+
+| | Fable | Codex |
+|---|---|---|
+| Forsaken Fortress to Fierce Duel, weight 1.0 | -0.0087 logloss, 27/39 blocks, 3.3 SE | -0.0085 logloss, CI [-0.0125, -0.0044] |
+| accuracy | 57.7% to 61.8% | 58.24% to 60.44% |
+
+So `CROSS_THEME_WEIGHT = 0.0` is discarding evidence that helps, and the cost accepted for
+it - a model that is useless at every rotation - is being paid for nothing.
+
+NOT changed yet. It is one theme pair in one direction. Top Defender began collecting on
+2026-09-12 and gives a second, independent pair for free.
+
+### What this round establishes about boundaries
+
+The EVENT boundary destroys transfer and the THEME boundary does not. That is the opposite
+of the reasoning recorded at `odds.py:106-131`, which was judged from two observations on
+2026-07-29 and never measured. Neither agent could say WHY, because `balance_epoch` is
+NULL on all 3428 matches and nothing in the snapshot separates a roster change, a stat
+change, a map change or a collection change.
+
+### What would re-open the Solstice result
+
+- A Savannah theme correlating above r = 0.3 against the pooled Solstice fit.
+- A zero-shot Solstice prediction beating 0.6931 on a Savannah theme by more than 0.005.
+- A transfer rule fixed BEFORE evaluation that lowers paired out-of-sample logloss on a
+  newly collected theme, with an interval excluding zero.
+
+### Traps this round adds
+
+- **A weight sweep cannot detect "no information".** It compares wrongness. Add a
+  zero-shot fit and a permutation of the transferred labels.
+- **`tuning.py` is icon-matcher tuning, not model validation.** There is no model
+  validation harness in this repo. Both agents wrote one and both checked it against
+  `odds.fit`; that check is the only reason their numbers are comparable.
+- **An unmeasured justification in a comment reads exactly like a measured one.** The
+  cross-theme weight was set to 0 on a judgement from one evening and sat unquestioned for
+  six weeks while it discarded useful evidence.

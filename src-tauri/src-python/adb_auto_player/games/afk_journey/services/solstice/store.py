@@ -460,11 +460,19 @@ class MatchStore:
         )
         cols = ",".join(self._MATCH_COLS)
         placeholders = ",".join("?" * len(self._MATCH_COLS))
+        # Windows are stored in the Z form and compared as STRINGS, while a locally
+        # captured stamp arrives as "+00:00". "T00:00:00+00:00" sorts BELOW
+        # "T00:00:00Z", so a capture in the first moments of a rotation fell outside the
+        # window that had just opened and was filed under the previous theme.
+        values = tuple(
+            _as_stamp(getattr(rec, c)) if c == "captured_at" else getattr(rec, c)
+            for c in self._MATCH_COLS
+        )
         with self._connect() as con:
             cur = con.execute(
                 f"INSERT INTO match({cols}) VALUES({placeholders}) "
                 f"ON CONFLICT(natural_key) DO NOTHING",
-                tuple(getattr(rec, c) for c in self._MATCH_COLS),
+                values,
             )
             if rec.natural_key is None:
                 return int(cur.lastrowid or 0)
@@ -1308,6 +1316,50 @@ class MatchStore:
         ).fetchone()
         return row[0] if row else None
 
+    def _theme_by_date(
+        self, con: sqlite3.Connection, captured_at: str | None
+    ) -> tuple[int | None, int | None]:
+        """Resolve a capture to (event_id, theme_id) using the date ALONE.
+
+        The pull API sends a theme slug but no event (`MatchOut` in the server's
+        schemas), so `upsert_synced` used to fall back to the event being collected NOW.
+        Every pulled Solstice row then looked for a Solstice theme under Savannah Cup,
+        found nothing, and was stored with no theme at all - 2039 of them. Worse, three
+        slugs exist under both events, so a pulled row could instead have resolved to
+        the WRONG event's theme and looked perfectly attributed.
+
+        A date needs no event, and is sound because no two dated windows overlap across
+        events - which is only true now that every event's final theme is closed to its
+        event end.
+
+        Args:
+            con: The open connection to query on.
+            captured_at: The capture timestamp, any ISO form.
+
+        Returns:
+            (event_id, theme_id), or (None, None) when no window covers it.
+        """
+        if not captured_at:
+            return None, None
+        stamp = _as_stamp(captured_at)
+        rows = con.execute(
+            "SELECT id, event_id FROM theme"
+            " WHERE (starts_at IS NULL OR starts_at <= ?)"
+            "   AND (ends_at   IS NULL OR ends_at   >  ?)"
+            "   AND (starts_at IS NOT NULL OR ends_at IS NOT NULL)"
+            " ORDER BY starts_at IS NULL, starts_at DESC LIMIT 2",
+            (stamp, stamp),
+        ).fetchall()
+        if not rows:
+            return None, None
+        if len(rows) > 1:
+            # Two windows covering one instant is a data fault, not a tie to break.
+            logging.warning(
+                f"[SC-38] {stamp} is covered by {len(rows)} theme windows; "
+                f"taking theme {rows[0][0]}"
+            )
+        return int(rows[0][1]), int(rows[0][0])
+
     def mark_push_rejected(self, local_id: int, reason: str) -> None:
         """A row the server refuses is not a failed push - retrying is pointless."""
         with self._connect() as con:
@@ -1327,25 +1379,31 @@ class MatchStore:
             ).fetchone()
             if existing is not None:
                 return None
-            # A pulled row carries its own event; it may not be the one we collect.
-            theme_id = self._theme_id_for(
-                con, row.get("theme_slug"), row.get("event_slug")
-            )
+            # The DATE decides, because the pull API sends no event and the event we
+            # happen to be collecting is not the one this row belongs to. The slug is a
+            # fallback for a capture no window covers, scoped to the event the row
+            # claims if it ever starts sending one.
+            event_id, theme_id = self._theme_by_date(con, row.get("captured_at"))
+            if theme_id is None:
+                theme_id = self._theme_id_for(
+                    con, row.get("theme_slug"), row.get("event_slug")
+                )
             cur = con.execute(
                 # blue_trio is NOT set, and that is the point: we never watched this
                 # draft, so there is no blue. The NULL IS the flag - it is what
                 # excludes the row from the first-pick intercept in the fit.
                 "INSERT INTO match(natural_key, source, captured_at, theme,"
-                " theme_id, theme_resolved_by, winning_trio, outcome_source,"
+                " event_id, theme_id, theme_resolved_by, winning_trio, outcome_source,"
                 " trio_1_rating, trio_2_rating, trio_1_rank, trio_2_rank,"
                 " predicted_trio_1, canonical_state,"
                 " origin, contributor_uuid, remote_received_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'canonical', 'synced', ?, ?)",
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'canonical', 'synced', ?, ?)",
                 (
                     row["natural_key"],
                     row["source"],
-                    row["captured_at"],
+                    _as_stamp(row["captured_at"]),
                     None,
+                    event_id,
                     theme_id,
                     row.get("theme_resolved_by"),
                     row["winning_trio"],
@@ -1457,19 +1515,25 @@ class MatchStore:
         moved = 0
         with self._connect() as con:
             rows = con.execute(
+                # LEFT JOIN: an INNER one drops rows with theme_id IS NULL, which are
+                # precisely the ones with nothing to lose and most to gain. 2039 pulled
+                # rows sat unfilable behind that join.
                 "SELECT m.id, m.captured_at FROM match m"
-                " JOIN theme t ON t.id = m.theme_id"
-                " WHERE m.theme_resolved_by='default' OR t.is_default=1"
+                " LEFT JOIN theme t ON t.id = m.theme_id"
+                " WHERE m.theme_id IS NULL"
+                "    OR m.theme_resolved_by='default'"
+                "    OR t.is_default=1"
             ).fetchall()
         for match_id, captured_at in rows:
-            event_id, theme_id, how = self.resolve_theme(captured_at)
-            if not theme_id or how != "window":
+            with self._connect() as con:
+                event_id, theme_id = self._theme_by_date(con, captured_at)
+            if not theme_id:
                 continue
             with self._connect() as con:
                 changed = con.execute(
                     "UPDATE match SET theme_id=?, event_id=?, theme_resolved_by=?"
-                    " WHERE id=? AND theme_id != ?",
-                    (theme_id, event_id, how, match_id, theme_id),
+                    " WHERE id=? AND (theme_id IS NULL OR theme_id != ?)",
+                    (theme_id, event_id, "window", match_id, theme_id),
                 ).rowcount
             moved += max(changed, 0)
         return moved

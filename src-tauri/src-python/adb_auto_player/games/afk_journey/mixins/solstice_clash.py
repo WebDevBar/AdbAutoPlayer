@@ -117,6 +117,14 @@ RESULT_POLL_DELAY = 5.0
 # is being read as the overworld - and since a draw resets the failure counter,
 # nothing else in the loop can ever notice.
 MAX_CONSECUTIVE_DRAWS = 4
+# How many scrolled passes of the events list must MISS the card before the
+# event is declared over. One pass is not proof: the list is reached straight
+# after a match, and a popup, a still-settling scroll or a slow load all look
+# identical to "not there" from the scroll loop. Observed twice, 2026-09-10
+# after 473 matches and 2026-09-12 after 2, both immediately after a clean match
+# and sync while the event was plainly still live. Each retry costs one
+# navigation, and the real event-over case just takes three of them.
+MAX_EVENT_MISSING = 3
 
 # --- Mode B: passive collection while the user plays ------------------------
 # Every one of these is read from the MODULE at use, never captured into a
@@ -1209,6 +1217,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         """
         consecutive_failures = 0
         consecutive_draws = 0
+        consecutive_event_missing = 0
         recorded = 0
 
         # Seed the local pool before collecting. Wrapped like every other
@@ -1231,6 +1240,9 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
             try:
                 if self._run_one_match():
                     consecutive_failures = 0
+                    # Reaching a match means the card was found, so any earlier miss was
+                    # transient by definition.
+                    consecutive_event_missing = 0
                     # Count only cycles that actually WROTE a match. A draw returns True
                     # (the loop behaved correctly and must not be penalised) but records
                     # nothing, so counting it would let max_matches be satisfied by a run
@@ -1256,12 +1268,24 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
                     )
             except _EventNotRunningError as exc:
                 # MUST precede the generic handler below, which would otherwise count
-                # this as a strike and spend two more cycles rediscovering it. The card
-                # was absent from the whole scrolled events list: the event is over, and
-                # no amount of retrying brings a limited-time event back inside one run.
-                logging.info(f"{exc} - stopping (recorded {recorded} match(es))")
-                self._overlay_stop()
-                return
+                # this as a strike and spend two more cycles rediscovering it.
+                #
+                # An absent card is only PROBABLY the end of the event. It is
+                # also what a popup, a half-settled scroll or a slow load looks
+                # like, and those happen most often right here: the list is
+                # reached seconds after a match ends. So confirm it across
+                # separate navigations before believing it. This does NOT
+                # `continue` - the recovery navigate_to_world() below is what
+                # puts the game somewhere the next attempt can start from.
+                consecutive_event_missing += 1
+                if consecutive_event_missing >= MAX_EVENT_MISSING:
+                    logging.info(f"{exc} - stopping (recorded {recorded} match(es))")
+                    self._overlay_stop()
+                    return
+                logging.warning(
+                    f"{exc}? - not found on pass "
+                    f"{consecutive_event_missing}/{MAX_EVENT_MISSING}, retrying"
+                )
             except Exception as exc:
                 # A match that was already RECORDED does not count as a failure, however
                 # the cycle ended. _run_one_match writes the match before navigating back,

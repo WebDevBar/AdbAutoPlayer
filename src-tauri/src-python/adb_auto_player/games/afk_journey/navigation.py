@@ -6,6 +6,7 @@ from enum import StrEnum, auto
 
 from adb_auto_player.exceptions import (
     AutoPlayerError,
+    AutoPlayerWarningError,
     GameActionFailedError,
     GameNotRunningOrFrozenError,
     GameTimeoutError,
@@ -287,7 +288,7 @@ class Navigation(PopupMessageHandler, ABC):
         return
 
     def _is_in_overview(self, screenshot: np.ndarray | None = None) -> bool:
-        """True if the top-right corner shows an overworld HUD element.
+        """True if the right side of the screen shows an overworld HUD element.
 
         Args:
             screenshot: Reuse an existing frame instead of capturing a new one, so a
@@ -301,7 +302,9 @@ class Navigation(PopupMessageHandler, ABC):
                     "navigation/homestead/world.png",
                     "navigation/time_of_day.png",
                 ],
-                crop_regions=CropRegions(left=0.6, bottom=0.6),
+                # Full-height right strip: homestead_enter sits bottom-right,
+                # time_of_day top-right (and fails to match at night).
+                crop_regions=CropRegions(left=0.6),
                 screenshot=screenshot,
             )
             is not None
@@ -395,6 +398,11 @@ class Navigation(PopupMessageHandler, ABC):
             template="battle_modes/duras_trials.png",
             timeout_message="Dura's Trials not found.",
         )
+        coming_soon = self.game_find_template_match("battle_modes/coming_soon.png")
+        if self._is_in_coming_soon_section(result, coming_soon):
+            raise AutoPlayerWarningError(
+                "Dura's Trials is not available yet (Coming Soon), skipping."
+            )
         self._tap_till_template_disappears(result.template)
         self.sleep_action()
 
@@ -415,6 +423,72 @@ class Navigation(PopupMessageHandler, ABC):
             raise e
         self.sleep_action()
         return
+
+    def navigate_to_union_campaign_screen(self) -> None:
+        """Navigate to the Union Campaign floor screen (Battle Modes > Guild Mode)."""
+        logging.info("Navigating to Union Campaign screen")
+
+        def stop_condition() -> bool:
+            match = self.game_find_template_match(
+                template="union_campaign/current_label.png",
+                crop_regions=CropRegions(left=0.2, right=0.2, top=0.55, bottom=0.15),
+            )
+            return match is not None
+
+        if stop_condition():
+            return
+
+        self.navigate_to_battle_modes_screen()
+
+        # The Guild Mode tab pill only needs tapping if its content (the Union
+        # Campaign card) isn't already showing - e.g. Guild Mode was already
+        # the active tab from a previous visit. Its pill also renders
+        # differently active vs. inactive, so this also sidesteps needing a
+        # second template for the active-tab appearance.
+        if (
+            self.game_find_template_match(template="battle_modes/union_campaign.png")
+            is None
+        ):
+            try:
+                guild_mode_tab = self.wait_for_template(
+                    "battle_modes/guild_mode_tab.png",
+                    crop_regions=CropRegions(top=0.75, bottom=0.05),
+                    timeout=self.template_timeout,
+                )
+            except GameTimeoutError as e:
+                self.capture_debug_screenshot("guild_mode_tab_not_found")
+                raise GameTimeoutError("Could not find Guild Mode tab.") from e
+            self.tap(guild_mode_tab)
+            self.sleep_navigation()
+
+        result = self._find_in_battle_modes(
+            template="battle_modes/union_campaign.png",
+            timeout_message="Could not find Union Campaign Label",
+        )
+        self._tap_till_template_disappears(result.template)
+        self.sleep_navigation()
+
+        try:
+            self.wait_for_template(
+                template="union_campaign/current_label.png",
+                crop_regions=CropRegions(left=0.2, right=0.2, top=0.55, bottom=0.15),
+                timeout=self.template_timeout,
+                diagnostic_recheck=True,
+            )
+        except GameTimeoutError as e:
+            self.capture_debug_screenshot("union_campaign_screen_not_found")
+            raise e
+        self.sleep_action()
+
+    @staticmethod
+    def _is_in_coming_soon_section(
+        entry: TemplateMatchResult, coming_soon: TemplateMatchResult | None
+    ) -> bool:
+        # Locked modes are listed below the "Coming Soon" header; their label
+        # looks identical to the unlocked one, so position is the only signal.
+        if coming_soon is None:
+            return False
+        return coming_soon.box.center.y < entry.box.center.y
 
     def _find_in_battle_modes(
         self, template: str, timeout_message: str

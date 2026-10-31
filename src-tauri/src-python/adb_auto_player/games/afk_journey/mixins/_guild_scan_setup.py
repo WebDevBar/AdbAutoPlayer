@@ -23,11 +23,17 @@ if TYPE_CHECKING:
     from adb_auto_player.games.afk_journey.settings import Settings
 
     class BaseClass:
-        settings: Settings
         LANG_ERROR: str
-        min_timeout: float
-        fast_timeout: float
-        device: Any
+
+        @property
+        def settings(self) -> Settings: ...
+        @property
+        def min_timeout(self) -> float: ...
+        @property
+        def fast_timeout(self) -> float: ...
+        @property
+        def device(self) -> Any: ...
+
         template_timeout: float
         _ocr_debug: list[dict] | None
         _screenshot_dir: Any
@@ -81,7 +87,14 @@ class _GuildScanSetupMixin(BaseClass):
     _MAX_ASCII_VAL = 127
     _MAX_NEW_NAMES_NO_CHANGE = 6
     _MIN_NAME_LENGTH = 2
-    _MAX_SCROLLS = 25
+    _MAX_SCROLLS = 60
+    _STATIC_BLOCK_TOLERANCE = 8
+    _NAME_ABOVE_RANK_OFFSET = 22
+    _NAME_ABOVE_SCORE_OFFSET = 44
+    _NAME_CROP_HALF_HEIGHTS = (28, 40)
+    _X_NAME_CROP_MIN = 295
+    _NAME_RECOVERY_CONFIDENT_RATIO = 0.8
+    _NAME_MAX_BELOW_RANK = 10
     _MAX_SCROLLS_ACTIVENESS = 35
     _FUZZY_DEDUP_THRESHOLD = 0.75
     _MIN_NAME_ALNUM_RATIO = 0.5
@@ -97,6 +110,10 @@ class _GuildScanSetupMixin(BaseClass):
     _Y_ACTIVENESS_MIN = 320
     _Y_ACTIVENESS_MAX = 1800
     _X_ACTIVENESS_MIN = 500
+    _X_ACTIVENESS_NAME_RANGE = (235, 880)
+    _ACTIVENESS_VALUE_BELOW_NAME = 95
+    _ACTIVENESS_PAIR_TOLERANCE = 30
+    _X_ACTIVENESS_NAME_MIN = 200
     _Y_ACTIVENESS_ROW_TOLERANCE = 60
     _Y_ACTIVENESS_PAIR_RADIUS = 120
     _MIN_ACTIVENESS_VALUE = 10
@@ -109,7 +126,9 @@ class _GuildScanSetupMixin(BaseClass):
     _Y_CHEST_CONTRIB_MIN = 850
     _Y_CHEST_CONTRIB_MAX = 1800
     _X_CHEST_NAME_MAX = 480
-    _Y_CHEST_PAIR_RADIUS = 150
+    _CHEST_VALUE_BELOW_NAME = 45
+    _CHEST_PAIR_TOLERANCE = 20
+    _X_CHEST_NAME_RANGE = (305, 700)
     _MAX_CHEST_VALUE = 200
     _MAX_SCROLLS_CHEST = 44
     _MAX_NO_NEW_CHEST = 5

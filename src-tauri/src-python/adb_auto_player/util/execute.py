@@ -23,7 +23,11 @@ import tomllib
 from collections.abc import Callable
 from typing import Any, cast
 
-from adb_auto_player.exceptions import AutoPlayerError, GenericAdbUnrecoverableError
+from adb_auto_player.exceptions import (
+    AutoPlayerError,
+    GameNotRunningOrFrozenError,
+    GenericAdbUnrecoverableError,
+)
 from adb_auto_player.file_loader import SettingsLoader
 from adb_auto_player.models.commands import Command
 
@@ -34,6 +38,21 @@ _DEFAULT_MAX_CONSECUTIVE_RESTARTS = 5
 # again is treated as "resolved" — the consecutive-failure streak resets
 # instead of counting toward the give-up cap.
 _CONSECUTIVE_FAILURE_RESET_SECONDS = 5 * 60
+
+
+class _WatchdogState:
+    """Watchdog state shared across nested `Execute.function` calls.
+
+    Custom routines call `Execute.function` once for the routine and again for
+    each task inside it. Only the outermost call runs the watchdog thread; the
+    timeout flag is shared so whichever level catches the resulting
+    `KeyboardInterrupt` (usually the innermost, which holds the game instance)
+    treats it as a timeout instead of a manual Ctrl+C.
+    """
+
+    active = False
+    timeout_triggered = False
+    last_activity_time = 0.0
 
 
 class Execute:
@@ -99,7 +118,13 @@ class Execute:
             pass
 
         # --- Watchdog Logic (Activity Based) ---
-        last_activity_time = time.monotonic()
+        owns_watchdog = (
+            timeout_enabled and timeout_mins > 0 and not _WatchdogState.active
+        )
+        if owns_watchdog:
+            _WatchdogState.active = True
+            _WatchdogState.timeout_triggered = False
+            _WatchdogState.last_activity_time = time.monotonic()
         consecutive_restart_failures = 0
         attempt_start_time = time.monotonic()
 
@@ -135,17 +160,12 @@ class Execute:
 
         class ActivityTrackerHandler(logging.Handler):
             def emit(self, record):
-                nonlocal last_activity_time
-                last_activity_time = time.monotonic()
+                _WatchdogState.last_activity_time = time.monotonic()
 
         tracker_handler = ActivityTrackerHandler()
-        logging.getLogger().addHandler(tracker_handler)
-
-        timeout_triggered = False
         watchdog_stop_event = threading.Event()
 
         def watchdog_loop():
-            nonlocal timeout_triggered
             while not watchdog_stop_event.is_set():
                 # Check every 10 seconds
                 for _ in range(10):
@@ -153,18 +173,22 @@ class Execute:
                         return
                     time.sleep(1)
 
-                elapsed = (time.monotonic() - last_activity_time) / 60
+                # Wait until the previous timeout has been handled
+                if _WatchdogState.timeout_triggered:
+                    continue
+
+                elapsed = (time.monotonic() - _WatchdogState.last_activity_time) / 60
                 if elapsed > timeout_mins:
-                    timeout_triggered = True
+                    _WatchdogState.timeout_triggered = True
                     logging.error(
                         f"No activity detected for {timeout_mins} minutes. "
                         "Interrupting main thread."
                     )
                     _thread.interrupt_main()
-                    return
 
         watchdog_thread = None
-        if timeout_enabled and timeout_mins > 0:
+        if owns_watchdog:
+            logging.getLogger().addHandler(tracker_handler)
             watchdog_thread = threading.Thread(target=watchdog_loop)
             watchdog_thread.daemon = True
             watchdog_thread.start()
@@ -249,6 +273,10 @@ class Execute:
                         callable_function(**kwargs)
                     break  # Success, exit the loop
                 except KeyboardInterrupt:
+                    # Consume the shared flag so the watchdog resumes monitoring
+                    # and a later manual Ctrl+C isn't mistaken for a timeout.
+                    timeout_triggered = _WatchdogState.timeout_triggered
+                    _WatchdogState.timeout_triggered = False
                     if timeout_triggered:
                         logging.warning(
                             "Task timeout triggered, restarting game and "
@@ -261,13 +289,12 @@ class Execute:
                         ):
                             try:
                                 cast(Any, instance).restart_game()
-                                timeout_triggered = False
                                 logging.info(
                                     "Waiting %s seconds for game to restart...",
                                     watchdog_restart_delay,
                                 )
                                 time.sleep(watchdog_restart_delay)
-                                last_activity_time = time.monotonic()
+                                _WatchdogState.last_activity_time = time.monotonic()
                                 continue  # Retry the loop
                             except Exception as ex:
                                 logging.error(f"Failed to restart game: {ex}")
@@ -281,8 +308,13 @@ class Execute:
                         print(summary)
                     sys.exit(0)
                 except Exception as e:
+                    # A closed game is always restarted, even without the
+                    # stuck-task watchdog: it is not a task failure.
+                    game_closed = isinstance(e, GameNotRunningOrFrozenError)
                     # java.lang.SecurityException should always be fatal
-                    if timeout_enabled and "java.lang.SecurityException" not in str(e):
+                    if (
+                        timeout_enabled or game_closed
+                    ) and "java.lang.SecurityException" not in str(e):
                         logging.warning(
                             f"Task failed with error: {e}. "
                             "Restarting game and retrying..."
@@ -299,7 +331,7 @@ class Execute:
                                     watchdog_restart_delay,
                                 )
                                 time.sleep(watchdog_restart_delay)
-                                last_activity_time = time.monotonic()
+                                _WatchdogState.last_activity_time = time.monotonic()
                                 continue  # Retry the loop
                             except Exception as ex:
                                 logging.error(f"Failed to restart game: {ex}")
@@ -314,10 +346,13 @@ class Execute:
                     return e
         finally:
             # Cleanup watchdog
-            watchdog_stop_event.set()
-            logging.getLogger().removeHandler(tracker_handler)
-            if watchdog_thread and watchdog_thread.is_alive():
-                watchdog_thread.join(timeout=1.0)
+            if owns_watchdog:
+                watchdog_stop_event.set()
+                logging.getLogger().removeHandler(tracker_handler)
+                if watchdog_thread and watchdog_thread.is_alive():
+                    watchdog_thread.join(timeout=1.0)
+                _WatchdogState.active = False
+                _WatchdogState.timeout_triggered = False
         return None
 
     @staticmethod

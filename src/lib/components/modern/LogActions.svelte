@@ -1,16 +1,23 @@
 <script lang="ts">
-  import { t } from "$lib/i18n/i18n";
+  import { t } from "#lib/i18n/i18n.ts";
 
   interface Props {
     onClear: () => void;
     onExport: () => void;
     onExportWdb: () => void;
+    onOpenScreenshots: () => void;
   }
 
-  let { onClear, onExport, onExportWdb }: Props = $props();
+  let { onClear, onExport, onExportWdb, onOpenScreenshots }: Props = $props();
 </script>
 
 <div class="actions">
+  <button
+    class="action-btn"
+    onclick={onOpenScreenshots}
+    title={$t("Open the folder with error screenshots")}
+    >{$t("screenshots")}</button
+  >
   <button class="action-btn" onclick={onExport}>{$t("export")}</button>
   <!-- The live view is filtered; this saves what the run actually said. -->
   <button

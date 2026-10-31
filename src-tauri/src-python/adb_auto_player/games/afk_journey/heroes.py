@@ -156,3 +156,6 @@ class HeroesEnum(StrEnum):
     Senea = auto()
     Aster = auto()
     Karma = auto()
+    Estrilda = auto()
+    Marene = auto()
+    Baden = auto()

@@ -92,3 +92,10 @@ export async function readWdbLog(
 ): Promise<string> {
     return await pyInvoke("read_wdb_log", {}, options);
 }
+
+export async function getDebugScreenshotsDir(
+    body: Commands["get_debug_screenshots_dir"]["input"],
+    options?: InvokeOptions
+): Promise<Commands["get_debug_screenshots_dir"]["output"]> {
+    return await pyInvoke("get_debug_screenshots_dir", body, options);
+}

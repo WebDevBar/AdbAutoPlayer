@@ -627,6 +627,18 @@ async def read_wdb_log() -> str:
         return f"Could not read {path}: {exc}"
 
 
+@tauri_profile_aware_command
+async def get_debug_screenshots_dir(
+    app_handle: AppHandle,
+    body: ProfileContext,
+) -> str:
+    # Same folder save_debug_screenshot writes to; created so it can be
+    # opened even before the first error screenshot exists
+    screenshots_dir = SettingsLoader.get_app_config_dir() / "data" / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+    return str(screenshots_dir)
+
+
 def _model_gen_command_error() -> NoReturn:
     raise RuntimeError(
         "This function exists to generate TypeScript bindings and should not be called."

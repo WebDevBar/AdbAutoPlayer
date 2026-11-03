@@ -160,7 +160,8 @@ def select(
         title: Shown in the header.
         options: Choices, in display order.
         back: Label for the escape option, always last.
-        subtitle: Optional second header line, e.g. a resolved path.
+        subtitle: Optional header text, e.g. a resolved path or a help blurb. Each
+            line gets its own header row.
         start: Index to place the cursor on initially.
 
     Returns:
@@ -187,10 +188,11 @@ def select(
     }
     digits: list[str] = []
 
+    subtitle_lines = subtitle.splitlines()
+
     def header() -> list[tuple[str, str]]:
         lines = [("class:title", f" {title}\n")]
-        if subtitle:
-            lines.append(("class:subtitle", f" {subtitle}\n"))
+        lines += [("class:subtitle", f" {line}\n") for line in subtitle_lines]
         return lines
 
     def body() -> list[tuple[str, str]]:
@@ -220,7 +222,7 @@ def select(
     layout = Layout(
         HSplit(
             [
-                Window(FormattedTextControl(header), height=2 if subtitle else 1),
+                Window(FormattedTextControl(header), height=1 + len(subtitle_lines)),
                 Window(
                     FormattedTextControl(body, focusable=True),
                     # Scrolling is prompt_toolkit's own, driven by the
@@ -261,12 +263,15 @@ def select(
     return state["result"]
 
 
-def ask_line(prompt_text: str, default: str | None = None) -> str | Any:
+def ask_line(
+    prompt_text: str, default: str | None = None, help_text: str = ""
+) -> str | Any:
     """Ask for one line of text on the terminal device.
 
     Args:
         prompt_text: Shown before the cursor.
         default: Pre-filled, and returned on an empty answer.
+        help_text: Shown on the lines above the prompt.
 
     Returns:
         The entered text, the default, or CANCELLED.
@@ -279,7 +284,10 @@ def ask_line(prompt_text: str, default: str | None = None) -> str | Any:
 
     try:
         session: Any = PromptSession(input=io[0], output=io[1])
-        answer = session.prompt(f"{prompt_text}: ", default=default or "")
+        shown = [("", f"{prompt_text}: ")]
+        if help_text:
+            shown.insert(0, ("fg:#888888", f"{help_text}\n"))
+        answer = session.prompt(shown, default=default or "")
     except (KeyboardInterrupt, EOFError):
         return CANCELLED
     answer = answer.strip()

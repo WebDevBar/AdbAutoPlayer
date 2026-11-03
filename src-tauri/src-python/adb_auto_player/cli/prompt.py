@@ -30,7 +30,7 @@ def _input(prompt: str) -> str | Any:
         return CANCELLED
 
 
-def ask_line(prompt: str, default: str | None = None) -> str | Any:
+def ask_line(prompt: str, default: str | None = None, help_text: str = "") -> str | Any:
     """Ask for a single line of text.
 
     Uses the full-screen front end when a terminal is available, and falls back to
@@ -40,13 +40,16 @@ def ask_line(prompt: str, default: str | None = None) -> str | Any:
     Args:
         prompt: Shown before the cursor.
         default: Returned when the user just presses enter.
+        help_text: Explanation shown above the prompt, one or more lines.
 
     Returns:
         The entered text, the default, or CANCELLED.
     """
     if tui.is_available():
-        return tui.ask_line(prompt, default)
+        return tui.ask_line(prompt, default, help_text)
 
+    if help_text:
+        print(f"\n{help_text}")
     suffix = f" [{default}]" if default is not None else ""
     answer = _input(f"{prompt}{suffix}: ")
     if answer is CANCELLED:
@@ -62,6 +65,7 @@ def choose(
     options: Sequence[str],
     back: str = "Back",
     subtitle: str = "",
+    start: int = 0,
 ) -> int | Any:
     """Show a list and return the chosen index.
 
@@ -69,18 +73,19 @@ def choose(
         title: Shown above the list.
         options: The choices, in display order.
         back: Label for the always-present zero option.
-        subtitle: Optional second header line.
+        subtitle: Optional header text below the title; may span several lines.
+        start: Index to place the cursor on. Only the full-screen picker has one.
 
     Returns:
         The zero-based index into `options`, -1 for the back option, or CANCELLED.
     """
     if tui.is_available():
-        return tui.select(title, options, back=back, subtitle=subtitle)
+        return tui.select(title, options, back=back, subtitle=subtitle, start=start)
 
     while True:
         print(f"\n{title}")
-        if subtitle:
-            print(f"  {subtitle}")
+        for line in subtitle.splitlines():
+            print(f"  {line}")
         for i, option in enumerate(options, start=1):
             print(f"  {i:>3}. {option}")
         print(f"  {0:>3}. {back}")
@@ -119,3 +124,17 @@ def confirm(prompt: str, default: bool = False) -> bool | Any:
     if answer is CANCELLED:
         return CANCELLED
     return str(answer).strip().lower().startswith("y")
+
+
+def message(text: str) -> None:
+    """Show a message, waiting for acknowledgement when there is a screen to wait on.
+
+    Without a full-screen UI it is just printed: nothing there would redraw over it.
+
+    Args:
+        text: What to show.
+    """
+    if tui.is_available():
+        tui.message(text)
+        return
+    print(text)

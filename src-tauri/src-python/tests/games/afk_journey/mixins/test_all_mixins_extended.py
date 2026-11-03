@@ -22,6 +22,7 @@ from adb_auto_player.games.afk_journey.mixins.sunlit_showdown import SunlitShowd
 from adb_auto_player.games.afk_journey.mixins.titan_reaver_proxy_battle import (
     TitanReaverProxyBattleMixin,
 )
+from adb_auto_player.games.afk_journey.settings import DailiesSettings
 from adb_auto_player.models import ConfidenceValue
 from adb_auto_player.models.geometry import Box, Point
 from adb_auto_player.models.ocr import OCRResult
@@ -664,6 +665,32 @@ def test_run_dailies_features_disabled():
     bot._settings.dailies.hamburger = False
     bot._settings.dailies.afk_stages = False
     bot.run_dailies()
+
+
+def test_run_dailies_runs_union_campaign_only_when_enabled():
+    """Union Campaign is opt-in: off by default, one push when enabled."""
+    assert DailiesSettings().union_campaign is False
+    bot = MockAllAFKJ()
+    for enabled, calls in ((False, 0), (True, 1)):
+        bot._settings.dailies.union_campaign = enabled
+        with (
+            patch.object(bot, "start_up"),
+            patch.object(bot, "navigate_to_world"),
+            patch.object(bot, "claim_daily_rewards"),
+            patch.object(bot, "buy_emporium"),
+            patch.object(bot, "single_pull"),
+            patch.object(bot, "run_dream_realm"),
+            patch.object(bot, "run_arena"),
+            patch.object(bot, "claim_hamburger"),
+            patch.object(bot, "raise_hero_affinity"),
+            patch.object(bot, "swap_essences"),
+            patch.object(bot, "push_duras_trials"),
+            patch.object(bot, "push_legend_trials"),
+            patch.object(bot, "push_afk_stages"),
+            patch.object(bot, "push_union_campaign") as mock_union,
+        ):
+            bot.run_dailies()
+        assert mock_union.call_count == calls
 
 
 def test_run_dream_realm_scan_skip_today_default():

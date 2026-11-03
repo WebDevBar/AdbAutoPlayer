@@ -18,6 +18,7 @@ from .afk_stages import AFKStagesMixin
 from .arena import ArenaMixin
 from .duras_trials import DurasTrialsMixin
 from .legend_trial import SeasonLegendTrial
+from .union_campaign import UnionCampaignMixin
 
 _UNKNOWN_HERO = "Unknown"
 _LAST_AFFINITY_HERO = "Chippy"
@@ -27,7 +28,13 @@ _HERO_NAME_READ_ATTEMPTS = 2
 
 
 class DailiesMixin(
-    ArenaMixin, DurasTrialsMixin, SeasonLegendTrial, AFKStagesMixin, AFKJourneyBase, ABC
+    ArenaMixin,
+    DurasTrialsMixin,
+    SeasonLegendTrial,
+    UnionCampaignMixin,
+    AFKStagesMixin,
+    AFKJourneyBase,
+    ABC,
 ):
     """Dailies Mixin."""
 
@@ -83,6 +90,10 @@ class DailiesMixin(
             self.push_legend_trials()
         elif not self.settings.dailies.legend_trials:
             logging.info("Legend Trials disabled.")
+        if self.settings.dailies.union_campaign:
+            self.push_union_campaign()
+        else:
+            logging.info("Union Campaign disabled.")
         if self.settings.dailies.afk_stages:
             self.push_afk_stages(season=True)
         else:

@@ -385,6 +385,9 @@ class DailiesSettings(BaseModel):
     legend_trials: bool = Field(
         default=True, alias="Run Legend Trials", title="Run Legend Trials"
     )
+    union_campaign: bool = Field(
+        default=False, alias="Run Union Campaign", title="Run Union Campaign"
+    )
     afk_stages: bool = Field(default=True, alias="AFK Stages", title="AFK Stages")
     buy_discount_affinity: bool = Field(default=True, alias="Buy Discount Affinity")
     buy_all_affinity: bool = Field(default=False, alias="Buy All Affinity")

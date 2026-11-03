@@ -1,5 +1,34 @@
 # Changelog
 
+## [wdb-12.13.7-37] - 2026-11-03
+
+Upstream 12.13.7, plus a terminal menu that explains itself and Union Campaign in Dailies.
+
+### Added
+
+- **Interactive terminal menu.** Running the CLI with no command opens a full-screen menu:
+  pick a task by category, or edit settings. It reads and writes the same settings files as the
+  GUI.
+- **The settings menu explains every field.** Each row shows the value the bot will actually
+  use, marked `[set]` (in your file) or `[default]`, and its allowed range. Opening a field
+  shows what it does, its default and its allowed values. Yes/no settings are an On/Off pick.
+- **Union Campaign can run as part of Dailies** with the new "Run Union Campaign" toggle (off by
+  default). It runs after Legend Trials, using the Union Campaign section's own settings.
+
+### Fixed
+
+- **Settings showed `None`** for anything not yet written to the file, although the bot was
+  using a default.
+- **An invalid value or a failed save crashed the settings menu**, or threw away your edits.
+- **Exclude Heroes, Ravaged Realm Squads and Legend Trial Towers** were missing from the
+  terminal settings menu.
+- **Changed ADB and App settings were not picked up** until restart: clearing their cache did
+  nothing.
+- **Savannah Cup: a single missed scroll ended the collection run.** It now needs three missed
+  passes.
+- **Savannah Cup: pulled matches were filed without a theme** and dropped from the odds model.
+  They are now filed by capture date.
+
 ## [wdb-12.12.1-36] - 2026-09-09
 
 Upstream 12.12.1 plus the fixes found by running the bot for two days.

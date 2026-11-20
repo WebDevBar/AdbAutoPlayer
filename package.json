@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@js-joda/core": "^6.1.0",
-    "@tailwindcss/vite": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.4",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-notification": "~2.4.0",
     "@tauri-apps/plugin-opener": "^2.5.5",
@@ -10,14 +10,14 @@
     "@tauri-apps/plugin-window-state": "~2.4.1",
     "@types/json-schema": "^7.0.15",
     "posthog-js": "^1.438.9",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.4",
     "tauri-plugin-pytauri-api": "^0.8.0"
   },
   "description": "",
   "devDependencies": {
     "@skeletonlabs/skeleton": "^5.0.1",
     "@skeletonlabs/skeleton-svelte": "^5.0.1",
-    "@sveltejs/adapter-static": "^4.0.0",
+    "@sveltejs/adapter-static": "^4.0.1",
     "@sveltejs/kit": "^3.0.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/forms": "^0.5.11",
@@ -27,7 +27,7 @@
     "prettier": "^3.9.10",
     "prettier-plugin-svelte": "^4.1.1",
     "prettier-plugin-tailwindcss": "^0.8.1",
-    "svelte": "^5.57.2",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.7.7",
     "typescript": "^6.0.3",
     "vite": "^8.3.5",
@@ -58,5 +58,5 @@
     "tauri": "tauri"
   },
   "type": "module",
-  "version": "12.13.7"
+  "version": "12.13.9"
 }

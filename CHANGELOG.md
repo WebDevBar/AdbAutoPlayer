@@ -950,3 +950,21 @@ does nothing.
 ### Bug Fixes
 
 - **AFK Journey – Hero names**: Corrected the spelling of Isabella (previously "Isabelle") and Sylphira (previously "Sylphyra"), including their template images.
+
+## [12.13.8] - 2026-11-03
+
+### New Features
+
+- **AFK Journey – Union Campaign**: The game now shows a Skip button during combat after the first fight; it is tapped automatically whenever it is available.
+
+## [12.13.9] - 2026-11-10
+
+### New Features
+
+- **AFK Journey – New hero**: Added Thane to the hero list, so it can be recognized and selected.
+
+### Bug Fixes
+
+- **AFK Journey – Homestead**: Entering the Homestead now waits for the loading screen instead of pressing back too early. It also handles the "Tap to enter" screen after a game restart.
+- **AFK Journey – Homestead crafting**: The "You have Process Cards available" popup that covered the crafting screen is now dismissed, and the crafting screen is retried instead of timing out.
+- **AFK Journey – Battle start**: The battle start button is now retapped at intervals based on the template timeout setting, so a slow emulator gets more time to load the battle.

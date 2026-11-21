@@ -173,7 +173,8 @@ _SIDE_SIZE = 3  # every Solstice Clash comp is exactly three heroes
 # the slug into a match's identity, so leaving it on solstice-clash would file
 # every Savannah Cup match under the wrong event AND let two matches from
 # different events collide on one key in the shared pool.
-EVENT_SLUG = "savannah-cup"
+# Changed to showdown-smackdown 2026-11-21 for the same reason.
+EVENT_SLUG = "showdown-smackdown"
 
 # Two captures belong to the SAME occurrence when they fall within this many
 # seconds of each other. Single-linkage: a capture within the window of two

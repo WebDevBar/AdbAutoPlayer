@@ -1454,6 +1454,47 @@ def _apply(con: sqlite3.Connection, db: str, fresh: bool, quiet: bool) -> dict:
         (savannah_id, event_id),
     )
 
+    # Showdown Smackdown (2026-11-11 to 2026-11-25): Savannah Cup reskinned again. The
+    # 2026-11-21 screen walk found the 5x3 draft grid and the locked-pick row at the
+    # same pixels as Savannah (the wiki's "20 heroes" is wrong for the draft screen -
+    # it shows 15), and every downstream template matched at 0.98-1.00. So all of its
+    # geometry is copied from Savannah rather than re-measured.
+    con.execute(
+        "INSERT OR IGNORE INTO event(slug,name,game) VALUES(?,?,?)",
+        ("showdown-smackdown", "Showdown Smackdown", "afk-journey"),
+    )
+    showdown_id = con.execute(
+        "SELECT id FROM event WHERE slug='showdown-smackdown'"
+    ).fetchone()[0]
+    for slug, name, starts, ends, is_default in (
+        ("unknown", "Unknown / Default", None, None, 1),
+        # END observed: the event screen read "Rotates in 1d 17h" at 2026-11-21 06:35
+        # UTC, landing on midnight UTC. START inferred from the three-day cadence every
+        # earlier rotation kept, NOT observed - collection only began 11-21.
+        (
+            "fierce-duel",
+            "Fierce Duel",
+            "2026-11-20T00:00:00Z",
+            "2026-11-23T00:00:00Z",
+            0,
+        ),
+        # Next in the event's theme list ("Starts in 2d 22h" on 2026-11-20). END unknown:
+        # NULL absorbs everything after the start until the next rotation is observed.
+        ("tactical-grounds", "Tactical Grounds", "2026-11-23T00:00:00Z", None, 0),
+    ):
+        con.execute(
+            "INSERT OR IGNORE INTO theme"
+            "(event_id,slug,name,starts_at,ends_at,is_default) VALUES(?,?,?,?,?,?)",
+            (showdown_id, slug, name, starts, ends, is_default),
+        )
+    con.execute(
+        "INSERT OR IGNORE INTO cell_registry(event_id,screen,cell_name,cell_type,"
+        "x0,y0,x1,y1,side,slot,base_resolution,verified_at)"
+        " SELECT ?,screen,cell_name,cell_type,x0,y0,x1,y1,side,slot,"
+        " base_resolution,verified_at FROM cell_registry WHERE event_id=?",
+        (showdown_id, savannah_id),
+    )
+
     now = datetime.datetime.now().isoformat(timespec="seconds")
     con.execute(
         "INSERT OR IGNORE INTO schema_version(version,applied_at,note) VALUES(?,?,?)",

@@ -226,15 +226,21 @@ DETAILS_TIMEOUT = 15.0
 # reading 'Current Theme Fortress O' instead of 'Forsaken Fortress'. That fails
 # silently - a garbled name is still stored as match.theme - so it is worse than a
 # crash. Verified by OCR on a real capture before changing.
-_THEME_NAME_REGION = (1235, 1320, 50, 580)
+# Re-measured on the Showdown Smackdown screen 2026-11-21: the name now sits higher
+# (y~1205-1275) and the Savannah crop read 'rierce aana Rotates in 1d 17h'. Shorter crops
+# picked up the italic swash between the words as a stray letter ('Fierce L Duel');
+# this taller one read 'Fierce Duel' cleanly on three neighbouring variants.
+_THEME_NAME_REGION = (1190, 1290, 20, 425)
 
 
-# The event this mode currently drives. Savannah Cup (2026-09-03) is Solstice Clash
+# The event this mode currently drives. Showdown Smackdown (2026-11-11 to 11-25) is the
+# same mode again: same Fortune Picks spot, same 3v3 pick-and-ban. Savannah Cup
+# (2026-09-03) was Solstice Clash
 # reskinned: same 3v3 pick-and-ban, same "Royal City Show" host, same Fortune Picks
 # button in the same place. Only the two entry-point images differ, so only these two
 # paths move per event - everything downstream matched the old templates unchanged.
-_EVENT_CARD_TEMPLATE = "event/savannah_cup/events_card"
-_EVENT_SCREEN_TEMPLATE = "event/savannah_cup/event_screen"
+_EVENT_CARD_TEMPLATE = "event/showdown_smackdown/events_card"
+_EVENT_SCREEN_TEMPLATE = "event/showdown_smackdown/event_screen"
 
 
 class _EventNotRunningError(GameActionFailedError):
@@ -780,14 +786,14 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         try:
             card = self._find_in_battle_modes(
                 template=_EVENT_CARD_TEMPLATE,
-                timeout_message="[SC-26] Savannah Cup card not in the events list",
+                timeout_message="[SC-26] event card not in the events list",
             )
         except GameTimeoutError as exc:
             # Scrolled the whole list and it is not there. That is not a transient
             # failure worth two more attempts from the 3-strike budget - a limited-time
             # event that has ended never comes back within a run. Stop cleanly.
             raise _EventNotRunningError(
-                "[SC-27] Savannah Cup is not in the events list - the event has ended"
+                "[SC-27] the event is not in the events list - the event has ended"
             ) from exc
         self._tap_till_template_disappears(card.template)
         # Arrival is confirmed by WAITING for a title that persists, never by tapping it.
@@ -799,7 +805,7 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         self.wait_for_template(
             template=_EVENT_SCREEN_TEMPLATE,
             timeout=EVENT_SCREEN_TIMEOUT,
-            timeout_message="[SC-01] did not reach the Savannah Cup event page",
+            timeout_message="[SC-01] did not reach the event page",
         )
         # Read the theme HERE, while the event screen is up. It shows "Current Theme:
         # <name>" and "Rotates in <n>"; no later screen in this flow shows either.
@@ -830,6 +836,10 @@ class SolsticeClashMixin(AFKJourneyBase, ABC):
         y0, y1, x0, x1 = _THEME_NAME_REGION
         crop = screenshot[y0:y1, x0:x1]
         text = self._ocr.extract_text(crop).strip()
+        # Drop single-character tokens: the swash between the words of a stylised
+        # title OCRs as a stray letter ('Fierce L Duel'), and no theme so far has had
+        # a one-letter word.
+        text = " ".join(w for w in text.split() if len(w) > 1)
         return text or None
 
     def _run_one_match(self) -> bool:

@@ -47,20 +47,6 @@
  "Satrana": [
   "Ember Enchantress"
  ],
- "Dunlingr": [
-  "Eternal Voice"
- ],
- "Bryon": [
-  "Evergreen Sentinel",
-  "Starshore Breeze"
- ],
- "Tasi": [
-  "Fairy of Dreams",
-  "Starlit Fantasy"
- ],
- "Thoran": [
-  "Fallen King"
- ],
  "Vala": [
   "Day and Night",
   "Thorny Rose"
@@ -92,7 +78,8 @@
   "Scorching Oath"
  ],
  "Kulu": [
-  "Blast Master"
+  "Blast Master",
+  "Neon Riot"
  ],
  "Baelran": [
   "Dawnblade"
@@ -121,10 +108,6 @@
   "Daughter of Dawn",
   "Forest Dew"
  ],
- "Isabella": [
-  "Fabled Reverie",
-  "The Taken Soul"
- ],
  "Aurora": [
   "Celestial of Dreams",
   "Dreamscape Dominion"
@@ -147,21 +130,46 @@
   "Crimson Operative",
   "Roving Swordsman"
  ],
- "Kazim": [
-  "Falcon's Vow"
- ],
  "Lamentis": [
   "Cosmic Hellion"
  ],
  "Peggy": [
-  "Empire's Jewel"
+  "Empire's Jewel",
+  "Scarlet Decree"
  ],
- "Voracia": [
-  "Feastweaver"
+ "Taichi & Agumon": [
+  "Courage Duo"
  ],
- "Cecia": [
-  "Midnight Cosmos",
-  "Requiem of Thorns"
+ "Yamato & Gabumon": [
+  "Cool Duo"
+ ],
+ "Senea": [
+  "Deathless Songstress",
+  "Azure Aria"
+ ],
+ "Aster": [
+  "Chaos Observer"
+ ],
+ "Eryndor": [
+  "Emerald Stargazer",
+  "Veiled Viceroy"
+ ],
+ "Aneva": [
+  "Abyssal Slayer"
+ ],
+ "Dunlingr": [
+  "Eternal Voice"
+ ],
+ "Bryon": [
+  "Evergreen Sentinel",
+  "Starshore Breeze"
+ ],
+ "Tasi": [
+  "Fairy of Dreams",
+  "Starlit Fantasy"
+ ],
+ "Thoran": [
+  "Fallen King"
  ],
  "Rhys": [
   "Fiery Cavalier"
@@ -196,17 +204,9 @@
   "Graveyard Ghostfire",
   "Pumpkin Spirit"
  ],
- "Phraesto": [
-  "Misty Scorpion",
-  "Golden Depths"
- ],
  "Marilee": [
   "Greenwood Gale",
   "Forest's Arrow"
- ],
- "Silvina": [
-  "Nostalgic Reverie",
-  "The Taken Breath"
  ],
  "Viperian": [
   "Glimmerbane Regalia",
@@ -219,16 +219,6 @@
  "Valka": [
   "Forsaken Blade",
   "Radiant Vanguard"
- ],
- "Hugin": [
-  "Maverick Smith"
- ],
- "Bonnie": [
-  "Obsidian Claws",
-  "Feathery Reverie"
- ],
- "Arden": [
-  "Oak Sage"
  ],
  "Callan": [
   "Grim Soulkeeper"
@@ -255,16 +245,26 @@
   "Ironsworn General"
  ],
  "Pandora": [
-  "Hope Unleashed"
+  "Hope Unleashed",
+  "Starwoven Waves"
  ],
- "Mehira": [
-  "Mind Cager"
+ "Isabella": [
+  "Fabled Reverie",
+  "The Taken Soul"
+ ],
+ "Phraesto": [
+  "Golden Depths",
+  "Misty Scorpion"
  ],
  "Alna": [
   "Frozen Mother"
  ],
  "Kordan": [
   "Ironblood Chieftain"
+ ],
+ "Bonnie": [
+  "Feathery Reverie",
+  "Obsidian Claws"
  ],
  "Ravion": [
   "Ivory Majesty",
@@ -277,33 +277,40 @@
  "Silven": [
   "Heir of Glory"
  ],
- "Hepler": [
-  "Master of Forms"
- ],
  "Gunnar": [
   "Iron Doom"
- ],
- "Ludovic": [
-  "Nostalgic Meadow",
-  "Wreathed Eternalist"
  ],
  "Frieren": [
   "Frieren's Winterwear",
   "The Legendary Mage"
  ],
+ "Kazim": [
+  "Falcon's Vow"
+ ],
  "Orion": [
   "Golden Prince"
  ],
  "Rolan": [
-  "First Crown"
+  "First Crown",
+  "King of Gambits"
+ ],
+ "Voracia": [
+  "Feastweaver"
+ ],
+ "Estrilda": [
+  "Knight of Valor"
+ ],
+ "Tephesia": [
+  "Lady Languor",
+  "Poisoned Tongue"
  ],
  "Mirael": [
   "Scarlet Vow",
   "Scarlet Sorceress"
  ],
- "Eironn": [
-  "Sword of Misarte",
-  "Stormsword"
+ "Cecia": [
+  "Midnight Cosmos",
+  "Requiem of Thorns"
  ],
  "Sinbad": [
   "Seaside Savant",
@@ -315,25 +322,19 @@
  "Niru": [
   "Soul Collector"
  ],
- "Lucca": [
-  "Stalwart Fighter"
- ],
- "Seth": [
-  "Swift Shadow"
- ],
- "Reinier": [
-  "Symmetric Sin"
- ],
- "Hewynn": [
-  "Tender Leaf",
-  "Serene Snowfall"
- ],
- "Lucius": [
-  "The Lightbringer"
+ "Silvina": [
+  "Nostalgic Reverie",
+  "The Taken Breath"
  ],
  "Rowan": [
-  "The Roamer",
-  "Son of Mithril"
+  "Son of Mithril",
+  "The Roamer"
+ ],
+ "Hugin": [
+  "Maverick Smith"
+ ],
+ "Arden": [
+  "Oak Sage"
  ],
  "Gerda": [
   "Soothing Siren"
@@ -341,6 +342,10 @@
  "Faramor": [
   "Silverfang Mantle",
   "Sunlit Surf"
+ ],
+ "Hewynn": [
+  "Serene Snowfall",
+  "Tender Leaf"
  ],
  "Lily May": [
   "Silent Guillotine",
@@ -356,31 +361,61 @@
  "Aliceth": [
   "Radiant Wings"
  ],
- "Nazrik": [
-  "Soulstalker"
+ "Mehira": [
+  "Mind Cager",
+  "Pristine Malice"
  ],
- "Koko": [
-  "Sugar-Coated Menace",
-  "Wild Child"
+ "Hepler": [
+  "Master of Forms"
  ],
- "Pippa": [
-  "The Muddled Magician"
- ],
- "Damian": [
-  "Storybook Spark",
-  "Woody Wonder"
- ],
- "Himmel": [
-  "The Legendary Hero"
+ "Ludovic": [
+  "Nostalgic Meadow",
+  "Wreathed Eternalist"
  ],
  "Evie": [
-  "Royal Envoy"
+  "Royal Envoy",
+  "Starry Slumber"
  ],
- "Sylphira": [
-  "Sovereign of Song"
+ "Cyran": [
+  "Midnight Hymn",
+  "Umbral Weaver"
+ ],
+ "Marene": [
+  "Roaring Tempest"
+ ],
+ "Sherlock Holmes": [
+  "Master of Deduction"
+ ],
+ "Baden": [
+  "Pride of Rayne",
+  "The Abomination"
+ ],
+ "Nazrik": [
+  "Lone Vanguard",
+  "Soulstalker"
+ ],
+ "Eironn": [
+  "Sword of Misarte",
+  "Stormsword"
+ ],
+ "Lucca": [
+  "Stalwart Fighter"
+ ],
+ "Seth": [
+  "Swift Shadow"
+ ],
+ "Reinier": [
+  "Symmetric Sin"
+ ],
+ "Lucius": [
+  "The Lightbringer"
  ],
  "Dionel": [
   "Venus of Dawn"
+ ],
+ "Koko": [
+  "Wild Child",
+  "Sugar-Coated Menace"
  ],
  "Walker": [
   "Wildland Outlaw"
@@ -388,15 +423,16 @@
  "Korin": [
   "Wood Warden"
  ],
+ "Damian": [
+  "Woody Wonder",
+  "Storybook Spark"
+ ],
  "Nara": [
   "Wrathful Wraith"
  ],
  "Lorsan": [
   "Winter's Tune",
   "Windweaver Protector"
- ],
- "Cyran": [
-  "Umbral Weaver"
  ],
  "Saida": [
   "Vampiric Vine"
@@ -413,7 +449,22 @@
  "Tilaya": [
   "Wild Blade"
  ],
+ "Pippa": [
+  "The Muddled Magician"
+ ],
  "Zorya": [
   "Watcher in Stone"
+ ],
+ "Himmel": [
+  "The Legendary Hero"
+ ],
+ "Sylphira": [
+  "Sovereign of Song"
+ ],
+ "Karma": [
+  "Twinborn Malice"
+ ],
+ "Thane": [
+  "The Exalted"
  ]
 }

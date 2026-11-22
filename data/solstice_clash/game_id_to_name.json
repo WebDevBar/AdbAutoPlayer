@@ -184,10 +184,50 @@
     "score": 0.9502,
     "via": "wiki-asset-match"
   },
+  "139": {
+    "name": "Senea",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
   "14": {
     "name": "Smokey & Meerky",
     "score": 0.9975,
     "via": "wiki-asset-match"
+  },
+  "140": {
+    "name": "Baden",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "141": {
+    "name": "Thane",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "142": {
+    "name": "Estrilda",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "143": {
+    "name": "Tephesia",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "144": {
+    "name": "Grezhul",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "147": {
+    "name": "Aster",
+    "score": 1.0,
+    "via": "operator-confirmed"
+  },
+  "148": {
+    "name": "Marene",
+    "score": 1.0,
+    "via": "operator-confirmed"
   },
   "149": {
     "name": "Taichi & Agumon",

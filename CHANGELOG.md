@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Solstice Clash collects Showdown Smackdown** (2026-11-11 to 11-25), the event's third
+  reskin: its own events-list and title templates, and a taller theme-name crop.
+- **Eight new heroes are recognised in Solstice Clash:** Aster, Baden, Estrilda, Grezhul,
+  Marene, Senea, Tephesia and Thane.
+
+### Fixed
+
+- **Voracia, Eryndor, Rolan and both Digimon duos are recognised again.** Their game ids were
+  recorded in a reference file in September but never in the hero database the matcher
+  reads, so all five went unidentified.
+
 ## [wdb-12.13.7-37] - 2026-11-03
 
 Upstream 12.13.7, plus a terminal menu that explains itself and Union Campaign in Dailies.
